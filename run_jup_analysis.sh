@@ -1,96 +1,56 @@
 #!/bin/bash
-# Run JUP Ntuple analysis
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Default parameters
 MAX_EVENTS=-1
+JOBS=8
+MERGE_OUTPUT=""
+WEIGHTED_OUTPUT=""
+PLOT_DIR=""
 JPSI_MUON_ID="soft"
-UPS_MUON_ID="tight"
-OUTPUT=""
-JOBS=16
+UPS_MUON_ID="soft"
+INPUT_DIR=""
 
-# Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -n|--max-events)
-            MAX_EVENTS="$2"
-            shift 2
-            ;;
-        --jpsi-muon-id)
-            JPSI_MUON_ID="$2"
-            shift 2
-            ;;
-        --ups-muon-id)
-            UPS_MUON_ID="$2"
-            shift 2
-            ;;
-        -o|--output)
-            OUTPUT="$2"
-            shift 2
-            ;;
-        -j|--jobs)
-            JOBS="$2"
-            shift 2
-            ;;
+        -n|--max-events) MAX_EVENTS="$2"; shift 2 ;;
+        -j|--jobs) JOBS="$2"; shift 2 ;;
+        --jpsi-muon-id) JPSI_MUON_ID="$2"; shift 2 ;;
+        --ups-muon-id) UPS_MUON_ID="$2"; shift 2 ;;
+        -i|--input-dir) INPUT_DIR="$2"; shift 2 ;;
+        --merge-output) MERGE_OUTPUT="$2"; shift 2 ;;
+        --weighted-output) WEIGHTED_OUTPUT="$2"; shift 2 ;;
+        --plot-dir) PLOT_DIR="$2"; shift 2 ;;
         -h|--help)
             echo "Usage: $0 [options]"
-            echo "Options:"
-            echo "  -n, --max-events N      Maximum events to process (-1=all)"
-            echo "  --jpsi-muon-id TYPE     J/psi Muon ID (soft/medium/tight/loose/none)"
-            echo "  --ups-muon-id TYPE      Upsilon Muon ID (soft/medium/tight/loose/none)"
-            echo "  -o, --output FILE       Output ROOT file"
-            echo "  -j, --jobs N            Parallel processes"
+            echo "  -n, --max-events N"
+            echo "  -j, --jobs N"
+            echo "  --jpsi-muon-id TYPE"
+            echo "  --ups-muon-id TYPE"
+            echo "  -i, --input-dir DIR"
+            echo "  --merge-output FILE"
+            echo "  --weighted-output FILE"
+            echo "  --plot-dir DIR"
             exit 0
             ;;
-        *)
-            echo "Unknown option: $1"
-            exit 1
-            ;;
+        *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
-echo "=========================================="
-echo "JUP Ntuple Correlation Analysis"
-echo "=========================================="
-echo "Max events: $MAX_EVENTS"
-echo "J/psi Muon ID: $JPSI_MUON_ID"
-echo "Upsilon Muon ID: $UPS_MUON_ID"
+MERGE_ARGS=(--channel JUP --dataset data -n "$MAX_EVENTS" -j "$JOBS" --jpsi-muon-id "$JPSI_MUON_ID" --ups-muon-id "$UPS_MUON_ID")
+[[ -n "$INPUT_DIR" ]] && MERGE_ARGS+=(-i "$INPUT_DIR")
+[[ -n "$MERGE_OUTPUT" ]] && MERGE_ARGS+=(-o "$MERGE_OUTPUT")
 
-# Build command
-CMD="python3 analyze_ntuple_JUP.py -n $MAX_EVENTS --jpsi-muon-id $JPSI_MUON_ID --ups-muon-id $UPS_MUON_ID -j $JOBS"
-if [ -n "$OUTPUT" ]; then
-    CMD="$CMD -o $OUTPUT"
-fi
+./run_assoc_merge.sh "${MERGE_ARGS[@]}" || exit $?
 
-echo "Running: $CMD"
-echo "=========================================="
+FIT_ARGS=(--channel JUP --dataset data -j "$JOBS")
+[[ -n "$MERGE_OUTPUT" ]] && FIT_ARGS+=(-i "$MERGE_OUTPUT")
+[[ -n "$WEIGHTED_OUTPUT" ]] && FIT_ARGS+=(-o "$WEIGHTED_OUTPUT")
+[[ -n "$PLOT_DIR" ]] && FIT_ARGS+=(--plot-dir "$PLOT_DIR/fit")
+./run_assoc_fit.sh "${FIT_ARGS[@]}" || exit $?
 
-$CMD
-
-# If analysis succeeded, run plotting
-if [ $? -eq 0 ]; then
-    echo ""
-    echo "=========================================="
-    echo "Creating Plots"
-    echo "=========================================="
-    
-    if [ -n "$OUTPUT" ]; then
-        INPUT_FILE="$OUTPUT"
-        PLOT_DIR="$(dirname $OUTPUT)/plots_JUP"
-    else
-        INPUT_FILE="output/jup_ntuple_correlations.root"
-        PLOT_DIR="output/plots_JUP"
-    fi
-    
-    mkdir -p "$PLOT_DIR"
-    python3 plot_ntuple_results.py -i "$INPUT_FILE" -o "$PLOT_DIR" -p JUP
-    
-    echo ""
-    echo "=========================================="
-    echo "Analysis complete!"
-    echo "=========================================="
-    echo "Output histograms: $INPUT_FILE"
-    echo "Output plots: $PLOT_DIR/"
-fi
+PLOT_ARGS=(--channel JUP --dataset data -j "$JOBS")
+[[ -n "$WEIGHTED_OUTPUT" ]] && PLOT_ARGS+=(-i "$WEIGHTED_OUTPUT")
+[[ -n "$PLOT_DIR" ]] && PLOT_ARGS+=(-o "$PLOT_DIR")
+./run_assoc_plots.sh "${PLOT_ARGS[@]}"

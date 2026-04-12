@@ -19,7 +19,7 @@ MODE = DPS_1
 JOBS = 8
 MAX_EVENTS = -1
 JPSI_MUON_ID = soft
-UPS_MUON_ID = tight
+UPS_MUON_ID = soft
 
 # Arguments passed to run_wrapper.sh
 arguments = "run_jup_mc_ntuple.sh -m $(MODE) -j $(JOBS) -n $(MAX_EVENTS) --jpsi-muon-id $(JPSI_MUON_ID) --ups-muon-id $(UPS_MUON_ID)"

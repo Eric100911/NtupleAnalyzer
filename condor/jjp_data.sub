@@ -18,7 +18,7 @@ MAX_EVENTS = -1
 MUON_ID = soft
 
 # Arguments passed to run_wrapper.sh
-arguments = "run_jjp_analysis.sh -j $(JOBS) -n $(MAX_EVENTS) --muon-id $(MUON_ID)"
+arguments = "run_assoc_merge.sh --channel JJP --dataset data -j $(JOBS) -n $(MAX_EVENTS) --muon-id $(MUON_ID)"
 
 # Log files
 log_dir = logs/jjp_data
