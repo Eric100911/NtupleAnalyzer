@@ -18,9 +18,13 @@ OUTPUT_BASE = "/eos/user/x/xcheng/learn_MC/NtupleAnalyzer_assocPV"
 DEFAULT_PROXY = "/afs/cern.ch/user/x/xcheng/x509up_u180107"
 
 DATA_PATHS = {
-    "JJP": "/eos/user/x/xcheng/JpsiJpsiPhi_muon_pt_cut/merged_rootNtuple",
+    "JJP": "/eos/user/c/chiw/JpsiJpsiPhi/rootNtuple",
     "JUP": "/eos/user/x/xcheng/JpsiUpsPhi/merged_rootNtuple",
 }
+
+JJP_DATASET_DIRS = tuple(f"ParkingDoubleMuonLowMass{i}" for i in range(8))
+JJP_REFACTOR_PREFIX = "crab3_refactor"
+JJP_SUBMIT_PREFIX = "260411"
 
 MC_BASE = "/eos/ihep/cms/store/user/xcheng/MC_Production_v2/output"
 MC_SAMPLE_DIRS = {
@@ -339,6 +343,26 @@ def to_xrootd_if_needed(path: str) -> str:
     return path
 
 
+def _discover_jjp_refactor_data_files(input_path: str) -> List[str]:
+    files: List[str] = []
+    for dataset_dir in JJP_DATASET_DIRS:
+        base_dir = os.path.join(input_path, dataset_dir)
+        if not os.path.isdir(base_dir):
+            continue
+
+        task_dirs = sorted(glob.glob(os.path.join(base_dir, f"{JJP_REFACTOR_PREFIX}*")))
+        for task_dir in task_dirs:
+            if not os.path.isdir(task_dir):
+                continue
+
+            submit_dirs = sorted(glob.glob(os.path.join(task_dir, f"{JJP_SUBMIT_PREFIX}*")))
+            for submit_dir in submit_dirs:
+                if not os.path.isdir(submit_dir):
+                    continue
+                files.extend(sorted(glob.glob(os.path.join(submit_dir, "**", "*.root"), recursive=True)))
+    return files
+
+
 def discover_root_files(input_path: str, max_files: int = -1) -> List[str]:
     resolved = to_xrootd_if_needed(input_path)
     files: List[str]
@@ -357,7 +381,9 @@ def discover_root_files(input_path: str, max_files: int = -1) -> List[str]:
         if not files:
             files = [f"root://{host}{line.strip()}" for line in result.stdout.splitlines() if line.strip().endswith(".root")]
     else:
-        files = sorted(glob.glob(os.path.join(resolved, "*.root")))
+        files = _discover_jjp_refactor_data_files(resolved)
+        if not files:
+            files = sorted(glob.glob(os.path.join(resolved, "*.root")))
     if max_files > 0:
         files = files[:max_files]
     if not files:
