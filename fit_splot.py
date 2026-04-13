@@ -153,21 +153,31 @@ def build_jjp_model(n_events: int):
     m_phi = ROOT.RooRealVar("sel_Phi_mass", "m(Phi)", 0.99, 1.07)
     keep.extend([m_jpsi1, m_jpsi2, m_phi])
 
-    jpsi_shared = {
-        "mean": ROOT.RooRealVar("jpsi_mean", "jpsi_mean", 3.096, 3.05, 3.15),
-        "sigma_cb": ROOT.RooRealVar("jpsi_sigma_cb", "jpsi_sigma_cb", 0.025, 0.003, 0.08),
-        "alpha": ROOT.RooRealVar("jpsi_alpha", "jpsi_alpha", 1.5, 0.3, 5.0),
-        "n": ROOT.RooRealVar("jpsi_n", "jpsi_n", 3.0, 0.5, 20.0),
-        "sigma_gauss": ROOT.RooRealVar("jpsi_sigma_gauss", "jpsi_sigma_gauss", 0.04, 0.003, 0.12),
-        "frac_gauss": ROOT.RooRealVar("jpsi_frac_gauss", "jpsi_frac_gauss", 0.2, 0.0, 1.0),
+    jpsi1_params = {
+        "mean": ROOT.RooRealVar("jpsi1_mean", "jpsi1_mean", 3.096, 3.05, 3.15),
+        "sigma_cb": ROOT.RooRealVar("jpsi1_sigma_cb", "jpsi1_sigma_cb", 0.025, 0.003, 0.08),
+        "alpha": ROOT.RooRealVar("jpsi1_alpha", "jpsi1_alpha", 1.5, 0.3, 5.0),
+        "n": ROOT.RooRealVar("jpsi1_n", "jpsi1_n", 3.0, 0.5, 20.0),
+        "sigma_gauss": ROOT.RooRealVar("jpsi1_sigma_gauss", "jpsi1_sigma_gauss", 0.04, 0.003, 0.12),
+        "frac_gauss": ROOT.RooRealVar("jpsi1_frac_gauss", "jpsi1_frac_gauss", 0.2, 0.0, 1.0),
     }
-    keep.extend(list(jpsi_shared.values()))
-    jpsi_slope = ROOT.RooRealVar("jpsi_bkg_slope", "jpsi_bkg_slope", -2.0, -50.0, -0.001)
-    keep.append(jpsi_slope)
-    jpsi1_sig = build_jpsi_signal(m_jpsi1, "1", jpsi_shared, keep)
-    jpsi2_sig = build_jpsi_signal(m_jpsi2, "2", jpsi_shared, keep)
-    jpsi1_bkg = build_jpsi_background(m_jpsi1, "1", jpsi_slope, keep)
-    jpsi2_bkg = build_jpsi_background(m_jpsi2, "2", jpsi_slope, keep)
+    jpsi2_params = {
+        "mean": ROOT.RooRealVar("jpsi2_mean", "jpsi2_mean", 3.096, 3.05, 3.15),
+        "sigma_cb": ROOT.RooRealVar("jpsi2_sigma_cb", "jpsi2_sigma_cb", 0.025, 0.003, 0.08),
+        "alpha": ROOT.RooRealVar("jpsi2_alpha", "jpsi2_alpha", 1.5, 0.3, 5.0),
+        "n": ROOT.RooRealVar("jpsi2_n", "jpsi2_n", 3.0, 0.5, 20.0),
+        "sigma_gauss": ROOT.RooRealVar("jpsi2_sigma_gauss", "jpsi2_sigma_gauss", 0.04, 0.003, 0.12),
+        "frac_gauss": ROOT.RooRealVar("jpsi2_frac_gauss", "jpsi2_frac_gauss", 0.2, 0.0, 1.0),
+    }
+    keep.extend(list(jpsi1_params.values()))
+    keep.extend(list(jpsi2_params.values()))
+    jpsi1_slope = ROOT.RooRealVar("jpsi1_bkg_slope", "jpsi1_bkg_slope", -2.0, -50.0, -0.001)
+    jpsi2_slope = ROOT.RooRealVar("jpsi2_bkg_slope", "jpsi2_bkg_slope", -2.0, -50.0, -0.001)
+    keep.extend([jpsi1_slope, jpsi2_slope])
+    jpsi1_sig = build_jpsi_signal(m_jpsi1, "1", jpsi1_params, keep)
+    jpsi2_sig = build_jpsi_signal(m_jpsi2, "2", jpsi2_params, keep)
+    jpsi1_bkg = build_jpsi_background(m_jpsi1, "1", jpsi1_slope, keep)
+    jpsi2_bkg = build_jpsi_background(m_jpsi2, "2", jpsi2_slope, keep)
     phi_sig, phi_keep = build_phi_signal(m_phi)
     phi_bkg, phi_bkg_keep = build_phi_background(m_phi)
     keep.extend(phi_keep.values())
@@ -310,6 +320,50 @@ def clone_tree_with_weights(input_file: str, output_file: str, weight_map):
     fin.Close()
 
 
+def compute_component_significance(
+    model,
+    data,
+    yields,
+    signal_yield_name: str,
+    best_min_nll: float,
+    jobs: int = 1,
+    strategy: int = 1,
+    print_level: int = -1,
+):
+    signal_var = yields[signal_yield_name]
+    signal = max(0.0, signal_var.getVal())
+    background = sum(max(0.0, var.getVal()) for name, var in yields.items() if name != signal_yield_name)
+
+    params = model.getParameters(data)
+    snapshot = params.snapshot()
+    signal_is_constant = signal_var.isConstant()
+
+    signal_var.setVal(0.0)
+    signal_var.setConstant(True)
+    null_fit = model.fitTo(
+        data,
+        ROOT.RooFit.Extended(True),
+        ROOT.RooFit.Save(True),
+        ROOT.RooFit.NumCPU(max(1, jobs)),
+        ROOT.RooFit.Strategy(strategy),
+        ROOT.RooFit.PrintLevel(print_level),
+    )
+
+    q0 = max(0.0, 2.0 * (null_fit.minNll() - best_min_nll))
+
+    if snapshot is not None:
+        params.assignValueOnly(snapshot)
+    signal_var.setConstant(signal_is_constant)
+
+    return {
+        "signal_yield": signal,
+        "background_yield": background,
+        "q0": q0,
+        "lrt_significance": math.sqrt(q0),
+        "null_fit_result": null_fit,
+    }
+
+
 def main():
     args = parse_args()
     channel = normalize_channel(args.channel)
@@ -372,9 +426,24 @@ def main():
     fit_result.Write("fit_result")
     fit_out.Close()
     fin.Close()
+    significance = compute_component_significance(
+        model,
+        data,
+        yields,
+        signal_yield_name,
+        best_min_nll=fit_result.minNll(),
+        jobs=args.jobs,
+        strategy=1,
+        print_level=-1,
+    )
+    keepalive.append(significance["null_fit_result"])
 
     print(f"[INFO] fitted dataset entries : {data.numEntries()}")
     print(f"[INFO] signal yield           : {yields[signal_yield_name].getVal():.2f}")
+    print(f"[INFO] background yield       : {significance['background_yield']:.2f}")
+    print(f"[INFO] signal component       : {signal_yield_name}")
+    print(f"[INFO] q0 (LRT, sss only)    : {significance['q0']:.3f}")
+    print(f"[INFO] significance (LRT)    : {significance['lrt_significance']:.3f}")
     print(f"[INFO] weights saved         : {output_file}")
     return 0
 
