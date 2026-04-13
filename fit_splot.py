@@ -78,16 +78,18 @@ def build_jpsi_background(obs, suffix: str, slope, keep):
 
 def build_phi_signal(obs):
     mean = ROOT.RooRealVar("phi_mean", "phi_mean", 1.019, 1.010, 1.028)
-    width = ROOT.RooRealVar("phi_width", "phi_width", 0.0043, 0.001, 0.02)
-    sigma = ROOT.RooRealVar("phi_sigma", "phi_sigma", 0.002, 0.0002, 0.02)
+    # width = ROOT.RooRealVar("phi_width", "phi_width", 0.002, 0.0005, 0.005)
+    width = ROOT.RooRealVar("phi_width", "phi_width", 0.002124)
+    width.setConstant(True)
+    sigma = ROOT.RooRealVar("phi_sigma", "phi_sigma", 0.002, 0.0002, 0.005)
     pdf = ROOT.RooVoigtian("phi_sig", "phi_sig", obs, mean, width, sigma)
     return pdf, {"mean": mean, "width": width, "sigma": sigma, "pdf": pdf}
 
 
 def build_phi_background(obs):
-    c0 = ROOT.RooRealVar("phi_bkg_c0", "phi_bkg_c0", 0.0, -2.0, 2.0)
-    c1 = ROOT.RooRealVar("phi_bkg_c1", "phi_bkg_c1", 0.0, -2.0, 2.0)
-    c2 = ROOT.RooRealVar("phi_bkg_c2", "phi_bkg_c2", 0.0, -2.0, 2.0)
+    c0 = ROOT.RooRealVar("phi_bkg_c0", "phi_bkg_c0", 0.0, -100.0, 100.0)
+    c1 = ROOT.RooRealVar("phi_bkg_c1", "phi_bkg_c1", 0.0, -100.0, 100.0)
+    c2 = ROOT.RooRealVar("phi_bkg_c2", "phi_bkg_c2", 0.0, -100.0, 100.0)
     pdf = ROOT.RooChebychev("phi_bkg", "phi_bkg", obs, ROOT.RooArgList(c0, c1, c2))
     return pdf, {"c0": c0, "c1": c1, "c2": c2, "pdf": pdf}
 
