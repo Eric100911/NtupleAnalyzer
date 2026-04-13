@@ -36,9 +36,7 @@ request_disk = 20G
 +JobFlavour = "workday"
 
 # File transfer settings
-should_transfer_files = YES
-when_to_transfer_output = ON_EXIT
-transfer_output_files = output
+should_transfer_files = NO
 
 # Environment and proxy
 getenv = True

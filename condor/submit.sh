@@ -201,14 +201,14 @@ submit_job() {
     mkdir -p logs/jup_mc logs/jjp_mc logs/jup_data logs/jjp_data
     
     # Build condor_submit arguments
-    local SUBMIT_ARGS=""
+    local SUBMIT_APPEND_ARGS=()
     
-    [ -n "$JOBS" ] && SUBMIT_ARGS="$SUBMIT_ARGS JOBS=$JOBS"
-    [ -n "$MAX_EVENTS" ] && SUBMIT_ARGS="$SUBMIT_ARGS MAX_EVENTS=$MAX_EVENTS"
-    [ -n "$MUON_ID" ] && SUBMIT_ARGS="$SUBMIT_ARGS MUON_ID=$MUON_ID"
-    [ -n "$JPSI_MUON_ID" ] && SUBMIT_ARGS="$SUBMIT_ARGS JPSI_MUON_ID=$JPSI_MUON_ID"
-    [ -n "$UPS_MUON_ID" ] && SUBMIT_ARGS="$SUBMIT_ARGS UPS_MUON_ID=$UPS_MUON_ID"
-    [ -n "$FLAVOR" ] && SUBMIT_ARGS="$SUBMIT_ARGS '+JobFlavour=\"$FLAVOR\"'"
+    [ -n "$JOBS" ] && SUBMIT_APPEND_ARGS+=("-append" "JOBS = $JOBS")
+    [ -n "$MAX_EVENTS" ] && SUBMIT_APPEND_ARGS+=("-append" "MAX_EVENTS = $MAX_EVENTS")
+    [ -n "$MUON_ID" ] && SUBMIT_APPEND_ARGS+=("-append" "MUON_ID = $MUON_ID")
+    [ -n "$JPSI_MUON_ID" ] && SUBMIT_APPEND_ARGS+=("-append" "JPSI_MUON_ID = $JPSI_MUON_ID")
+    [ -n "$UPS_MUON_ID" ] && SUBMIT_APPEND_ARGS+=("-append" "UPS_MUON_ID = $UPS_MUON_ID")
+    [ -n "$FLAVOR" ] && SUBMIT_APPEND_ARGS+=("-append" "+JobFlavour = \"$FLAVOR\"")
     
     # Handle 'all' mode
     local MODES_TO_SUBMIT=()
@@ -226,10 +226,12 @@ submit_job() {
     
     # Submit jobs
     for m in "${MODES_TO_SUBMIT[@]}"; do
-        local MODE_ARG=""
-        [ -n "$m" ] && MODE_ARG="MODE=$m"
+        local CMD_PARTS=("condor_submit")
+        [ -n "$m" ] && CMD_PARTS+=("-append" "MODE = $m")
+        CMD_PARTS+=("${SUBMIT_APPEND_ARGS[@]}")
+        CMD_PARTS+=("$SUB_FILE")
         
-        local CMD="condor_submit $SUB_FILE $MODE_ARG $SUBMIT_ARGS"
+        local CMD="${CMD_PARTS[*]}"
         
         echo ""
         msg_info "Submitting: $ANALYSIS_TYPE ${m:-default}"
@@ -238,7 +240,7 @@ submit_job() {
         if [ "$DRY_RUN" = true ]; then
             msg_warn "Dry run - not submitting"
         else
-            eval $CMD
+            "${CMD_PARTS[@]}"
             msg_ok "Job submitted"
         fi
     done

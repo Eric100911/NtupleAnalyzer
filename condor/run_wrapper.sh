@@ -17,6 +17,13 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ANALYZER_DIR="$(dirname "$SCRIPT_DIR")"
 CMSSW_BASE_DIR="$(dirname "$(dirname "$ANALYZER_DIR")")"
+ANALYZER_DIR_FALLBACK="/afs/cern.ch/user/x/xcheng/condor/CMSSW_15_0_15/src/NtupleAnalyzer"
+CMSSW_BASE_FALLBACK="/afs/cern.ch/user/x/xcheng/condor/CMSSW_15_0_15"
+
+if [ ! -f "$CMSSW_BASE_DIR/src/.SCRAM/Environment" ] && [ -f "$CMSSW_BASE_FALLBACK/src/.SCRAM/Environment" ]; then
+    ANALYZER_DIR="$ANALYZER_DIR_FALLBACK"
+    CMSSW_BASE_DIR="$CMSSW_BASE_FALLBACK"
+fi
 
 # Parse wrapper arguments
 ANALYSIS_SCRIPT="$1"
