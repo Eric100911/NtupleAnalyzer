@@ -153,22 +153,26 @@ def build_jjp_model(n_events: int):
     m_phi = ROOT.RooRealVar("sel_Phi_mass", "m(Phi)", 0.99, 1.07)
     keep.extend([m_jpsi1, m_jpsi2, m_phi])
 
+    jpsi_alpha = ROOT.RooRealVar("jpsi_alpha", "jpsi_alpha", 1.5, 0.3, 5.0)
+    jpsi_n = ROOT.RooRealVar("jpsi_n", "jpsi_n", 3.0, 0.5, 20.0)
+    jpsi_frac_gauss = ROOT.RooRealVar("jpsi_frac_gauss", "jpsi_frac_gauss", 0.2, 0.0, 1.0)
     jpsi1_params = {
         "mean": ROOT.RooRealVar("jpsi1_mean", "jpsi1_mean", 3.096, 3.05, 3.15),
         "sigma_cb": ROOT.RooRealVar("jpsi1_sigma_cb", "jpsi1_sigma_cb", 0.025, 0.003, 0.08),
-        "alpha": ROOT.RooRealVar("jpsi1_alpha", "jpsi1_alpha", 1.5, 0.3, 5.0),
-        "n": ROOT.RooRealVar("jpsi1_n", "jpsi1_n", 3.0, 0.5, 20.0),
+        "alpha": jpsi_alpha,
+        "n": jpsi_n,
         "sigma_gauss": ROOT.RooRealVar("jpsi1_sigma_gauss", "jpsi1_sigma_gauss", 0.04, 0.003, 0.12),
-        "frac_gauss": ROOT.RooRealVar("jpsi1_frac_gauss", "jpsi1_frac_gauss", 0.2, 0.0, 1.0),
+        "frac_gauss": jpsi_frac_gauss,
     }
     jpsi2_params = {
         "mean": ROOT.RooRealVar("jpsi2_mean", "jpsi2_mean", 3.096, 3.05, 3.15),
         "sigma_cb": ROOT.RooRealVar("jpsi2_sigma_cb", "jpsi2_sigma_cb", 0.025, 0.003, 0.08),
-        "alpha": ROOT.RooRealVar("jpsi2_alpha", "jpsi2_alpha", 1.5, 0.3, 5.0),
-        "n": ROOT.RooRealVar("jpsi2_n", "jpsi2_n", 3.0, 0.5, 20.0),
+        "alpha": jpsi_alpha,
+        "n": jpsi_n,
         "sigma_gauss": ROOT.RooRealVar("jpsi2_sigma_gauss", "jpsi2_sigma_gauss", 0.04, 0.003, 0.12),
-        "frac_gauss": ROOT.RooRealVar("jpsi2_frac_gauss", "jpsi2_frac_gauss", 0.2, 0.0, 1.0),
+        "frac_gauss": jpsi_frac_gauss,
     }
+    keep.extend([jpsi_alpha, jpsi_n, jpsi_frac_gauss])
     keep.extend(list(jpsi1_params.values()))
     keep.extend(list(jpsi2_params.values()))
     jpsi1_slope = ROOT.RooRealVar("jpsi1_bkg_slope", "jpsi1_bkg_slope", -2.0, -50.0, -0.001)
@@ -364,6 +368,15 @@ def compute_component_significance(
     }
 
 
+def save_significance_to_root(fout, signal_yield_name: str, significance):
+    ROOT.TNamed("signal_component", signal_yield_name).Write()
+    ROOT.TParameter("double")("signal_yield", float(significance["signal_yield"])).Write()
+    ROOT.TParameter("double")("background_yield", float(significance["background_yield"])).Write()
+    ROOT.TParameter("double")("q0_lrt", float(significance["q0"])).Write()
+    ROOT.TParameter("double")("lrt_significance", float(significance["lrt_significance"])).Write()
+    significance["null_fit_result"].Write("null_fit_result")
+
+
 def main():
     args = parse_args()
     channel = normalize_channel(args.channel)
@@ -421,11 +434,6 @@ def main():
         weight_map[f"{yield_name}_sw"] = [data.get(i).getRealValue(f"{yield_name}_sw") for i in range(data.numEntries())]
     weight_map["signal_sw"] = list(weight_map[f"{signal_yield_name}_sw"])
 
-    clone_tree_with_weights(input_file, output_file, weight_map)
-    fit_out = ROOT.TFile(output_file.replace(".root", "_fit_result.root"), "RECREATE")
-    fit_result.Write("fit_result")
-    fit_out.Close()
-    fin.Close()
     significance = compute_component_significance(
         model,
         data,
@@ -437,6 +445,13 @@ def main():
         print_level=-1,
     )
     keepalive.append(significance["null_fit_result"])
+
+    clone_tree_with_weights(input_file, output_file, weight_map)
+    fit_out = ROOT.TFile(output_file.replace(".root", "_fit_result.root"), "RECREATE")
+    fit_result.Write("fit_result")
+    save_significance_to_root(fit_out, signal_yield_name, significance)
+    fit_out.Close()
+    fin.Close()
 
     print(f"[INFO] fitted dataset entries : {data.numEntries()}")
     print(f"[INFO] signal yield           : {yields[signal_yield_name].getVal():.2f}")
