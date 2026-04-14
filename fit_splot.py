@@ -94,11 +94,15 @@ def build_phi_background(obs):
     return pdf, {"c0": c0, "c1": c1, "c2": c2, "pdf": pdf}
 
 
-def build_ups_signal(obs):
+def build_ups_signal(obs, mc_only_1s: bool = False):
     keep = []
     mean_1s = ROOT.RooRealVar("mean_Ups_1S", "mean_Ups_1S", 9.460, 9.40, 9.50)
-    sigma_1s_1 = ROOT.RooConstVar("sigma_Ups_1S_1", "sigma_Ups_1S_1", 0.081172)
-    sigma_1s_2 = ROOT.RooConstVar("sigma_Ups_1S_2", "sigma_Ups_1S_2", 0.05)
+    if mc_only_1s:
+        sigma_1s_1 = ROOT.RooRealVar("sigma_Ups_1S_1", "sigma_Ups_1S_1", 0.081172, 0.005, 0.20)
+        sigma_1s_2 = ROOT.RooRealVar("sigma_Ups_1S_2", "sigma_Ups_1S_2", 0.05, 0.005, 0.20)
+    else:
+        sigma_1s_1 = ROOT.RooConstVar("sigma_Ups_1S_1", "sigma_Ups_1S_1", 0.081172)
+        sigma_1s_2 = ROOT.RooConstVar("sigma_Ups_1S_2", "sigma_Ups_1S_2", 0.05)
     diff_2s = ROOT.RooConstVar("mean_diff_2S_1S", "mean_diff_2S_1S", 10.023 - 9.460)
     diff_3s = ROOT.RooConstVar("mean_diff_3S_1S", "mean_diff_3S_1S", 10.355 - 9.460)
     mean_2s = ROOT.RooFormulaVar("mean_Ups_2S", "@0+@1", ROOT.RooArgList(mean_1s, diff_2s))
@@ -117,6 +121,10 @@ def build_ups_signal(obs):
     cb_1s_2 = ROOT.RooCBShape("cb_Ups_1S_2", "cb_Ups_1S_2", obs, mean_1s, sigma_1s_2, alpha_2, n_2)
     frac_cb = ROOT.RooConstVar("frac_cb_Ups", "frac_cb_Ups", 7.2778e-01)
     cb_1s = ROOT.RooAddPdf("cb_Ups_1S", "cb_Ups_1S", ROOT.RooArgList(cb_1s_1, cb_1s_2), ROOT.RooArgList(frac_cb))
+
+    if mc_only_1s:
+        keep.extend([mean_1s, sigma_1s_1, sigma_1s_2, alpha_1, n_1, alpha_2, n_2, cb_1s_1, cb_1s_2, frac_cb, cb_1s])
+        return cb_1s, keep
 
     cb_2s_1 = ROOT.RooCBShape("cb_Ups_2S_1", "cb_Ups_2S_1", obs, mean_2s, sigma_2s_1, alpha_1, n_1)
     cb_2s_2 = ROOT.RooCBShape("cb_Ups_2S_2", "cb_Ups_2S_2", obs, mean_2s, sigma_2s_2, alpha_2, n_2)
@@ -215,7 +223,7 @@ def build_jjp_model(n_events: int):
     return model, observables, yields, "yield_sss", keep
 
 
-def build_jup_model(n_events: int):
+def build_jup_model(n_events: int, mc_only_1s: bool = False):
     keep = []
     m_jpsi = ROOT.RooRealVar("sel_Jpsi_mass", "m(Jpsi)", 2.9, 3.3)
     m_ups = ROOT.RooRealVar("sel_Ups_mass", "m(Upsilon)", 8.5, 11.4)
@@ -235,7 +243,7 @@ def build_jup_model(n_events: int):
     keep.append(jpsi_slope)
     jpsi_sig = build_jpsi_signal(m_jpsi, "main", jpsi_shared, keep)
     jpsi_bkg = build_jpsi_background(m_jpsi, "main", jpsi_slope, keep)
-    ups_sig, ups_keep = build_ups_signal(m_ups)
+    ups_sig, ups_keep = build_ups_signal(m_ups, mc_only_1s=mc_only_1s)
     ups_bkg, ups_bkg_keep = build_ups_background(m_ups)
     phi_sig, phi_keep = build_phi_signal(m_phi)
     phi_bkg, phi_bkg_keep = build_phi_background(m_phi)
@@ -411,7 +419,7 @@ def main():
     if channel == "JJP":
         model, observables, yields, signal_yield_name, keepalive = build_jjp_model(n_entries)
     else:
-        model, observables, yields, signal_yield_name, keepalive = build_jup_model(n_entries)
+        model, observables, yields, signal_yield_name, keepalive = build_jup_model(n_entries, mc_only_1s=(dataset == "mc"))
 
     data = make_dataset(tree, observables)
     keepalive.append(data)
