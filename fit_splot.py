@@ -154,7 +154,7 @@ def build_ups_background(obs):
     return pdf, [c0, c1, c2, pdf]
 
 
-def build_jjp_model(n_events: int):
+def build_jjp_model(n_events: int, mc_two_component: bool = False):
     keep = []
     m_jpsi1 = ROOT.RooRealVar("sel_Jpsi_1_mass", "m(Jpsi1)", 2.9, 3.3)
     m_jpsi2 = ROOT.RooRealVar("sel_Jpsi_2_mass", "m(Jpsi2)", 2.9, 3.3)
@@ -198,15 +198,16 @@ def build_jjp_model(n_events: int):
     components = OrderedDict()
     components["yield_sss"] = ROOT.RooProdPdf("pdf_sss", "pdf_sss", ROOT.RooArgSet(jpsi1_sig, jpsi2_sig, phi_sig))
     components["yield_ssb"] = ROOT.RooProdPdf("pdf_ssb", "pdf_ssb", ROOT.RooArgSet(jpsi1_sig, jpsi2_sig, phi_bkg))
-    components["yield_sbs"] = ROOT.RooProdPdf("pdf_sbs", "pdf_sbs", ROOT.RooArgSet(jpsi1_sig, jpsi2_bkg, phi_sig))
-    components["yield_bss"] = ROOT.RooProdPdf("pdf_bss", "pdf_bss", ROOT.RooArgSet(jpsi1_bkg, jpsi2_sig, phi_sig))
-    components["yield_sbb"] = ROOT.RooProdPdf("pdf_sbb", "pdf_sbb", ROOT.RooArgSet(jpsi1_sig, jpsi2_bkg, phi_bkg))
-    components["yield_bsb"] = ROOT.RooProdPdf("pdf_bsb", "pdf_bsb", ROOT.RooArgSet(jpsi1_bkg, jpsi2_sig, phi_bkg))
-    components["yield_bbs"] = ROOT.RooProdPdf("pdf_bbs", "pdf_bbs", ROOT.RooArgSet(jpsi1_bkg, jpsi2_bkg, phi_sig))
-    components["yield_bbb"] = ROOT.RooProdPdf("pdf_bbb", "pdf_bbb", ROOT.RooArgSet(jpsi1_bkg, jpsi2_bkg, phi_bkg))
+    if not mc_two_component:
+        components["yield_sbs"] = ROOT.RooProdPdf("pdf_sbs", "pdf_sbs", ROOT.RooArgSet(jpsi1_sig, jpsi2_bkg, phi_sig))
+        components["yield_bss"] = ROOT.RooProdPdf("pdf_bss", "pdf_bss", ROOT.RooArgSet(jpsi1_bkg, jpsi2_sig, phi_sig))
+        components["yield_sbb"] = ROOT.RooProdPdf("pdf_sbb", "pdf_sbb", ROOT.RooArgSet(jpsi1_sig, jpsi2_bkg, phi_bkg))
+        components["yield_bsb"] = ROOT.RooProdPdf("pdf_bsb", "pdf_bsb", ROOT.RooArgSet(jpsi1_bkg, jpsi2_sig, phi_bkg))
+        components["yield_bbs"] = ROOT.RooProdPdf("pdf_bbs", "pdf_bbs", ROOT.RooArgSet(jpsi1_bkg, jpsi2_bkg, phi_sig))
+        components["yield_bbb"] = ROOT.RooProdPdf("pdf_bbb", "pdf_bbb", ROOT.RooArgSet(jpsi1_bkg, jpsi2_bkg, phi_bkg))
 
     yields = OrderedDict()
-    init = [0.4, 0.1, 0.08, 0.08, 0.08, 0.08, 0.08, 0.1]
+    init = [0.9, 0.1] if mc_two_component else [0.4, 0.1, 0.08, 0.08, 0.08, 0.08, 0.08, 0.1]
     for (yield_name, _), frac in zip(components.items(), init):
         yields[yield_name] = ROOT.RooRealVar(yield_name, yield_name, max(5.0, n_events * frac), 0.0, max(20.0, n_events * 1.5))
     keep.extend(list(components.values()))
@@ -223,7 +224,7 @@ def build_jjp_model(n_events: int):
     return model, observables, yields, "yield_sss", keep
 
 
-def build_jup_model(n_events: int, mc_only_1s: bool = False):
+def build_jup_model(n_events: int, mc_only_1s: bool = False, mc_two_component: bool = False):
     keep = []
     m_jpsi = ROOT.RooRealVar("sel_Jpsi_mass", "m(Jpsi)", 2.9, 3.3)
     m_ups = ROOT.RooRealVar("sel_Ups_mass", "m(Upsilon)", 8.5, 11.4)
@@ -255,15 +256,16 @@ def build_jup_model(n_events: int, mc_only_1s: bool = False):
     components = OrderedDict()
     components["yield_sss"] = ROOT.RooProdPdf("pdf_sss", "pdf_sss", ROOT.RooArgSet(jpsi_sig, ups_sig, phi_sig))
     components["yield_ssb"] = ROOT.RooProdPdf("pdf_ssb", "pdf_ssb", ROOT.RooArgSet(jpsi_sig, ups_sig, phi_bkg))
-    components["yield_sbs"] = ROOT.RooProdPdf("pdf_sbs", "pdf_sbs", ROOT.RooArgSet(jpsi_sig, ups_bkg, phi_sig))
-    components["yield_bss"] = ROOT.RooProdPdf("pdf_bss", "pdf_bss", ROOT.RooArgSet(jpsi_bkg, ups_sig, phi_sig))
-    components["yield_sbb"] = ROOT.RooProdPdf("pdf_sbb", "pdf_sbb", ROOT.RooArgSet(jpsi_sig, ups_bkg, phi_bkg))
-    components["yield_bsb"] = ROOT.RooProdPdf("pdf_bsb", "pdf_bsb", ROOT.RooArgSet(jpsi_bkg, ups_sig, phi_bkg))
-    components["yield_bbs"] = ROOT.RooProdPdf("pdf_bbs", "pdf_bbs", ROOT.RooArgSet(jpsi_bkg, ups_bkg, phi_sig))
-    components["yield_bbb"] = ROOT.RooProdPdf("pdf_bbb", "pdf_bbb", ROOT.RooArgSet(jpsi_bkg, ups_bkg, phi_bkg))
+    if not mc_two_component:
+        components["yield_sbs"] = ROOT.RooProdPdf("pdf_sbs", "pdf_sbs", ROOT.RooArgSet(jpsi_sig, ups_bkg, phi_sig))
+        components["yield_bss"] = ROOT.RooProdPdf("pdf_bss", "pdf_bss", ROOT.RooArgSet(jpsi_bkg, ups_sig, phi_sig))
+        components["yield_sbb"] = ROOT.RooProdPdf("pdf_sbb", "pdf_sbb", ROOT.RooArgSet(jpsi_sig, ups_bkg, phi_bkg))
+        components["yield_bsb"] = ROOT.RooProdPdf("pdf_bsb", "pdf_bsb", ROOT.RooArgSet(jpsi_bkg, ups_sig, phi_bkg))
+        components["yield_bbs"] = ROOT.RooProdPdf("pdf_bbs", "pdf_bbs", ROOT.RooArgSet(jpsi_bkg, ups_bkg, phi_sig))
+        components["yield_bbb"] = ROOT.RooProdPdf("pdf_bbb", "pdf_bbb", ROOT.RooArgSet(jpsi_bkg, ups_bkg, phi_bkg))
 
     yields = OrderedDict()
-    init = [0.5, 0.08, 0.08, 0.08, 0.06, 0.06, 0.06, 0.08]
+    init = [0.9, 0.1] if mc_two_component else [0.5, 0.08, 0.08, 0.08, 0.06, 0.06, 0.06, 0.08]
     for (yield_name, _), frac in zip(components.items(), init):
         yields[yield_name] = ROOT.RooRealVar(yield_name, yield_name, max(5.0, n_events * frac), 0.0, max(20.0, n_events * 1.5))
     keep.extend(list(components.values()))
@@ -287,11 +289,9 @@ def make_dataset(tree, observables):
     return ROOT.RooDataSet("data", "data", tree, argset)
 
 
-def save_projection_plots(channel: str, plot_dir: str, data, model, observables, signal_yield_name: str):
+def save_projection_plots(channel: str, plot_dir: str, data, model, observables, signal_yield_name: str, yields):
     ensure_dir(plot_dir)
-    background_components = ",".join(
-        [name.replace("yield_", "pdf_") for name in ["yield_ssb", "yield_sbs", "yield_bss", "yield_sbb", "yield_bsb", "yield_bbs", "yield_bbb"]]
-    )
+    background_components = ",".join(name.replace("yield_", "pdf_") for name in yields if name != signal_yield_name)
     signal_component = signal_yield_name.replace("yield_", "pdf_")
 
     ROOT.gStyle.SetOptStat(0)
@@ -301,7 +301,8 @@ def save_projection_plots(channel: str, plot_dir: str, data, model, observables,
         frame = obs.frame(ROOT.RooFit.Title(f"{channel} fit projection: {branch_name}"))
         data.plotOn(frame, ROOT.RooFit.Name("data"))
         model.plotOn(frame, ROOT.RooFit.Name("model"))
-        model.plotOn(frame, ROOT.RooFit.Components(background_components), ROOT.RooFit.LineStyle(ROOT.kDashed), ROOT.RooFit.LineColor(ROOT.kBlue + 1))
+        if background_components:
+            model.plotOn(frame, ROOT.RooFit.Components(background_components), ROOT.RooFit.LineStyle(ROOT.kDashed), ROOT.RooFit.LineColor(ROOT.kBlue + 1))
         model.plotOn(frame, ROOT.RooFit.Components(signal_component), ROOT.RooFit.LineStyle(ROOT.kDashed), ROOT.RooFit.LineColor(ROOT.kRed + 1))
         frame.GetXaxis().SetTitle(branch_name)
         frame.Draw()
@@ -417,9 +418,13 @@ def main():
     tree = fin.Get(INPUT_TREE)
 
     if channel == "JJP":
-        model, observables, yields, signal_yield_name, keepalive = build_jjp_model(n_entries)
+        model, observables, yields, signal_yield_name, keepalive = build_jjp_model(n_entries, mc_two_component=(dataset == "mc"))
     else:
-        model, observables, yields, signal_yield_name, keepalive = build_jup_model(n_entries, mc_only_1s=(dataset == "mc"))
+        model, observables, yields, signal_yield_name, keepalive = build_jup_model(
+            n_entries,
+            mc_only_1s=(dataset == "mc"),
+            mc_two_component=(dataset == "mc"),
+        )
 
     data = make_dataset(tree, observables)
     keepalive.append(data)
@@ -433,7 +438,7 @@ def main():
     )
     keepalive.append(fit_result)
 
-    save_projection_plots(channel, plot_dir, data, model, observables, signal_yield_name)
+    save_projection_plots(channel, plot_dir, data, model, observables, signal_yield_name, yields)
     sdata = ROOT.RooStats.SPlot("sData", "sData", data, model, ROOT.RooArgList(*yields.values()))
     keepalive.append(sdata)
 
