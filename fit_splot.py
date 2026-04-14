@@ -74,12 +74,17 @@ def build_phi_signal(obs, float_width: bool = False):
 
 
 def build_phi_background(obs):
-    c0 = ROOT.RooRealVar("phi_bkg_c0", "phi_bkg_c0", 0.0, -100.0, 100.0)
-    c1 = ROOT.RooRealVar("phi_bkg_c1", "phi_bkg_c1", 0.0, -100.0, 100.0)
-    c2 = ROOT.RooRealVar("phi_bkg_c2", "phi_bkg_c2", 0.0, -100.0, 100.0)
-    # pdf = ROOT.RooChebychev("phi_bkg", "phi_bkg", obs, ROOT.RooArgList(c0, c1, c2))
-    pdf = ROOT.RooBernstein("phi_bkg", "phi_bkg", obs, ROOT.RooArgList(c0, c1, c2))
-    return pdf, {"c0": c0, "c1": c1, "c2": c2, "pdf": pdf}
+    mthr = ROOT.RooConstVar("phi_bkg_thr", "phi_bkg_thr", 0.987354)
+    p = ROOT.RooRealVar("phi_bkg_p", "phi_bkg_p", 0.8, 0.0, 8.0)
+    a1 = ROOT.RooRealVar("phi_bkg_a1", "phi_bkg_a1", 10.0, -200.0, 200.0)
+    a2 = ROOT.RooRealVar("phi_bkg_a2", "phi_bkg_a2", -80.0, -2000.0, 500.0)
+    pdf = ROOT.RooGenericPdf(
+        "phi_bkg",
+        "phi_bkg",
+        "pow(@0-@1,@2) * exp(@3*(@0-@1) + @4*pow(@0-@1,2))",
+        ROOT.RooArgList(obs, mthr, p, a1, a2),
+    )
+    return pdf, {"thr": mthr, "p": p, "a1": a1, "a2": a2, "pdf": pdf}
 
 
 def build_ups_signal(obs, mc_only_1s: bool = False):
