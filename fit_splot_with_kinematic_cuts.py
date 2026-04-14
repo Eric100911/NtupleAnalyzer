@@ -48,7 +48,7 @@ COMMON_CUTS = {
     "track_misuse_relpt_max": 0.01,
     "phi_pt_min": 4.0,
     "phi_abs_eta_max": 2.5,
-    "phi_vtxprob_min": 0.05,
+    "phi_vtxprob_min": 0.01,
     "phi_ctau_min": None,
     "phi_ctau_max": None,
     "pri_vtxprob_min": None,
@@ -68,7 +68,7 @@ JJP_CUTS = {
     "jpsi_trigger_min_matched_muons": 0,
     "jpsi_pt_min": 6.0,
     "jpsi_abs_eta_max": 2.5,
-    "jpsi_vtxprob_min": 0.05,
+    "jpsi_vtxprob_min": 0.01,
     "jpsi_ctau_min": None,
     "jpsi_ctau_max": None,
 }
@@ -80,12 +80,12 @@ JUP_CUTS = {
     "ups_trigger_min_matched_muons": 0,
     "jpsi_pt_min": 6.0,
     "jpsi_abs_eta_max": 2.5,
-    "jpsi_vtxprob_min": 0.05,
+    "jpsi_vtxprob_min": 0.01,
     "jpsi_ctau_min": None,
     "jpsi_ctau_max": None,
     "ups_pt_min": None,
     "ups_abs_eta_max": 2.5,
-    "ups_vtxprob_min": 0.10,
+    "ups_vtxprob_min": 0.01,
     "ups_ctau_min": None,
     "ups_ctau_max": None,
 }
@@ -230,6 +230,9 @@ def build_prefit_filters(channel: str, available_branches: set[str]):
     filters: list[tuple[str, str]] = []
     warnings: list[str] = []
 
+    def cand_take(branch: str) -> str:
+        return f"TakeAt({branch}, bestCandIdx)"
+
     add_filter(filters, warnings, available_branches, range_expression("sel_Phi_pt", min_value=COMMON_CUTS["phi_pt_min"]), "phi_pt", ["sel_Phi_pt"])
     add_filter(filters, warnings, available_branches, range_expression("sel_Phi_eta", max_value=COMMON_CUTS["phi_abs_eta_max"], abs_value=True), "phi_eta", ["sel_Phi_eta"])
     add_filter(filters, warnings, available_branches, range_expression("sel_Phi_VtxProb", min_value=COMMON_CUTS["phi_vtxprob_min"]), "phi_vtxprob", ["sel_Phi_VtxProb"])
@@ -237,37 +240,72 @@ def build_prefit_filters(channel: str, available_branches: set[str]):
     add_filter(filters, warnings, available_branches, range_expression("sel_Pri_VtxProb", min_value=COMMON_CUTS["pri_vtxprob_min"]), "pri_vtxprob", ["sel_Pri_VtxProb"])
 
     if COMMON_CUTS["require_pri_assocpv_pass"]:
-        add_filter(filters, warnings, available_branches, "Pri_assocPVPass > 0", "pri_assocpv_pass", ["Pri_assocPVPass"])
+        add_filter(filters, warnings, available_branches, f"{cand_take('Pri_assocPVPass')} > 0", "pri_assocpv_pass", ["Pri_assocPVPass", "bestCandIdx"])
     if COMMON_CUTS["require_phi_common_assocpv_pass"]:
-        add_filter(filters, warnings, available_branches, "Phi_commonAssocPVPass > 0", "phi_common_assocpv_pass", ["Phi_commonAssocPVPass"])
+        add_filter(filters, warnings, available_branches, f"{cand_take('Phi_commonAssocPVPass')} > 0", "phi_common_assocpv_pass", ["Phi_commonAssocPVPass", "bestCandIdx"])
     if COMMON_CUTS["require_kaon_has_assocpv"]:
-        add_filter(filters, warnings, available_branches, "Phi_K_1_hasAssocPV > 0 && Phi_K_2_hasAssocPV > 0", "kaon_assocpv", ["Phi_K_1_hasAssocPV", "Phi_K_2_hasAssocPV"])
+        add_filter(
+            filters,
+            warnings,
+            available_branches,
+            f"{cand_take('Phi_K_1_hasAssocPV')} > 0 && {cand_take('Phi_K_2_hasAssocPV')} > 0",
+            "kaon_assocpv",
+            ["Phi_K_1_hasAssocPV", "Phi_K_2_hasAssocPV", "bestCandIdx"],
+        )
 
-    add_filter(filters, warnings, available_branches, range_expression("Pri_assocPVIdx", COMMON_CUTS["assocpv_idx_min"], COMMON_CUTS["assocpv_idx_max"]), "pri_assocpv_idx", ["Pri_assocPVIdx"])
-    add_filter(filters, warnings, available_branches, range_expression("Phi_commonAssocPVIdx", COMMON_CUTS["assocpv_idx_min"], COMMON_CUTS["assocpv_idx_max"]), "phi_assocpv_idx", ["Phi_commonAssocPVIdx"])
-    add_filter(filters, warnings, available_branches, range_expression("Pri_maxAbsDzPV", max_value=COMMON_CUTS["pri_max_abs_dzpv"], abs_value=True), "pri_max_abs_dzpv", ["Pri_maxAbsDzPV"])
-    add_filter(filters, warnings, available_branches, range_expression("Pri_maxAbsDxyPV", max_value=COMMON_CUTS["pri_max_abs_dxypv"], abs_value=True), "pri_max_abs_dxypv", ["Pri_maxAbsDxyPV"])
     add_filter(
         filters,
         warnings,
         available_branches,
-        (
-            f"std::abs(Phi_K_1_dzAssocPV) <= {float(COMMON_CUTS['track_max_abs_dz_assocpv'])} && "
-            f"std::abs(Phi_K_2_dzAssocPV) <= {float(COMMON_CUTS['track_max_abs_dz_assocpv'])}"
-        ) if COMMON_CUTS["track_max_abs_dz_assocpv"] is not None else None,
-        "track_dz_assocpv",
-        ["Phi_K_1_dzAssocPV", "Phi_K_2_dzAssocPV"],
+        range_expression(cand_take("Pri_assocPVIdx"), COMMON_CUTS["assocpv_idx_min"], COMMON_CUTS["assocpv_idx_max"]),
+        "pri_assocpv_idx",
+        ["Pri_assocPVIdx", "bestCandIdx"],
+    )
+    add_filter(
+        filters,
+        warnings,
+        available_branches,
+        range_expression(cand_take("Phi_commonAssocPVIdx"), COMMON_CUTS["assocpv_idx_min"], COMMON_CUTS["assocpv_idx_max"]),
+        "phi_assocpv_idx",
+        ["Phi_commonAssocPVIdx", "bestCandIdx"],
+    )
+    add_filter(
+        filters,
+        warnings,
+        available_branches,
+        range_expression(cand_take("Pri_maxAbsDzPV"), max_value=COMMON_CUTS["pri_max_abs_dzpv"], abs_value=True),
+        "pri_max_abs_dzpv",
+        ["Pri_maxAbsDzPV", "bestCandIdx"],
+    )
+    add_filter(
+        filters,
+        warnings,
+        available_branches,
+        range_expression(cand_take("Pri_maxAbsDxyPV"), max_value=COMMON_CUTS["pri_max_abs_dxypv"], abs_value=True),
+        "pri_max_abs_dxypv",
+        ["Pri_maxAbsDxyPV", "bestCandIdx"],
     )
     add_filter(
         filters,
         warnings,
         available_branches,
         (
-            f"std::abs(Phi_K_1_dxyAssocPV) <= {float(COMMON_CUTS['track_max_abs_dxy_assocpv'])} && "
-            f"std::abs(Phi_K_2_dxyAssocPV) <= {float(COMMON_CUTS['track_max_abs_dxy_assocpv'])}"
+            f"std::abs({cand_take('Phi_K_1_dzAssocPV')}) <= {float(COMMON_CUTS['track_max_abs_dz_assocpv'])} && "
+            f"std::abs({cand_take('Phi_K_2_dzAssocPV')}) <= {float(COMMON_CUTS['track_max_abs_dz_assocpv'])}"
+        ) if COMMON_CUTS["track_max_abs_dz_assocpv"] is not None else None,
+        "track_dz_assocpv",
+        ["Phi_K_1_dzAssocPV", "Phi_K_2_dzAssocPV", "bestCandIdx"],
+    )
+    add_filter(
+        filters,
+        warnings,
+        available_branches,
+        (
+            f"std::abs({cand_take('Phi_K_1_dxyAssocPV')}) <= {float(COMMON_CUTS['track_max_abs_dxy_assocpv'])} && "
+            f"std::abs({cand_take('Phi_K_2_dxyAssocPV')}) <= {float(COMMON_CUTS['track_max_abs_dxy_assocpv'])}"
         ) if COMMON_CUTS["track_max_abs_dxy_assocpv"] is not None else None,
         "track_dxy_assocpv",
-        ["Phi_K_1_dxyAssocPV", "Phi_K_2_dxyAssocPV"],
+        ["Phi_K_1_dxyAssocPV", "Phi_K_2_dxyAssocPV", "bestCandIdx"],
     )
 
     if COMMON_CUTS["muon_pt_min"] is not None:
