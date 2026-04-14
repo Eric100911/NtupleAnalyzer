@@ -43,30 +43,20 @@ def parse_args():
     return parser.parse_args()
 
 
-def build_jpsi_signal(obs, suffix: str, shared, keep):
-    cb = ROOT.RooCBShape(
-        f"jpsi_cb_{suffix}",
-        f"jpsi_cb_{suffix}",
-        obs,
-        shared["mean"],
-        shared["sigma_cb"],
-        shared["alpha"],
-        shared["n"],
-    )
-    gauss = ROOT.RooGaussian(
-        f"jpsi_gauss_{suffix}",
-        f"jpsi_gauss_{suffix}",
-        obs,
-        shared["mean"],
-        shared["sigma_gauss"],
-    )
-    pdf = ROOT.RooAddPdf(
+def build_jpsi_signal(obs, suffix: str, params, keep):
+    pdf = ROOT.RooCrystalBall(
         f"jpsi_sig_{suffix}",
         f"jpsi_sig_{suffix}",
-        ROOT.RooArgList(cb, gauss),
-        ROOT.RooArgList(shared["frac_gauss"]),
+        obs,
+        params["mean"],
+        params["sigma_l"],
+        params["sigma_r"],
+        params["alpha_l"],
+        params["n_l"],
+        params["alpha_r"],
+        params["n_r"],
     )
-    keep.extend([cb, gauss, pdf])
+    keep.append(pdf)
     return pdf
 
 
@@ -78,8 +68,7 @@ def build_jpsi_background(obs, suffix: str, slope, keep):
 
 def build_phi_signal(obs, float_width: bool = False):
     mean = ROOT.RooRealVar("phi_mean", "phi_mean", 1.019, 1.010, 1.028)
-    width = ROOT.RooRealVar("phi_width", "phi_width", 0.002124, 0.0005, 0.005)
-    width.setConstant(not float_width)
+    width = ROOT.RooConstVar("phi_width", "phi_width", 0.004249)
     sigma = ROOT.RooRealVar("phi_sigma", "phi_sigma", 0.002, 0.0002, 0.005)
     pdf = ROOT.RooVoigtian("phi_sig", "phi_sig", obs, mean, width, sigma)
     return pdf, {"mean": mean, "width": width, "sigma": sigma, "pdf": pdf}
@@ -169,26 +158,24 @@ def build_jjp_model(n_events: int, mc_two_component: bool = False):
     m_phi = ROOT.RooRealVar("sel_Phi_mass", "m(Phi)", 0.99, 1.07)
     keep.extend([m_jpsi1, m_jpsi2, m_phi])
 
-    jpsi_alpha = ROOT.RooRealVar("jpsi_alpha", "jpsi_alpha", 1.5, 0.3, 5.0)
-    jpsi_n = ROOT.RooRealVar("jpsi_n", "jpsi_n", 3.0, 1.0, 20.0)
-    jpsi_frac_gauss = ROOT.RooRealVar("jpsi_frac_gauss", "jpsi_frac_gauss", 0.2, 0.0, 1.0)
     jpsi1_params = {
         "mean": ROOT.RooRealVar("jpsi1_mean", "jpsi1_mean", 3.096, 3.05, 3.15),
-        "sigma_cb": ROOT.RooRealVar("jpsi1_sigma_cb", "jpsi1_sigma_cb", 0.025, 0.003, 0.08),
-        "alpha": jpsi_alpha,
-        "n": jpsi_n,
-        "sigma_gauss": ROOT.RooRealVar("jpsi1_sigma_gauss", "jpsi1_sigma_gauss", 0.04, 0.003, 0.12),
-        "frac_gauss": jpsi_frac_gauss,
+        "sigma_l": ROOT.RooRealVar("jpsi1_sigma_l", "jpsi1_sigma_l", 0.025, 0.003, 0.08),
+        "sigma_r": ROOT.RooRealVar("jpsi1_sigma_r", "jpsi1_sigma_r", 0.025, 0.003, 0.08),
+        "alpha_l": ROOT.RooRealVar("jpsi1_alpha_l", "jpsi1_alpha_l", 1.5, 0.1, 10.0),
+        "n_l": ROOT.RooRealVar("jpsi1_n_l", "jpsi1_n_l", 3.0, 1.0, 50.0),
+        "alpha_r": ROOT.RooRealVar("jpsi1_alpha_r", "jpsi1_alpha_r", 1.5, 0.1, 10.0),
+        "n_r": ROOT.RooRealVar("jpsi1_n_r", "jpsi1_n_r", 3.0, 1.0, 50.0),
     }
     jpsi2_params = {
         "mean": ROOT.RooRealVar("jpsi2_mean", "jpsi2_mean", 3.096, 3.05, 3.15),
-        "sigma_cb": ROOT.RooRealVar("jpsi2_sigma_cb", "jpsi2_sigma_cb", 0.025, 0.003, 0.08),
-        "alpha": jpsi_alpha,
-        "n": jpsi_n,
-        "sigma_gauss": ROOT.RooRealVar("jpsi2_sigma_gauss", "jpsi2_sigma_gauss", 0.04, 0.003, 0.12),
-        "frac_gauss": jpsi_frac_gauss,
+        "sigma_l": ROOT.RooRealVar("jpsi2_sigma_l", "jpsi2_sigma_l", 0.025, 0.003, 0.08),
+        "sigma_r": ROOT.RooRealVar("jpsi2_sigma_r", "jpsi2_sigma_r", 0.025, 0.003, 0.08),
+        "alpha_l": ROOT.RooRealVar("jpsi2_alpha_l", "jpsi2_alpha_l", 1.5, 0.1, 10.0),
+        "n_l": ROOT.RooRealVar("jpsi2_n_l", "jpsi2_n_l", 3.0, 1.0, 50.0),
+        "alpha_r": ROOT.RooRealVar("jpsi2_alpha_r", "jpsi2_alpha_r", 1.5, 0.1, 10.0),
+        "n_r": ROOT.RooRealVar("jpsi2_n_r", "jpsi2_n_r", 3.0, 1.0, 50.0),
     }
-    keep.extend([jpsi_alpha, jpsi_n, jpsi_frac_gauss])
     keep.extend(list(jpsi1_params.values()))
     keep.extend(list(jpsi2_params.values()))
     jpsi1_slope = ROOT.RooRealVar("jpsi1_bkg_slope", "jpsi1_bkg_slope", -2.0, -50.0, -0.001)
@@ -235,17 +222,18 @@ def build_jjp_model(n_events: int, mc_two_component: bool = False):
 def build_jup_model(n_events: int, mc_only_1s: bool = False, mc_two_component: bool = False):
     keep = []
     m_jpsi = ROOT.RooRealVar("sel_Jpsi_mass", "m(Jpsi)", 2.9, 3.3)
-    m_ups = ROOT.RooRealVar("sel_Ups_mass", "m(Upsilon)", 9.0, 10.0) if mc_only_1s else ROOT.RooRealVar("sel_Ups_mass", "m(Upsilon)", 8.5, 11.4)
+    m_ups = ROOT.RooRealVar("sel_Ups_mass", "m(Upsilon)", 8.5, 11.4)
     m_phi = ROOT.RooRealVar("sel_Phi_mass", "m(Phi)", 0.99, 1.07)
     keep.extend([m_jpsi, m_ups, m_phi])
 
     jpsi_shared = {
         "mean": ROOT.RooRealVar("jpsi_mean", "jpsi_mean", 3.096, 3.05, 3.15),
-        "sigma_cb": ROOT.RooRealVar("jpsi_sigma_cb", "jpsi_sigma_cb", 0.025, 0.003, 0.08),
-        "alpha": ROOT.RooRealVar("jpsi_alpha", "jpsi_alpha", 1.5, 0.3, 5.0),
-        "n": ROOT.RooRealVar("jpsi_n", "jpsi_n", 3.0, 1.0, 20.0),
-        "sigma_gauss": ROOT.RooRealVar("jpsi_sigma_gauss", "jpsi_sigma_gauss", 0.04, 0.003, 0.12),
-        "frac_gauss": ROOT.RooRealVar("jpsi_frac_gauss", "jpsi_frac_gauss", 0.2, 0.0, 1.0),
+        "sigma_l": ROOT.RooRealVar("jpsi_sigma_l", "jpsi_sigma_l", 0.025, 0.003, 0.08),
+        "sigma_r": ROOT.RooRealVar("jpsi_sigma_r", "jpsi_sigma_r", 0.025, 0.003, 0.08),
+        "alpha_l": ROOT.RooRealVar("jpsi_alpha_l", "jpsi_alpha_l", 1.5, 0.1, 10.0),
+        "n_l": ROOT.RooRealVar("jpsi_n_l", "jpsi_n_l", 3.0, 1.0, 50.0),
+        "alpha_r": ROOT.RooRealVar("jpsi_alpha_r", "jpsi_alpha_r", 1.5, 0.1, 10.0),
+        "n_r": ROOT.RooRealVar("jpsi_n_r", "jpsi_n_r", 3.0, 1.0, 50.0),
     }
     keep.extend(list(jpsi_shared.values()))
     jpsi_slope = ROOT.RooRealVar("jpsi_bkg_slope", "jpsi_bkg_slope", -2.0, -50.0, -0.001)
@@ -318,10 +306,8 @@ def save_projection_plots(channel: str, plot_dir: str, data, model, observables,
         canvas.SaveAs(os.path.join(plot_dir, f"{branch_name}_fit.png"))
 
 
-def clone_tree_with_weights(input_file: str, output_file: str, weight_map):
+def clone_tree_with_weights(tree, output_file: str, weight_map):
     ensure_parent_dir(output_file)
-    fin = ROOT.TFile.Open(input_file)
-    tree = fin.Get(INPUT_TREE)
     fout = ROOT.TFile(output_file, "RECREATE")
     out_tree = tree.CloneTree(0)
 
@@ -330,7 +316,15 @@ def clone_tree_with_weights(input_file: str, output_file: str, weight_map):
         branch_buffers[name] = array.array("d", [0.0])
         out_tree.Branch(name, branch_buffers[name], f"{name}/D")
 
-    for idx in range(tree.GetEntries()):
+    n_entries = tree.GetEntries()
+    expected = len(next(iter(weight_map.values()))) if weight_map else n_entries
+    if n_entries != expected:
+        raise RuntimeError(
+            f"Weight length mismatch: tree has {n_entries} entries, weights have {expected}. "
+            "The RooDataSet did not include all tree entries."
+        )
+
+    for idx in range(n_entries):
         tree.GetEntry(idx)
         for name, values in weight_map.items():
             branch_buffers[name][0] = float(values[idx])
@@ -338,7 +332,6 @@ def clone_tree_with_weights(input_file: str, output_file: str, weight_map):
 
     out_tree.Write()
     fout.Close()
-    fin.Close()
 
 
 def compute_component_significance(
@@ -467,13 +460,14 @@ def main():
     )
     keepalive.append(significance["null_fit_result"])
 
-    clone_tree_with_weights(input_file, output_file, weight_map)
+    clone_tree_with_weights(tree, output_file, weight_map)
     fit_out = ROOT.TFile(output_file.replace(".root", "_fit_result.root"), "RECREATE")
     fit_result.Write("fit_result")
     save_significance_to_root(fit_out, signal_yield_name, significance)
     fit_out.Close()
     fin.Close()
 
+    print(f"[INFO] input tree entries      : {tree.GetEntries()}")
     print(f"[INFO] fitted dataset entries : {data.numEntries()}")
     print(f"[INFO] signal yield           : {yields[signal_yield_name].getVal():.2f}")
     print(f"[INFO] background yield       : {significance['background_yield']:.2f}")
