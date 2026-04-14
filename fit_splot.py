@@ -49,8 +49,7 @@ def build_jpsi_signal(obs, suffix: str, params, keep):
         f"jpsi_sig_{suffix}",
         obs,
         params["mean"],
-        params["sigma_l"],
-        params["sigma_r"],
+        params["sigma"],
         params["alpha_l"],
         params["n_l"],
         params["alpha_r"],
@@ -85,59 +84,34 @@ def build_phi_background(obs):
 def build_ups_signal(obs, mc_only_1s: bool = False):
     keep = []
     mean_1s = ROOT.RooRealVar("mean_Ups_1S", "mean_Ups_1S", 9.460, 9.40, 9.50)
-    if mc_only_1s:
-        sigma_1s_1 = ROOT.RooRealVar("sigma_Ups_1S_1", "sigma_Ups_1S_1", 0.081172, 0.005, 0.20)
-        sigma_1s_2 = ROOT.RooRealVar("sigma_Ups_1S_2", "sigma_Ups_1S_2", 0.05, 0.005, 0.20)
-    else:
-        sigma_1s_1 = ROOT.RooConstVar("sigma_Ups_1S_1", "sigma_Ups_1S_1", 0.081172)
-        sigma_1s_2 = ROOT.RooConstVar("sigma_Ups_1S_2", "sigma_Ups_1S_2", 0.05)
+    sigma_1s = ROOT.RooRealVar("sigma_Ups_1S", "sigma_Ups_1S", 0.06, 0.005, 0.20)
     diff_2s = ROOT.RooConstVar("mean_diff_2S_1S", "mean_diff_2S_1S", 10.023 - 9.460)
     diff_3s = ROOT.RooConstVar("mean_diff_3S_1S", "mean_diff_3S_1S", 10.355 - 9.460)
     mean_2s = ROOT.RooFormulaVar("mean_Ups_2S", "@0+@1", ROOT.RooArgList(mean_1s, diff_2s))
     mean_3s = ROOT.RooFormulaVar("mean_Ups_3S", "@0+@1", ROOT.RooArgList(mean_1s, diff_3s))
-    sigma_2s_1 = ROOT.RooFormulaVar("sigma_Ups_2S_1", "@0*@1/@2", ROOT.RooArgList(sigma_1s_1, mean_2s, mean_1s))
-    sigma_2s_2 = ROOT.RooFormulaVar("sigma_Ups_2S_2", "@0*@1/@2", ROOT.RooArgList(sigma_1s_2, mean_2s, mean_1s))
-    sigma_3s_1 = ROOT.RooFormulaVar("sigma_Ups_3S_1", "@0*@1/@2", ROOT.RooArgList(sigma_1s_1, mean_3s, mean_1s))
-    sigma_3s_2 = ROOT.RooFormulaVar("sigma_Ups_3S_2", "@0*@1/@2", ROOT.RooArgList(sigma_1s_2, mean_3s, mean_1s))
+    sigma_2s = ROOT.RooFormulaVar("sigma_Ups_2S", "@0*@1/@2", ROOT.RooArgList(sigma_1s, mean_2s, mean_1s))
+    sigma_3s = ROOT.RooFormulaVar("sigma_Ups_3S", "@0*@1/@2", ROOT.RooArgList(sigma_1s, mean_3s, mean_1s))
+    alpha_l = ROOT.RooRealVar("alphaL_Ups", "alphaL_Ups", 2.5, 0.1, 10.0)
+    n_l = ROOT.RooRealVar("nL_Ups", "nL_Ups", 3.0, 1.0, 100.0)
+    alpha_r = ROOT.RooRealVar("alphaR_Ups", "alphaR_Ups", 2.5, 0.1, 10.0)
+    n_r = ROOT.RooRealVar("nR_Ups", "nR_Ups", 3.0, 1.0, 100.0)
+
+    dscb_1s = ROOT.RooCrystalBall("dscb_Ups_1S", "dscb_Ups_1S", obs, mean_1s, sigma_1s, alpha_l, n_l, alpha_r, n_r)
 
     if mc_only_1s:
-        alpha_1 = ROOT.RooRealVar("alpha_1_Ups", "alpha_1_Ups", 2.8762, 0.1, 10.0)
-        n_1 = ROOT.RooRealVar("n_1_Ups", "n_1_Ups", 0.061663, 0.01, 50.0)
-        alpha_2 = ROOT.RooRealVar("alpha_2_Ups", "alpha_2_Ups", 4.8121e-01, 0.01, 10.0)
-        n_2 = ROOT.RooRealVar("n_2_Ups", "n_2_Ups", 18.676, 0.5, 100.0)
-    else:
-        alpha_1 = ROOT.RooConstVar("alpha_1_Ups", "alpha_1_Ups", 2.8762)
-        n_1 = ROOT.RooConstVar("n_1_Ups", "n_1_Ups", 0.061663)
-        alpha_2 = ROOT.RooConstVar("alpha_2_Ups", "alpha_2_Ups", 4.8121e-01)
-        n_2 = ROOT.RooConstVar("n_2_Ups", "n_2_Ups", 18.676)
+        keep.extend([mean_1s, sigma_1s, alpha_l, n_l, alpha_r, n_r, dscb_1s])
+        return dscb_1s, keep
 
-    cb_1s_1 = ROOT.RooCBShape("cb_Ups_1S_1", "cb_Ups_1S_1", obs, mean_1s, sigma_1s_1, alpha_1, n_1)
-    cb_1s_2 = ROOT.RooCBShape("cb_Ups_1S_2", "cb_Ups_1S_2", obs, mean_1s, sigma_1s_2, alpha_2, n_2)
-    if mc_only_1s:
-        frac_cb = ROOT.RooRealVar("frac_cb_Ups", "frac_cb_Ups", 7.2778e-01, 0.0, 1.0)
-    else:
-        frac_cb = ROOT.RooConstVar("frac_cb_Ups", "frac_cb_Ups", 7.2778e-01)
-    cb_1s = ROOT.RooAddPdf("cb_Ups_1S", "cb_Ups_1S", ROOT.RooArgList(cb_1s_1, cb_1s_2), ROOT.RooArgList(frac_cb))
-
-    if mc_only_1s:
-        keep.extend([mean_1s, sigma_1s_1, sigma_1s_2, alpha_1, n_1, alpha_2, n_2, cb_1s_1, cb_1s_2, frac_cb, cb_1s])
-        return cb_1s, keep
-
-    cb_2s_1 = ROOT.RooCBShape("cb_Ups_2S_1", "cb_Ups_2S_1", obs, mean_2s, sigma_2s_1, alpha_1, n_1)
-    cb_2s_2 = ROOT.RooCBShape("cb_Ups_2S_2", "cb_Ups_2S_2", obs, mean_2s, sigma_2s_2, alpha_2, n_2)
-    cb_2s = ROOT.RooAddPdf("cb_Ups_2S", "cb_Ups_2S", ROOT.RooArgList(cb_2s_1, cb_2s_2), ROOT.RooArgList(frac_cb))
-
-    cb_3s_1 = ROOT.RooCBShape("cb_Ups_3S_1", "cb_Ups_3S_1", obs, mean_3s, sigma_3s_1, alpha_1, n_1)
-    cb_3s_2 = ROOT.RooCBShape("cb_Ups_3S_2", "cb_Ups_3S_2", obs, mean_3s, sigma_3s_2, alpha_2, n_2)
-    cb_3s = ROOT.RooAddPdf("cb_Ups_3S", "cb_Ups_3S", ROOT.RooArgList(cb_3s_1, cb_3s_2), ROOT.RooArgList(frac_cb))
+    dscb_2s = ROOT.RooCrystalBall("dscb_Ups_2S", "dscb_Ups_2S", obs, mean_2s, sigma_2s, alpha_l, n_l, alpha_r, n_r)
+    dscb_3s = ROOT.RooCrystalBall("dscb_Ups_3S", "dscb_Ups_3S", obs, mean_3s, sigma_3s, alpha_l, n_l, alpha_r, n_r)
 
     frac_1s = ROOT.RooRealVar("frac_1S", "frac_1S", 0.7, 0.0, 1.0)
     frac_2s = ROOT.RooRealVar("frac_2S", "frac_2S", 0.2, 0.0, 1.0)
-    pdf = ROOT.RooAddPdf("signal_Ups", "signal_Ups", ROOT.RooArgList(cb_1s, cb_2s, cb_3s), ROOT.RooArgList(frac_1s, frac_2s))
+    pdf = ROOT.RooAddPdf("signal_Ups", "signal_Ups", ROOT.RooArgList(dscb_1s, dscb_2s, dscb_3s), ROOT.RooArgList(frac_1s, frac_2s))
     keep.extend([
-        mean_1s, sigma_1s_1, sigma_1s_2, diff_2s, diff_3s, mean_2s, mean_3s,
-        sigma_2s_1, sigma_2s_2, sigma_3s_1, sigma_3s_2, alpha_1, n_1, alpha_2, n_2,
-        cb_1s_1, cb_1s_2, frac_cb, cb_1s, cb_2s_1, cb_2s_2, cb_2s, cb_3s_1, cb_3s_2, cb_3s,
+        mean_1s, sigma_1s, diff_2s, diff_3s, mean_2s, mean_3s,
+        sigma_2s, sigma_3s, alpha_l, n_l, alpha_r, n_r,
+        dscb_1s, dscb_2s, dscb_3s,
         frac_1s, frac_2s, pdf,
     ])
     return pdf, keep
@@ -158,26 +132,24 @@ def build_jjp_model(n_events: int, mc_two_component: bool = False):
     m_phi = ROOT.RooRealVar("sel_Phi_mass", "m(Phi)", 0.99, 1.07)
     keep.extend([m_jpsi1, m_jpsi2, m_phi])
 
+    shared_jpsi_tails = {
+        "alpha_l": ROOT.RooRealVar("jpsi_alpha_l", "jpsi_alpha_l", 1.5, 0.1, 10.0),
+        "n_l": ROOT.RooRealVar("jpsi_n_l", "jpsi_n_l", 3.0, 1.0, 50.0),
+        "alpha_r": ROOT.RooRealVar("jpsi_alpha_r", "jpsi_alpha_r", 1.5, 0.1, 10.0),
+        "n_r": ROOT.RooRealVar("jpsi_n_r", "jpsi_n_r", 3.0, 1.0, 50.0),
+    }
     jpsi1_params = {
         "mean": ROOT.RooRealVar("jpsi1_mean", "jpsi1_mean", 3.096, 3.05, 3.15),
-        "sigma_l": ROOT.RooRealVar("jpsi1_sigma_l", "jpsi1_sigma_l", 0.025, 0.003, 0.08),
-        "sigma_r": ROOT.RooRealVar("jpsi1_sigma_r", "jpsi1_sigma_r", 0.025, 0.003, 0.08),
-        "alpha_l": ROOT.RooRealVar("jpsi1_alpha_l", "jpsi1_alpha_l", 1.5, 0.1, 10.0),
-        "n_l": ROOT.RooRealVar("jpsi1_n_l", "jpsi1_n_l", 3.0, 1.0, 50.0),
-        "alpha_r": ROOT.RooRealVar("jpsi1_alpha_r", "jpsi1_alpha_r", 1.5, 0.1, 10.0),
-        "n_r": ROOT.RooRealVar("jpsi1_n_r", "jpsi1_n_r", 3.0, 1.0, 50.0),
+        "sigma": ROOT.RooRealVar("jpsi1_sigma", "jpsi1_sigma", 0.025, 0.003, 0.08),
+        **shared_jpsi_tails,
     }
     jpsi2_params = {
         "mean": ROOT.RooRealVar("jpsi2_mean", "jpsi2_mean", 3.096, 3.05, 3.15),
-        "sigma_l": ROOT.RooRealVar("jpsi2_sigma_l", "jpsi2_sigma_l", 0.025, 0.003, 0.08),
-        "sigma_r": ROOT.RooRealVar("jpsi2_sigma_r", "jpsi2_sigma_r", 0.025, 0.003, 0.08),
-        "alpha_l": ROOT.RooRealVar("jpsi2_alpha_l", "jpsi2_alpha_l", 1.5, 0.1, 10.0),
-        "n_l": ROOT.RooRealVar("jpsi2_n_l", "jpsi2_n_l", 3.0, 1.0, 50.0),
-        "alpha_r": ROOT.RooRealVar("jpsi2_alpha_r", "jpsi2_alpha_r", 1.5, 0.1, 10.0),
-        "n_r": ROOT.RooRealVar("jpsi2_n_r", "jpsi2_n_r", 3.0, 1.0, 50.0),
+        "sigma": ROOT.RooRealVar("jpsi2_sigma", "jpsi2_sigma", 0.025, 0.003, 0.08),
+        **shared_jpsi_tails,
     }
-    keep.extend(list(jpsi1_params.values()))
-    keep.extend(list(jpsi2_params.values()))
+    keep.extend(list(shared_jpsi_tails.values()))
+    keep.extend([jpsi1_params["mean"], jpsi1_params["sigma"], jpsi2_params["mean"], jpsi2_params["sigma"]])
     jpsi1_slope = ROOT.RooRealVar("jpsi1_bkg_slope", "jpsi1_bkg_slope", -2.0, -50.0, -0.001)
     jpsi2_slope = ROOT.RooRealVar("jpsi2_bkg_slope", "jpsi2_bkg_slope", -2.0, -50.0, -0.001)
     keep.extend([jpsi1_slope, jpsi2_slope])
@@ -228,8 +200,7 @@ def build_jup_model(n_events: int, mc_only_1s: bool = False, mc_two_component: b
 
     jpsi_shared = {
         "mean": ROOT.RooRealVar("jpsi_mean", "jpsi_mean", 3.096, 3.05, 3.15),
-        "sigma_l": ROOT.RooRealVar("jpsi_sigma_l", "jpsi_sigma_l", 0.025, 0.003, 0.08),
-        "sigma_r": ROOT.RooRealVar("jpsi_sigma_r", "jpsi_sigma_r", 0.025, 0.003, 0.08),
+        "sigma": ROOT.RooRealVar("jpsi_sigma", "jpsi_sigma", 0.025, 0.003, 0.08),
         "alpha_l": ROOT.RooRealVar("jpsi_alpha_l", "jpsi_alpha_l", 1.5, 0.1, 10.0),
         "n_l": ROOT.RooRealVar("jpsi_n_l", "jpsi_n_l", 3.0, 1.0, 50.0),
         "alpha_r": ROOT.RooRealVar("jpsi_alpha_r", "jpsi_alpha_r", 1.5, 0.1, 10.0),
