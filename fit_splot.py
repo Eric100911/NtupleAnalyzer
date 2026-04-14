@@ -76,11 +76,10 @@ def build_jpsi_background(obs, suffix: str, slope, keep):
     return pdf
 
 
-def build_phi_signal(obs):
+def build_phi_signal(obs, float_width: bool = False):
     mean = ROOT.RooRealVar("phi_mean", "phi_mean", 1.019, 1.010, 1.028)
-    # width = ROOT.RooRealVar("phi_width", "phi_width", 0.002, 0.0005, 0.005)
-    width = ROOT.RooRealVar("phi_width", "phi_width", 0.002124)
-    width.setConstant(True)
+    width = ROOT.RooRealVar("phi_width", "phi_width", 0.002124, 0.0005, 0.005)
+    width.setConstant(not float_width)
     sigma = ROOT.RooRealVar("phi_sigma", "phi_sigma", 0.002, 0.0002, 0.005)
     pdf = ROOT.RooVoigtian("phi_sig", "phi_sig", obs, mean, width, sigma)
     return pdf, {"mean": mean, "width": width, "sigma": sigma, "pdf": pdf}
@@ -112,14 +111,23 @@ def build_ups_signal(obs, mc_only_1s: bool = False):
     sigma_3s_1 = ROOT.RooFormulaVar("sigma_Ups_3S_1", "@0*@1/@2", ROOT.RooArgList(sigma_1s_1, mean_3s, mean_1s))
     sigma_3s_2 = ROOT.RooFormulaVar("sigma_Ups_3S_2", "@0*@1/@2", ROOT.RooArgList(sigma_1s_2, mean_3s, mean_1s))
 
-    alpha_1 = ROOT.RooConstVar("alpha_1_Ups", "alpha_1_Ups", 2.8762)
-    n_1 = ROOT.RooConstVar("n_1_Ups", "n_1_Ups", 0.061663)
-    alpha_2 = ROOT.RooConstVar("alpha_2_Ups", "alpha_2_Ups", 4.8121e-01)
-    n_2 = ROOT.RooConstVar("n_2_Ups", "n_2_Ups", 18.676)
+    if mc_only_1s:
+        alpha_1 = ROOT.RooRealVar("alpha_1_Ups", "alpha_1_Ups", 2.8762, 0.1, 10.0)
+        n_1 = ROOT.RooRealVar("n_1_Ups", "n_1_Ups", 0.061663, 0.01, 50.0)
+        alpha_2 = ROOT.RooRealVar("alpha_2_Ups", "alpha_2_Ups", 4.8121e-01, 0.01, 10.0)
+        n_2 = ROOT.RooRealVar("n_2_Ups", "n_2_Ups", 18.676, 0.5, 100.0)
+    else:
+        alpha_1 = ROOT.RooConstVar("alpha_1_Ups", "alpha_1_Ups", 2.8762)
+        n_1 = ROOT.RooConstVar("n_1_Ups", "n_1_Ups", 0.061663)
+        alpha_2 = ROOT.RooConstVar("alpha_2_Ups", "alpha_2_Ups", 4.8121e-01)
+        n_2 = ROOT.RooConstVar("n_2_Ups", "n_2_Ups", 18.676)
 
     cb_1s_1 = ROOT.RooCBShape("cb_Ups_1S_1", "cb_Ups_1S_1", obs, mean_1s, sigma_1s_1, alpha_1, n_1)
     cb_1s_2 = ROOT.RooCBShape("cb_Ups_1S_2", "cb_Ups_1S_2", obs, mean_1s, sigma_1s_2, alpha_2, n_2)
-    frac_cb = ROOT.RooConstVar("frac_cb_Ups", "frac_cb_Ups", 7.2778e-01)
+    if mc_only_1s:
+        frac_cb = ROOT.RooRealVar("frac_cb_Ups", "frac_cb_Ups", 7.2778e-01, 0.0, 1.0)
+    else:
+        frac_cb = ROOT.RooConstVar("frac_cb_Ups", "frac_cb_Ups", 7.2778e-01)
     cb_1s = ROOT.RooAddPdf("cb_Ups_1S", "cb_Ups_1S", ROOT.RooArgList(cb_1s_1, cb_1s_2), ROOT.RooArgList(frac_cb))
 
     if mc_only_1s:
@@ -162,7 +170,7 @@ def build_jjp_model(n_events: int, mc_two_component: bool = False):
     keep.extend([m_jpsi1, m_jpsi2, m_phi])
 
     jpsi_alpha = ROOT.RooRealVar("jpsi_alpha", "jpsi_alpha", 1.5, 0.3, 5.0)
-    jpsi_n = ROOT.RooRealVar("jpsi_n", "jpsi_n", 3.0, 0.5, 20.0)
+    jpsi_n = ROOT.RooRealVar("jpsi_n", "jpsi_n", 3.0, 1.0, 20.0)
     jpsi_frac_gauss = ROOT.RooRealVar("jpsi_frac_gauss", "jpsi_frac_gauss", 0.2, 0.0, 1.0)
     jpsi1_params = {
         "mean": ROOT.RooRealVar("jpsi1_mean", "jpsi1_mean", 3.096, 3.05, 3.15),
@@ -190,7 +198,7 @@ def build_jjp_model(n_events: int, mc_two_component: bool = False):
     jpsi2_sig = build_jpsi_signal(m_jpsi2, "2", jpsi2_params, keep)
     jpsi1_bkg = build_jpsi_background(m_jpsi1, "1", jpsi1_slope, keep)
     jpsi2_bkg = build_jpsi_background(m_jpsi2, "2", jpsi2_slope, keep)
-    phi_sig, phi_keep = build_phi_signal(m_phi)
+    phi_sig, phi_keep = build_phi_signal(m_phi, float_width=mc_two_component)
     phi_bkg, phi_bkg_keep = build_phi_background(m_phi)
     keep.extend(phi_keep.values())
     keep.extend(phi_bkg_keep.values())
@@ -227,7 +235,7 @@ def build_jjp_model(n_events: int, mc_two_component: bool = False):
 def build_jup_model(n_events: int, mc_only_1s: bool = False, mc_two_component: bool = False):
     keep = []
     m_jpsi = ROOT.RooRealVar("sel_Jpsi_mass", "m(Jpsi)", 2.9, 3.3)
-    m_ups = ROOT.RooRealVar("sel_Ups_mass", "m(Upsilon)", 8.5, 11.4)
+    m_ups = ROOT.RooRealVar("sel_Ups_mass", "m(Upsilon)", 9.0, 10.0) if mc_only_1s else ROOT.RooRealVar("sel_Ups_mass", "m(Upsilon)", 8.5, 11.4)
     m_phi = ROOT.RooRealVar("sel_Phi_mass", "m(Phi)", 0.99, 1.07)
     keep.extend([m_jpsi, m_ups, m_phi])
 
@@ -235,7 +243,7 @@ def build_jup_model(n_events: int, mc_only_1s: bool = False, mc_two_component: b
         "mean": ROOT.RooRealVar("jpsi_mean", "jpsi_mean", 3.096, 3.05, 3.15),
         "sigma_cb": ROOT.RooRealVar("jpsi_sigma_cb", "jpsi_sigma_cb", 0.025, 0.003, 0.08),
         "alpha": ROOT.RooRealVar("jpsi_alpha", "jpsi_alpha", 1.5, 0.3, 5.0),
-        "n": ROOT.RooRealVar("jpsi_n", "jpsi_n", 3.0, 0.5, 20.0),
+        "n": ROOT.RooRealVar("jpsi_n", "jpsi_n", 3.0, 1.0, 20.0),
         "sigma_gauss": ROOT.RooRealVar("jpsi_sigma_gauss", "jpsi_sigma_gauss", 0.04, 0.003, 0.12),
         "frac_gauss": ROOT.RooRealVar("jpsi_frac_gauss", "jpsi_frac_gauss", 0.2, 0.0, 1.0),
     }
@@ -246,7 +254,7 @@ def build_jup_model(n_events: int, mc_only_1s: bool = False, mc_two_component: b
     jpsi_bkg = build_jpsi_background(m_jpsi, "main", jpsi_slope, keep)
     ups_sig, ups_keep = build_ups_signal(m_ups, mc_only_1s=mc_only_1s)
     ups_bkg, ups_bkg_keep = build_ups_background(m_ups)
-    phi_sig, phi_keep = build_phi_signal(m_phi)
+    phi_sig, phi_keep = build_phi_signal(m_phi, float_width=mc_two_component)
     phi_bkg, phi_bkg_keep = build_phi_background(m_phi)
     keep.extend(ups_keep)
     keep.extend(ups_bkg_keep)
