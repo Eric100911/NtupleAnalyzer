@@ -417,6 +417,10 @@ def main():
     ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.WARNING)
     fin = ROOT.TFile.Open(input_file)
     tree = fin.Get(INPUT_TREE)
+    if not tree:
+        fin.Close()
+        raise RuntimeError(f"Input tree '{INPUT_TREE}' not found in {input_file}")
+    input_tree_entries = int(tree.GetEntries())
 
     if channel == "JJP":
         model, observables, yields, signal_yield_name, keepalive = build_jjp_model(n_entries, mc_two_component=(dataset == "mc"))
@@ -467,7 +471,7 @@ def main():
     fit_out.Close()
     fin.Close()
 
-    print(f"[INFO] input tree entries      : {tree.GetEntries()}")
+    print(f"[INFO] input tree entries      : {input_tree_entries}")
     print(f"[INFO] fitted dataset entries : {data.numEntries()}")
     print(f"[INFO] signal yield           : {yields[signal_yield_name].getVal():.2f}")
     print(f"[INFO] background yield       : {significance['background_yield']:.2f}")
