@@ -77,7 +77,8 @@ def build_phi_background(obs):
     c0 = ROOT.RooRealVar("phi_bkg_c0", "phi_bkg_c0", 0.0, -100.0, 100.0)
     c1 = ROOT.RooRealVar("phi_bkg_c1", "phi_bkg_c1", 0.0, -100.0, 100.0)
     c2 = ROOT.RooRealVar("phi_bkg_c2", "phi_bkg_c2", 0.0, -100.0, 100.0)
-    pdf = ROOT.RooChebychev("phi_bkg", "phi_bkg", obs, ROOT.RooArgList(c0, c1, c2))
+    # pdf = ROOT.RooChebychev("phi_bkg", "phi_bkg", obs, ROOT.RooArgList(c0, c1, c2))
+    pdf = ROOT.RooBernstein("phi_bkg", "phi_bkg", obs, ROOT.RooArgList(c0, c1, c2))
     return pdf, {"c0": c0, "c1": c1, "c2": c2, "pdf": pdf}
 
 
