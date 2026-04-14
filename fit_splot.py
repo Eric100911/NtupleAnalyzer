@@ -139,24 +139,23 @@ def build_jjp_model(n_events: int, mc_two_component: bool = False):
     keep.extend([m_jpsi1, m_jpsi2, m_phi])
 
     shared_jpsi_tails = {
-        "mean": ROOT.RooRealVar("jpsi_mean", "jpsi_mean", 3.096, 3.05, 3.15),
         "alpha_l": ROOT.RooRealVar("jpsi_alpha_l", "jpsi_alpha_l", 1.5, 0.1, 10.0),
         "n_l": ROOT.RooRealVar("jpsi_n_l", "jpsi_n_l", 3.0, 1.0, 50.0),
         "alpha_r": ROOT.RooRealVar("jpsi_alpha_r", "jpsi_alpha_r", 1.5, 0.1, 10.0),
         "n_r": ROOT.RooRealVar("jpsi_n_r", "jpsi_n_r", 3.0, 1.0, 50.0),
     }
     jpsi1_params = {
-        "mean": shared_jpsi_tails["mean"],
+        "mean": ROOT.RooRealVar("jpsi1_mean", "jpsi1_mean", 3.096, 3.05, 3.15),
         "sigma": ROOT.RooRealVar("jpsi1_sigma", "jpsi1_sigma", 0.025, 0.003, 0.08),
         **shared_jpsi_tails,
     }
     jpsi2_params = {
-        "mean": shared_jpsi_tails["mean"],
+        "mean": ROOT.RooRealVar("jpsi2_mean", "jpsi2_mean", 3.096, 3.05, 3.15),
         "sigma": ROOT.RooRealVar("jpsi2_sigma", "jpsi2_sigma", 0.025, 0.003, 0.08),
         **shared_jpsi_tails,
     }
     keep.extend(list(shared_jpsi_tails.values()))
-    keep.extend([jpsi1_params["sigma"], jpsi2_params["sigma"]])
+    keep.extend([jpsi1_params["mean"], jpsi1_params["sigma"], jpsi2_params["mean"], jpsi2_params["sigma"]])
     jpsi1_slope = ROOT.RooRealVar("jpsi1_bkg_slope", "jpsi1_bkg_slope", -2.0, -50.0, -0.001)
     jpsi2_slope = ROOT.RooRealVar("jpsi2_bkg_slope", "jpsi2_bkg_slope", -2.0, -50.0, -0.001)
     keep.extend([jpsi1_slope, jpsi2_slope])
@@ -319,7 +318,7 @@ def compute_component_significance(
     signal_yield_name: str,
     best_min_nll: float,
     jobs: int = 1,
-    strategy: int = 1,
+    strategy: int = 2,
     print_level: int = -1,
 ):
     signal_var = yields[signal_yield_name]
@@ -416,7 +415,7 @@ def main():
         ROOT.RooFit.Extended(True),
         ROOT.RooFit.Save(True),
         ROOT.RooFit.NumCPU(max(1, args.jobs)),
-        ROOT.RooFit.Strategy(1),
+        ROOT.RooFit.Strategy(2),
         ROOT.RooFit.PrintLevel(-1),
     )
     keepalive.append(fit_result)
@@ -437,7 +436,7 @@ def main():
         signal_yield_name,
         best_min_nll=fit_result.minNll(),
         jobs=args.jobs,
-        strategy=1,
+        strategy=2,
         print_level=-1,
     )
     keepalive.append(significance["null_fit_result"])
