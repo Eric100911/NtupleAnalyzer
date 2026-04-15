@@ -33,6 +33,36 @@ from ntuple_pipeline_common import (
 OUTPUT_TREE = "selected"
 
 
+def build_genmatch_expr(schema_key: str) -> str | None:
+    if schema_key == "JJP_mc":
+        return (
+            "PassSelectedJJPGenMatch("
+            "TakeAtInt(Jpsi_1_mu_1_Idx, bestCandIdx), "
+            "TakeAtInt(Jpsi_1_mu_2_Idx, bestCandIdx), "
+            "TakeAtInt(Jpsi_2_mu_1_Idx, bestCandIdx), "
+            "TakeAtInt(Jpsi_2_mu_2_Idx, bestCandIdx), "
+            "bestCandIdx, "
+            "muGenMatchIdx, muGenMatchSource, "
+            "Phi_K_1_genMatchIdx, Phi_K_1_genMatchSource, "
+            "Phi_K_2_genMatchIdx, Phi_K_2_genMatchSource, "
+            "MC_GenPart_motherGenIdx, MC_GenPart_motherPdgId)"
+        )
+    if schema_key == "JUP_mc":
+        return (
+            "PassSelectedJUPGenMatch("
+            "TakeAtInt(Jpsi_1_mu_1_Idx, bestCandIdx), "
+            "TakeAtInt(Jpsi_1_mu_2_Idx, bestCandIdx), "
+            "TakeAtInt(Ups_mu_1_Idx, bestCandIdx), "
+            "TakeAtInt(Ups_mu_2_Idx, bestCandIdx), "
+            "bestCandIdx, "
+            "muGenMatchIdx, muGenMatchSource, "
+            "Phi_K_1_genMatchIdx, Phi_K_1_genMatchSource, "
+            "Phi_K_2_genMatchIdx, Phi_K_2_genMatchSource, "
+            "MC_GenPart_motherGenIdx, MC_GenPart_motherPdgId)"
+        )
+    return None
+
+
 def build_best_index_expr(schema_key: str) -> str:
     if schema_key == "JJP_data" or schema_key == "JJP_mc":
         return (
@@ -77,6 +107,9 @@ def configure_rdf(schema, files, args):
 
     rdf = rdf.Define("bestCandIdx", build_best_index_expr(schema.schema_key))
     rdf = rdf.Filter("bestCandIdx >= 0", "pass_assocPV_selection")
+    genmatch_expr = build_genmatch_expr(schema.schema_key)
+    if genmatch_expr is not None:
+        rdf = rdf.Filter(genmatch_expr, "pass_genmatch_selection")
     rdf = define_selected_columns(rdf, schema)
     return rdf
 
@@ -137,6 +170,8 @@ def main():
     else:
         print(f"[INFO] J/psi muon ID: {args.jpsi_muon_id}")
         print(f"[INFO] Ups muon ID : {args.ups_muon_id}")
+    if dataset == "mc":
+        print("[INFO] genMatch     : source=1, valid mother, mother pdgId J/psi/Upsilon/Phi")
     print("=" * 80)
 
     start = time.time()
