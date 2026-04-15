@@ -50,6 +50,7 @@ DELTA_DZ_RANGE = (-0.1, 0.1)
 DELTA_DXY_RANGE = (-0.05, 0.05)
 WEIGHT_BRANCH = "signal_sw"
 NORMALIZE_HISTS = True
+RATIO_Y_RANGE = (0.5, 1.5)
 
 
 @dataclass(frozen=True)
@@ -321,35 +322,127 @@ def weighted_hist(values: np.ndarray, weights: np.ndarray, edges: np.ndarray):
     return counts, np.sqrt(sumw2)
 
 
+def ratio_to_reference(counts: np.ndarray, errors: np.ndarray, ref_counts: np.ndarray, ref_errors: np.ndarray):
+    ratio = np.full_like(counts, np.nan, dtype=float)
+    ratio_err = np.full_like(counts, np.nan, dtype=float)
+    valid = ref_counts != 0.0
+    ratio[valid] = counts[valid] / ref_counts[valid]
+
+    positive = valid & (counts != 0.0)
+    ratio_err[positive] = np.abs(ratio[positive]) * np.sqrt(
+        np.square(errors[positive] / counts[positive]) +
+        np.square(ref_errors[positive] / ref_counts[positive])
+    )
+    zero_num = valid & (counts == 0.0)
+    ratio_err[zero_num] = errors[zero_num] / np.abs(ref_counts[zero_num])
+    return ratio, ratio_err
+
+
 def save_overlay_plot(channel: str, dataset: str, sample: str | None, pair: PairSpec, coord: str, weighted_files: dict[str, str], scenarios: list[CutScenario], output_dir: str):
     edges = np.linspace(*(DELTA_DZ_RANGE if coord == "dz" else DELTA_DXY_RANGE), N_BINS + 1)
+    centers = 0.5 * (edges[:-1] + edges[1:])
     colors = {
-        "no_vertex_cut": "black",
-        "pri_assocpv_pass": "tab:blue",
-        "pri_vtxprob": "tab:red",
+        "no_vertex_cut": "0.35",
+        "pri_assocpv_pass": "#0072B2",
+        "pri_vtxprob": "#D55E00",
+    }
+    markers = {
+        "pri_assocpv_pass": "o",
+        "pri_vtxprob": "s",
+    }
+    line_styles = {
+        "pri_assocpv_pass": "-",
+        "pri_vtxprob": "--",
     }
 
-    fig, ax = plt.subplots(figsize=(8, 7))
+    histograms = {}
+    weighted_sums = {}
     for scenario in scenarios:
         values, weights = histogram_from_file(weighted_files[scenario.key], f"delta_{coord}_{pair.key}")
         counts, errors = weighted_hist(values, weights, edges)
+        histograms[scenario.key] = (counts, errors)
+        weighted_sums[scenario.key] = float(np.sum(weights))
+
+    ref_counts, ref_errors = histograms["no_vertex_cut"]
+
+    fig, (ax, rax) = plt.subplots(
+        2,
+        1,
+        figsize=(8, 8),
+        sharex=True,
+        gridspec_kw={"height_ratios": (3.0, 1.0), "hspace": 0.05},
+    )
+
+    hep.histplot(
+        ref_counts,
+        edges,
+        yerr=ref_errors,
+        histtype="fill",
+        color=colors["no_vertex_cut"],
+        alpha=0.22,
+        label=f"No vertex cut (Nw={weighted_sums['no_vertex_cut']:.1f})",
+        ax=ax,
+    )
+    hep.histplot(
+        ref_counts,
+        edges,
+        histtype="step",
+        linewidth=2.0,
+        color=colors["no_vertex_cut"],
+        ax=ax,
+    )
+
+    for scenario in scenarios:
+        if scenario.key == "no_vertex_cut":
+            continue
+        counts, errors = histograms[scenario.key]
         hep.histplot(
             counts,
             edges,
-            yerr=errors,
             histtype="step",
-            linewidth=2,
+            linewidth=2.4,
+            linestyle=line_styles.get(scenario.key, "-"),
             color=colors.get(scenario.key, None),
-            label=f"{scenario.label} (Nw={np.sum(weights):.1f})",
+            label=f"{scenario.label} (Nw={weighted_sums[scenario.key]:.1f})",
             ax=ax,
+        )
+        ax.errorbar(
+            centers,
+            counts,
+            yerr=errors,
+            fmt=markers.get(scenario.key, "o"),
+            color=colors.get(scenario.key, None),
+            markersize=4.5,
+            linewidth=1.2,
+            capsize=1.5,
+        )
+
+        ratio, ratio_err = ratio_to_reference(counts, errors, ref_counts, ref_errors)
+        valid = np.isfinite(ratio)
+        rax.errorbar(
+            centers[valid],
+            ratio[valid],
+            yerr=ratio_err[valid],
+            fmt=markers.get(scenario.key, "o"),
+            color=colors.get(scenario.key, None),
+            markersize=4.5,
+            linewidth=1.2,
+            capsize=1.5,
+            label=scenario.label,
         )
 
     coord_label = r"\Delta dz" if coord == "dz" else r"\Delta dxy"
-    ax.set_xlabel(rf"${coord_label}$ [cm]")
     ax.set_ylabel("Normalized sWeighted events" if NORMALIZE_HISTS else "sWeighted events")
     ax.set_title(pair.label)
     hep.cms.label("Work in progress", data=(dataset == "data"), ax=ax)
     ax.legend(loc="best", fontsize=15)
+    ax.grid(True, linestyle=":", linewidth=0.8, alpha=0.45)
+
+    rax.axhline(1.0, color="black", linestyle="--", linewidth=1.0)
+    rax.set_ylabel("cut / no cut")
+    rax.set_xlabel(rf"${coord_label}$ [cm]")
+    rax.set_ylim(*RATIO_Y_RANGE)
+    rax.grid(True, linestyle=":", linewidth=0.8, alpha=0.45)
     fig.tight_layout()
 
     base = os.path.join(output_dir, f"delta_{coord}_{pair.key}")
