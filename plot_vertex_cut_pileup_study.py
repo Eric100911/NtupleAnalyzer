@@ -45,12 +45,13 @@ INPUT_TREE = "selected"
 # =============================================================================
 
 PRI_VTXPROB_MIN = 0.05
-N_BINS = 20
+N_BINS = 15
 DELTA_DZ_RANGE = (-0.1, 0.1)
 DELTA_DXY_RANGE = (-0.05, 0.05)
 WEIGHT_BRANCH = "signal_sw"
 NORMALIZE_HISTS = True
-RATIO_Y_RANGE = (0.5, 1.5)
+RATIO_Y_RANGE = (0.1, 10.0)
+CTAU_RANGE = (-0.05, 0.1)
 
 
 @dataclass(frozen=True)
@@ -167,14 +168,14 @@ def delta_plot_specs(channel: str) -> list[PlotSpec]:
 def ctau_plot_specs(channel: str) -> list[PlotSpec]:
     if channel == "JJP":
         return [
-            PlotSpec("ctau_jpsi1", "sel_Jpsi_1_ctau", r"$J/\psi_1$", r"$c\tau$ [cm]", (-0.2, 0.2)),
-            PlotSpec("ctau_jpsi2", "sel_Jpsi_2_ctau", r"$J/\psi_2$", r"$c\tau$ [cm]", (-0.2, 0.2)),
-            PlotSpec("ctau_phi", "sel_Phi_ctau", r"$\phi$", r"$c\tau$ [cm]", (-0.2, 0.2)),
+            PlotSpec("ctau_jpsi1", "sel_Jpsi_1_ctau", r"$J/\psi_1$", r"$c\tau$ [cm]", CTAU_RANGE),
+            PlotSpec("ctau_jpsi2", "sel_Jpsi_2_ctau", r"$J/\psi_2$", r"$c\tau$ [cm]", CTAU_RANGE),
+            PlotSpec("ctau_phi", "sel_Phi_ctau", r"$\phi$", r"$c\tau$ [cm]", CTAU_RANGE),
         ]
     return [
-        PlotSpec("ctau_jpsi", "sel_Jpsi_ctau", r"$J/\psi$", r"$c\tau$ [cm]", (-0.2, 0.2)),
-        PlotSpec("ctau_ups", "sel_Ups_ctau", r"$\Upsilon$", r"$c\tau$ [cm]", (-0.2, 0.2)),
-        PlotSpec("ctau_phi", "sel_Phi_ctau", r"$\phi$", r"$c\tau$ [cm]", (-0.2, 0.2)),
+        PlotSpec("ctau_jpsi", "sel_Jpsi_ctau", r"$J/\psi$", r"$c\tau$ [cm]", CTAU_RANGE),
+        PlotSpec("ctau_ups", "sel_Ups_ctau", r"$\Upsilon$", r"$c\tau$ [cm]", CTAU_RANGE),
+        PlotSpec("ctau_phi", "sel_Phi_ctau", r"$\phi$", r"$c\tau$ [cm]", CTAU_RANGE),
     ]
 
 
@@ -547,11 +548,21 @@ def save_overlay_plot(
     hep.cms.label("Work in progress", data=(dataset == "data"), ax=ax)
     ax.legend(loc="best", fontsize=15)
     ax.grid(True, linestyle=":", linewidth=0.8, alpha=0.45)
+    if "ctau" in plot_spec.key:
+        ax.set_xlim(*CTAU_RANGE)
+        ax.set_yscale("log")
+        positive = np.concatenate(
+            [counts[counts > 0.0] for counts, _ in histograms.values() if np.any(counts > 0.0)]
+        )
+        ymin = max(np.min(positive) * 0.5, 1.0e-4) if positive.size else 1.0e-4
+        ymax = max(np.max(np.concatenate([counts for counts, _ in histograms.values()])) * 10.0, 1.0)
+        ax.set_ylim(ymin, ymax)
 
     rax.axhline(1.0, color="black", linestyle="--", linewidth=1.0)
     rax.set_ylabel("cut / no cut")
     rax.set_xlabel(plot_spec.xlabel)
     rax.set_ylim(*RATIO_Y_RANGE)
+    rax.set_yscale("log")
     rax.grid(True, linestyle=":", linewidth=0.8, alpha=0.45)
     fig.tight_layout()
 
