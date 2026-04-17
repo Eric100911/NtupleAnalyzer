@@ -69,6 +69,15 @@ class PairSpec:
     right: str
 
 
+@dataclass(frozen=True)
+class PlotSpec:
+    key: str
+    branch: str
+    title: str
+    xlabel: str
+    value_range: tuple[float, float]
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Study vertex-cut effects on sWeighted PV dz/dxy difference distributions")
     parser.add_argument("--channel", required=True, choices=["JJP", "JUP", "jjp", "jup"])
@@ -131,6 +140,76 @@ def pair_specs(channel: str) -> list[PairSpec]:
     ]
 
 
+def delta_plot_specs(channel: str) -> list[PlotSpec]:
+    specs: list[PlotSpec] = []
+    for pair in pair_specs(channel):
+        specs.append(
+            PlotSpec(
+                key=f"delta_dz_{pair.key}",
+                branch=f"delta_dz_{pair.key}",
+                title=pair.label,
+                xlabel=r"$\Delta dz$ [cm]",
+                value_range=DELTA_DZ_RANGE,
+            )
+        )
+        specs.append(
+            PlotSpec(
+                key=f"delta_dxy_{pair.key}",
+                branch=f"delta_dxy_{pair.key}",
+                title=pair.label,
+                xlabel=r"$\Delta dxy$ [cm]",
+                value_range=DELTA_DXY_RANGE,
+            )
+        )
+    return specs
+
+
+def ctau_plot_specs(channel: str) -> list[PlotSpec]:
+    if channel == "JJP":
+        return [
+            PlotSpec("ctau_jpsi1", "sel_Jpsi_1_ctau", r"$J/\psi_1$", r"$c\tau$ [cm]", (-0.2, 0.2)),
+            PlotSpec("ctau_jpsi2", "sel_Jpsi_2_ctau", r"$J/\psi_2$", r"$c\tau$ [cm]", (-0.2, 0.2)),
+            PlotSpec("ctau_phi", "sel_Phi_ctau", r"$\phi$", r"$c\tau$ [cm]", (-0.2, 0.2)),
+        ]
+    return [
+        PlotSpec("ctau_jpsi", "sel_Jpsi_ctau", r"$J/\psi$", r"$c\tau$ [cm]", (-0.2, 0.2)),
+        PlotSpec("ctau_ups", "sel_Ups_ctau", r"$\Upsilon$", r"$c\tau$ [cm]", (-0.2, 0.2)),
+        PlotSpec("ctau_phi", "sel_Phi_ctau", r"$\phi$", r"$c\tau$ [cm]", (-0.2, 0.2)),
+    ]
+
+
+def track_muon_plot_specs(channel: str) -> list[PlotSpec]:
+    if channel == "JJP":
+        muon_labels = [
+            ("jpsi1_mu1", r"$J/\psi_1\ \mu_1$"),
+            ("jpsi1_mu2", r"$J/\psi_1\ \mu_2$"),
+            ("jpsi2_mu1", r"$J/\psi_2\ \mu_1$"),
+            ("jpsi2_mu2", r"$J/\psi_2\ \mu_2$"),
+        ]
+    else:
+        muon_labels = [
+            ("jpsi_mu1", r"$J/\psi\ \mu_1$"),
+            ("jpsi_mu2", r"$J/\psi\ \mu_2$"),
+            ("ups_mu1", r"$\Upsilon\ \mu_1$"),
+            ("ups_mu2", r"$\Upsilon\ \mu_2$"),
+        ]
+
+    specs: list[PlotSpec] = []
+    for key, label in muon_labels:
+        specs.append(PlotSpec(f"{key}_dz", f"{key}_dz", label, r"$dz$ [cm]", DELTA_DZ_RANGE))
+        specs.append(PlotSpec(f"{key}_dxy", f"{key}_dxy", label, r"$dxy$ [cm]", DELTA_DXY_RANGE))
+
+    specs.extend(
+        [
+            PlotSpec("phi_k1_dz", "phi_k1_dz", r"$\phi\ K_1$", r"$dz$ [cm]", DELTA_DZ_RANGE),
+            PlotSpec("phi_k1_dxy", "phi_k1_dxy", r"$\phi\ K_1$", r"$dxy$ [cm]", DELTA_DXY_RANGE),
+            PlotSpec("phi_k2_dz", "phi_k2_dz", r"$\phi\ K_2$", r"$dz$ [cm]", DELTA_DZ_RANGE),
+            PlotSpec("phi_k2_dxy", "phi_k2_dxy", r"$\phi\ K_2$", r"$dxy$ [cm]", DELTA_DXY_RANGE),
+        ]
+    )
+    return specs
+
+
 def pv_value_expressions(channel: str) -> dict[str, dict[str, str]]:
     if channel == "JJP":
         return {
@@ -172,7 +251,7 @@ def required_pv_branches(channel: str) -> set[str]:
     return common
 
 
-def add_pv_delta_columns(rdf, channel: str):
+def add_derived_columns(rdf, channel: str):
     expressions = pv_value_expressions(channel)
     derived_columns: list[str] = []
 
@@ -181,6 +260,32 @@ def add_pv_delta_columns(rdf, channel: str):
             name = f"pv_{particle}_{coord}"
             rdf = rdf.Define(name, expression)
             derived_columns.append(name)
+
+    if channel == "JJP":
+        muon_exprs = {
+            "jpsi1_mu1": ("sel_Jpsi_1_mu_1_Idx", "sel_Jpsi1_mu1"),
+            "jpsi1_mu2": ("sel_Jpsi_1_mu_2_Idx", "sel_Jpsi1_mu2"),
+            "jpsi2_mu1": ("sel_Jpsi_2_mu_1_Idx", "sel_Jpsi2_mu1"),
+            "jpsi2_mu2": ("sel_Jpsi_2_mu_2_Idx", "sel_Jpsi2_mu2"),
+        }
+    else:
+        muon_exprs = {
+            "jpsi_mu1": ("sel_Jpsi_mu_1_Idx", "sel_Jpsi_mu1"),
+            "jpsi_mu2": ("sel_Jpsi_mu_2_Idx", "sel_Jpsi_mu2"),
+            "ups_mu1": ("sel_Ups_mu_1_Idx", "sel_Ups_mu1"),
+            "ups_mu2": ("sel_Ups_mu_2_Idx", "sel_Ups_mu2"),
+        }
+
+    for prefix, (idx_branch, _) in muon_exprs.items():
+        rdf = rdf.Define(f"{prefix}_dz", f"TakeAt(muDzAssocPV, {idx_branch})")
+        rdf = rdf.Define(f"{prefix}_dxy", f"TakeAt(muDxyAssocPV, {idx_branch})")
+        derived_columns.extend([f"{prefix}_dz", f"{prefix}_dxy"])
+
+    rdf = rdf.Define("phi_k1_dz", "TakeAt(Phi_K_1_dzAssocPV, bestCandIdx)")
+    rdf = rdf.Define("phi_k1_dxy", "TakeAt(Phi_K_1_dxyAssocPV, bestCandIdx)")
+    rdf = rdf.Define("phi_k2_dz", "TakeAt(Phi_K_2_dzAssocPV, bestCandIdx)")
+    rdf = rdf.Define("phi_k2_dxy", "TakeAt(Phi_K_2_dxyAssocPV, bestCandIdx)")
+    derived_columns.extend(["phi_k1_dz", "phi_k1_dxy", "phi_k2_dz", "phi_k2_dxy"])
 
     for pair in pair_specs(channel):
         for coord in ("dz", "dxy"):
@@ -214,7 +319,7 @@ def make_filtered_tree(input_file: str, output_file: str, channel: str, scenario
     rdf = ROOT.RDataFrame(INPUT_TREE, input_file)
     if max_events > 0:
         rdf = rdf.Range(max_events)
-    rdf, derived_columns = add_pv_delta_columns(rdf, channel)
+    rdf, derived_columns = add_derived_columns(rdf, channel)
     if scenario.expression and scenario.expression != "1":
         rdf = rdf.Filter(scenario.expression, scenario.key)
 
@@ -338,8 +443,14 @@ def ratio_to_reference(counts: np.ndarray, errors: np.ndarray, ref_counts: np.nd
     return ratio, ratio_err
 
 
-def save_overlay_plot(channel: str, dataset: str, sample: str | None, pair: PairSpec, coord: str, weighted_files: dict[str, str], scenarios: list[CutScenario], output_dir: str):
-    edges = np.linspace(*(DELTA_DZ_RANGE if coord == "dz" else DELTA_DXY_RANGE), N_BINS + 1)
+def save_overlay_plot(
+    dataset: str,
+    plot_spec: PlotSpec,
+    weighted_files: dict[str, str],
+    scenarios: list[CutScenario],
+    output_dir: str,
+):
+    edges = np.linspace(*plot_spec.value_range, N_BINS + 1)
     centers = 0.5 * (edges[:-1] + edges[1:])
     colors = {
         "no_vertex_cut": "0.35",
@@ -358,7 +469,7 @@ def save_overlay_plot(channel: str, dataset: str, sample: str | None, pair: Pair
     histograms = {}
     weighted_sums = {}
     for scenario in scenarios:
-        values, weights = histogram_from_file(weighted_files[scenario.key], f"delta_{coord}_{pair.key}")
+        values, weights = histogram_from_file(weighted_files[scenario.key], plot_spec.branch)
         counts, errors = weighted_hist(values, weights, edges)
         histograms[scenario.key] = (counts, errors)
         weighted_sums[scenario.key] = float(np.sum(weights))
@@ -431,21 +542,20 @@ def save_overlay_plot(channel: str, dataset: str, sample: str | None, pair: Pair
             label=scenario.label,
         )
 
-    coord_label = r"\Delta dz" if coord == "dz" else r"\Delta dxy"
     ax.set_ylabel("Normalized sWeighted events" if NORMALIZE_HISTS else "sWeighted events")
-    ax.set_title(pair.label)
+    ax.set_title(plot_spec.title)
     hep.cms.label("Work in progress", data=(dataset == "data"), ax=ax)
     ax.legend(loc="best", fontsize=15)
     ax.grid(True, linestyle=":", linewidth=0.8, alpha=0.45)
 
     rax.axhline(1.0, color="black", linestyle="--", linewidth=1.0)
     rax.set_ylabel("cut / no cut")
-    rax.set_xlabel(rf"${coord_label}$ [cm]")
+    rax.set_xlabel(plot_spec.xlabel)
     rax.set_ylim(*RATIO_Y_RANGE)
     rax.grid(True, linestyle=":", linewidth=0.8, alpha=0.45)
     fig.tight_layout()
 
-    base = os.path.join(output_dir, f"delta_{coord}_{pair.key}")
+    base = os.path.join(output_dir, plot_spec.key)
     fig.savefig(base + ".pdf")
     fig.savefig(base + ".png")
     plt.close(fig)
@@ -516,9 +626,9 @@ def main():
         else:
             print(f"[INFO] reuse existing weighted file: {weighted_file}")
 
-    for pair in pair_specs(channel):
-        for coord in ("dz", "dxy"):
-            save_overlay_plot(channel, dataset, sample, pair, coord, weighted_files, scenarios, output_dir)
+    plot_specs = delta_plot_specs(channel) + ctau_plot_specs(channel) + track_muon_plot_specs(channel)
+    for plot_spec in plot_specs:
+        save_overlay_plot(dataset, plot_spec, weighted_files, scenarios, output_dir)
 
     print(f"[INFO] saved vertex-cut comparison plots into {output_dir}")
     return 0
