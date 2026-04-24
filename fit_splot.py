@@ -262,6 +262,87 @@ def make_dataset(tree, observables):
     return ROOT.RooDataSet("data", "data", tree, argset)
 
 
+def snapshot_parameters(model, data):
+    params = model.getParameters(data)
+    names = [param.GetName() for param in params]
+    values = {name: params.find(name).getVal() for name in names}
+    constants = {name: bool(params.find(name).isConstant()) for name in names}
+    return {"values": values, "constants": constants}
+
+
+def apply_parameter_snapshot(model, data, snapshot, freeze_all: bool = False):
+    if snapshot is None:
+        return
+    params = model.getParameters(data)
+    for name, value in snapshot.get("values", {}).items():
+        param = params.find(name)
+        if param:
+            param.setVal(float(value))
+    for name, is_constant in snapshot.get("constants", {}).items():
+        param = params.find(name)
+        if param:
+            param.setConstant(bool(is_constant))
+    if freeze_all:
+        iterator = params.createIterator()
+        param = iterator.Next()
+        while param:
+            if "yield_" not in param.GetName():
+                param.setConstant(True)
+            param = iterator.Next()
+
+
+def fit_dataset_with_model(
+    tree_or_dataset,
+    channel: str,
+    dataset: str,
+    jobs: int,
+    strategy: int = 2,
+    print_level: int = -1,
+    minos: bool = False,
+    hesse: bool = True,
+    init_snapshot=None,
+    freeze_shape: bool = False,
+):
+    n_entries = int(tree_or_dataset.numEntries()) if hasattr(tree_or_dataset, "numEntries") else int(tree_or_dataset.GetEntries())
+    if channel == "JJP":
+        model, observables, yields, signal_yield_name, keepalive = build_jjp_model(n_entries, mc_two_component=(dataset == "mc"))
+    else:
+        model, observables, yields, signal_yield_name, keepalive = build_jup_model(
+            n_entries,
+            mc_only_1s=(dataset == "mc"),
+            mc_two_component=(dataset == "mc"),
+        )
+
+    if hasattr(tree_or_dataset, "numEntries"):
+        data = tree_or_dataset
+    else:
+        data = make_dataset(tree_or_dataset, observables)
+        keepalive.append(data)
+
+    apply_parameter_snapshot(model, data, init_snapshot, freeze_all=freeze_shape)
+
+    fit_options = [
+        ROOT.RooFit.Extended(True),
+        ROOT.RooFit.Save(True),
+        ROOT.RooFit.NumCPU(max(1, jobs)),
+        ROOT.RooFit.Strategy(int(strategy)),
+        ROOT.RooFit.PrintLevel(int(print_level)),
+        ROOT.RooFit.Hesse(bool(hesse)),
+    ]
+    if minos:
+        fit_options.append(ROOT.RooFit.Minos(True))
+
+    fit_result = model.fitTo(data, *fit_options)
+    keepalive.append(fit_result)
+    return fit_result, yields, {
+        "model": model,
+        "observables": observables,
+        "signal_yield_name": signal_yield_name,
+        "data": data,
+        "keepalive": keepalive,
+    }
+
+
 def save_projection_plots(channel: str, plot_dir: str, data, model, observables, signal_yield_name: str, yields):
     ensure_dir(plot_dir)
     background_components = ",".join(name.replace("yield_", "pdf_") for name in yields if name != signal_yield_name)
@@ -399,26 +480,21 @@ def main():
         raise RuntimeError(f"Input tree '{INPUT_TREE}' not found in {input_file}")
     input_tree_entries = int(tree.GetEntries())
 
-    if channel == "JJP":
-        model, observables, yields, signal_yield_name, keepalive = build_jjp_model(n_entries, mc_two_component=(dataset == "mc"))
-    else:
-        model, observables, yields, signal_yield_name, keepalive = build_jup_model(
-            n_entries,
-            mc_only_1s=(dataset == "mc"),
-            mc_two_component=(dataset == "mc"),
-        )
-
-    data = make_dataset(tree, observables)
-    keepalive.append(data)
-    fit_result = model.fitTo(
-        data,
-        ROOT.RooFit.Extended(True),
-        ROOT.RooFit.Save(True),
-        ROOT.RooFit.NumCPU(max(1, args.jobs)),
-        ROOT.RooFit.Strategy(2),
-        ROOT.RooFit.PrintLevel(-1),
+    fit_result, yields, fit_context = fit_dataset_with_model(
+        tree,
+        channel=channel,
+        dataset=dataset,
+        jobs=args.jobs,
+        strategy=2,
+        print_level=-1,
+        minos=False,
+        hesse=True,
     )
-    keepalive.append(fit_result)
+    model = fit_context["model"]
+    observables = fit_context["observables"]
+    signal_yield_name = fit_context["signal_yield_name"]
+    data = fit_context["data"]
+    keepalive = fit_context["keepalive"]
 
     save_projection_plots(channel, plot_dir, data, model, observables, signal_yield_name, yields)
     sdata = ROOT.RooStats.SPlot("sData", "sData", data, model, ROOT.RooArgList(*yields.values()))
