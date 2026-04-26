@@ -427,17 +427,7 @@ def choose_npv_edges(arrays_by_category: dict[str, dict[str, np.ndarray]]) -> np
 
 
 def choose_d_edges(arrays_by_category: dict[str, dict[str, np.ndarray]], branch: str) -> np.ndarray:
-    finite = []
-    for arrays in arrays_by_category.values():
-        values = np.asarray(arrays[branch], dtype=float)
-        values = values[np.isfinite(values) & (values >= 0.0) & (values < 1.0e5)]
-        if values.size:
-            finite.append(values)
-    if not finite:
-        return np.linspace(0.0, 10.0, DEFAULT_D_BINS + 1)
-    merged = np.concatenate(finite)
-    hi = max(float(np.quantile(merged, 0.995)), 5.0)
-    return np.linspace(0.0, hi, DEFAULT_D_BINS + 1)
+    return np.linspace(0.0, 50.0, DEFAULT_D_BINS + 1)
 
 
 def build_plot_specs(arrays_by_category: dict[str, dict[str, np.ndarray]]) -> list[PlotSpec]:
