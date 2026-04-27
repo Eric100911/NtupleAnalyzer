@@ -71,7 +71,7 @@ SCENARIOS = (
     Scenario("vtxprob", rf"$P_{{vtx}} > {PRI_VTXPROB_MIN:g}$", "pass_vtxprob_cut"),
 )
 
-CATEGORIES = (
+BASE_CATEGORIES = (
     Category("overall", "Overall", "weighted", None, "overall"),
     Category("signal", "Signal", "weighted", "signal_sw", "signal"),
     Category("sideband_bkg", "Sideband background", "sideband", None, "sideband_bkg"),
@@ -89,6 +89,40 @@ def parse_args():
     parser.add_argument("-n", "--max-events", type=int, default=-1, help="Limit events for quick tests")
     parser.add_argument("--force", action="store_true", help="Regenerate the augmented ROOT files")
     return parser.parse_args()
+
+
+def label_for_weight_branch(weight_branch: str) -> str:
+    if weight_branch == "signal_sw":
+        return "Signal"
+    core = weight_branch
+    if core.startswith("yield_"):
+        core = core[len("yield_") :]
+    if core.endswith("_sw"):
+        core = core[:-3]
+    return core.upper()
+
+
+def categories_for_weighted_file(weighted_file: str) -> list[Category]:
+    branches = set(get_tree_branches(weighted_file, INPUT_TREE))
+    categories = list(BASE_CATEGORIES)
+
+    sweight_branches = sorted(
+        branch for branch in branches
+        if branch.startswith("yield_") and branch.endswith("_sw")
+    )
+    for branch in sweight_branches:
+        label = label_for_weight_branch(branch)
+        tag = branch[:-3]
+        categories.append(
+            Category(
+                key=tag,
+                label=f"{label} sWeight",
+                input_kind="weighted",
+                weight_branch=branch,
+                output_subdir=f"sweight_{tag}",
+            )
+        )
+    return categories
 
 
 def default_paths(args):
@@ -566,15 +600,23 @@ def main():
     else:
         print(f"[INFO] reuse augmented sideband file : {sideband_output}")
 
+    categories = categories_for_weighted_file(weighted_output)
     plot_branches = ["nGoodPrimVtx", "priVtxZ", "signal_sw", "pass_assocpv_cut", "pass_vtxprob_cut", *D_BRANCHES, "D3_max"]
+    for category in categories:
+        if category.weight_branch is not None and category.weight_branch not in plot_branches:
+            plot_branches.append(category.weight_branch)
     arrays_by_category = {
         "overall": load_arrays(weighted_output, plot_branches),
         "signal": load_arrays(weighted_output, plot_branches),
         "sideband_bkg": load_arrays(sideband_output, plot_branches),
     }
+    for category in categories:
+        if category.key in arrays_by_category:
+            continue
+        arrays_by_category[category.key] = load_arrays(weighted_output, plot_branches)
     plot_specs = build_plot_specs(arrays_by_category)
 
-    for category in CATEGORIES:
+    for category in categories:
         category_dir = os.path.join(plot_dir, category.output_subdir)
         for plot_spec in plot_specs:
             save_comparison_plot(category, arrays_by_category[category.key], plot_spec, category_dir)
