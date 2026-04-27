@@ -77,14 +77,13 @@ def build_phi_background(obs):
     mthr = ROOT.RooConstVar("phi_bkg_thr", "phi_bkg_thr", 0.987354)
     p = ROOT.RooRealVar("phi_bkg_p", "phi_bkg_p", 0.8, 0.0, 8.0)
     a1 = ROOT.RooRealVar("phi_bkg_a1", "phi_bkg_a1", 10.0, -200.0, 200.0)
-    a2 = ROOT.RooRealVar("phi_bkg_a2", "phi_bkg_a2", -80.0, -2000.0, 500.0)
     pdf = ROOT.RooGenericPdf(
         "phi_bkg",
         "phi_bkg",
-        "pow(@0-@1,@2) * exp(@3*(@0-@1) + @4*pow(@0-@1,2))",
-        ROOT.RooArgList(obs, mthr, p, a1, a2),
+        "pow(@0-@1,@2) * exp(@3*(@0-@1))",
+        ROOT.RooArgList(obs, mthr, p, a1),
     )
-    return pdf, {"thr": mthr, "p": p, "a1": a1, "a2": a2, "pdf": pdf}
+    return pdf, {"thr": mthr, "p": p, "a1": a1, "pdf": pdf}
 
 
 def build_ups_signal(obs, mc_only_1s: bool = False):
@@ -140,9 +139,9 @@ def build_jjp_model(n_events: int, mc_two_component: bool = False):
 
     shared_jpsi_tails = {
         "alpha_l": ROOT.RooRealVar("jpsi_alpha_l", "jpsi_alpha_l", 1.5, 0.1, 10.0),
-        "n_l": ROOT.RooRealVar("jpsi_n_l", "jpsi_n_l", 3.0, 1.0, 50.0),
+        "n_l": ROOT.RooConstVar("jpsi_n_l", "jpsi_n_l", 5.0),
         "alpha_r": ROOT.RooRealVar("jpsi_alpha_r", "jpsi_alpha_r", 1.5, 0.1, 10.0),
-        "n_r": ROOT.RooRealVar("jpsi_n_r", "jpsi_n_r", 3.0, 1.0, 50.0),
+        "n_r": ROOT.RooConstVar("jpsi_n_r", "jpsi_n_r", 5.0),
     }
     jpsi1_params = {
         "mean": ROOT.RooRealVar("jpsi1_mean", "jpsi1_mean", 3.096, 3.05, 3.15),
@@ -208,9 +207,9 @@ def build_jup_model(n_events: int, mc_only_1s: bool = False, mc_two_component: b
         "mean": ROOT.RooRealVar("jpsi_mean", "jpsi_mean", 3.096, 3.05, 3.15),
         "sigma": ROOT.RooRealVar("jpsi_sigma", "jpsi_sigma", 0.025, 0.003, 0.08),
         "alpha_l": ROOT.RooRealVar("jpsi_alpha_l", "jpsi_alpha_l", 1.5, 0.1, 10.0),
-        "n_l": ROOT.RooRealVar("jpsi_n_l", "jpsi_n_l", 3.0, 1.0, 50.0),
+        "n_l": ROOT.RooConstVar("jpsi_n_l", "jpsi_n_l", 5.0),
         "alpha_r": ROOT.RooRealVar("jpsi_alpha_r", "jpsi_alpha_r", 1.5, 0.1, 10.0),
-        "n_r": ROOT.RooRealVar("jpsi_n_r", "jpsi_n_r", 3.0, 1.0, 50.0),
+        "n_r": ROOT.RooConstVar("jpsi_n_r", "jpsi_n_r", 5.0),
     }
     keep.extend(list(jpsi_shared.values()))
     jpsi_slope = ROOT.RooRealVar("jpsi_bkg_slope", "jpsi_bkg_slope", -2.0, -50.0, -0.001)
