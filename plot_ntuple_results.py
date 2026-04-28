@@ -166,6 +166,256 @@ def plot_2d_all_jup(fin, output_dir, process):
     print(f"Saved: {output_name}.pdf/.png")
 
 
+JJY_VERTEX_CATEGORIES = [
+    ("no_vertex", "No further vertexing selection"),
+    ("pri_valid", "Pri vertex valid"),
+    ("pri_vtxprob_gt_0p005", "Pri VtxProb > 0.005"),
+    ("same_mu_vertex", "All 6 muons same vertex"),
+]
+
+
+def jjy_h(category, stem):
+    return f"h_{category}_{stem}"
+
+
+def jjy_h2(category, stem):
+    return f"h2_{category}_{stem}"
+
+
+def plot_2d_all_jjy(fin, output_dir, process, category, category_title):
+    """绘制JJY的三个2D关联图"""
+    c = ROOT.TCanvas(f"c2d_all_{category}", "", 1800, 500)
+    c.Divide(3, 1)
+
+    hist_names = [
+        jjy_h2(category, "dy_dphi_jpsi1_jpsi2"),
+        jjy_h2(category, "dy_dphi_jpsi1_ups"),
+        jjy_h2(category, "dy_dphi_jpsi2_ups"),
+    ]
+    titles = ["J/#psi_{1} - J/#psi_{2}", "J/#psi_{1} - #Upsilon", "J/#psi_{2} - #Upsilon"]
+
+    for i, (hname, title) in enumerate(zip(hist_names, titles)):
+        c.cd(i + 1)
+        ROOT.gPad.SetRightMargin(0.15)
+        ROOT.gPad.SetLeftMargin(0.12)
+
+        h = fin.Get(hname)
+        if not h:
+            print(f"Warning: histogram {hname} not found")
+            continue
+
+        h.SetTitle(f"{title} ({process}, {category_title})")
+        h.GetXaxis().SetTitle("|#Delta y|")
+        h.GetYaxis().SetTitle("|#Delta#phi|")
+        h.Draw("COLZ")
+
+    output_name = os.path.join(output_dir, f"correlation_2d_all_{process}_{category}")
+    c.SaveAs(output_name + ".pdf")
+    c.SaveAs(output_name + ".png")
+    print(f"Saved: {output_name}.pdf/.png")
+
+
+def plot_jjy_kinematic_quantity(fin, output_dir, process, category, category_title, quantity, xlabel):
+    c = ROOT.TCanvas(f"c_{category}_{quantity}", "", 800, 600)
+    legend = ROOT.TLegend(0.60, 0.70, 0.88, 0.88)
+    legend.SetBorderSize(0)
+    legend.SetFillStyle(0)
+    legend.SetTextSize(0.035)
+
+    specs = [
+        (jjy_h(category, f"jpsi1_{quantity}"), "J/#psi_{1}", ROOT.kRed),
+        (jjy_h(category, f"jpsi2_{quantity}"), "J/#psi_{2}", ROOT.kBlue),
+        (jjy_h(category, f"ups_{quantity}"), "#Upsilon", ROOT.kGreen + 2),
+    ]
+    hists = []
+    max_val = 0
+    for hname, label, color in specs:
+        h = fin.Get(hname)
+        if not h:
+            print(f"Warning: histogram {hname} not found")
+            continue
+        h.SetLineColor(color)
+        h.SetLineWidth(2)
+        max_val = max(max_val, h.GetMaximum())
+        hists.append((h, label))
+
+    if not hists:
+        return
+
+    first = True
+    for h, label in hists:
+        h.SetMaximum(max_val * 1.3 if max_val > 0 else 1)
+        h.SetMinimum(0)
+        h.SetTitle(f"{xlabel} Distributions ({process}, {category_title})")
+        h.GetXaxis().SetTitle(xlabel)
+        h.GetYaxis().SetTitle("Events")
+        h.Draw("HIST" if first else "HIST SAME")
+        legend.AddEntry(h, label, "l")
+        first = False
+
+    legend.Draw()
+    output_name = os.path.join(output_dir, f"{quantity}_distributions_{process}_{category}")
+    c.SaveAs(output_name + ".pdf")
+    c.SaveAs(output_name + ".png")
+    print(f"Saved: {output_name}.pdf/.png")
+
+
+def plot_kinematics_jjy(fin, output_dir, process, category, category_title):
+    plot_jjy_kinematic_quantity(fin, output_dir, process, category, category_title, "pt", "p_{T} [GeV]")
+    plot_jjy_kinematic_quantity(fin, output_dir, process, category, category_title, "eta", "#eta")
+    plot_jjy_kinematic_quantity(fin, output_dir, process, category, category_title, "y", "y")
+    plot_jjy_kinematic_quantity(fin, output_dir, process, category, category_title, "phi", "#phi")
+
+
+def plot_resonance_mass_jjy(fin, output_dir, process, category, category_title):
+    """绘制JJY的m(mumu)共振质量谱。"""
+    c = ROOT.TCanvas(f"c_res_mass_{category}", "", 1200, 600)
+    c.Divide(2, 1)
+
+    c.cd(1)
+    ROOT.gPad.SetLeftMargin(0.12)
+    ROOT.gPad.SetRightMargin(0.05)
+    legend = ROOT.TLegend(0.58, 0.70, 0.88, 0.88)
+    legend.SetBorderSize(0)
+    legend.SetFillStyle(0)
+    legend.SetTextSize(0.035)
+
+    jpsi_specs = [
+        (jjy_h(category, "jpsi1_mass"), "J/#psi_{1}", ROOT.kRed),
+        (jjy_h(category, "jpsi2_mass"), "J/#psi_{2}", ROOT.kBlue),
+        (jjy_h(category, "jpsi_mass_all"), "J/#psi_{1}+J/#psi_{2}", ROOT.kBlack),
+    ]
+    jpsi_hists = []
+    max_val = 0
+    for hname, label, color in jpsi_specs:
+        h = fin.Get(hname)
+        if not h:
+            print(f"Warning: histogram {hname} not found")
+            continue
+        h.SetLineColor(color)
+        h.SetLineWidth(2)
+        if label == "J/#psi_{1}+J/#psi_{2}":
+            h.SetLineStyle(2)
+        max_val = max(max_val, h.GetMaximum())
+        jpsi_hists.append((h, label))
+
+    first = True
+    for h, label in jpsi_hists:
+        h.SetMaximum(max_val * 1.3 if max_val > 0 else 1)
+        h.SetMinimum(0)
+        h.SetTitle(f"J/#psi m(#mu#mu) ({process}, {category_title})")
+        h.GetXaxis().SetTitle("m(#mu#mu) [GeV]")
+        h.GetYaxis().SetTitle("Candidates")
+        h.Draw("HIST" if first else "HIST SAME")
+        legend.AddEntry(h, label, "l")
+        first = False
+    if jpsi_hists:
+        legend.Draw()
+
+    c.cd(2)
+    ROOT.gPad.SetLeftMargin(0.12)
+    ROOT.gPad.SetRightMargin(0.05)
+    h_ups = fin.Get(jjy_h(category, "ups_mass"))
+    if not h_ups:
+        print(f"Warning: histogram {jjy_h(category, 'ups_mass')} not found")
+    else:
+        h_ups.SetLineColor(ROOT.kGreen + 2)
+        h_ups.SetLineWidth(2)
+        h_ups.SetMinimum(0)
+        h_ups.SetMaximum(h_ups.GetMaximum() * 1.3 if h_ups.GetMaximum() > 0 else 1)
+        h_ups.SetTitle(f"#Upsilon(1S) m(#mu#mu) ({process}, {category_title})")
+        h_ups.GetXaxis().SetTitle("m(#mu#mu) [GeV]")
+        h_ups.GetYaxis().SetTitle("Candidates")
+        h_ups.Draw("HIST")
+
+    output_name = os.path.join(output_dir, f"resonance_mass_{process}_{category}")
+    c.SaveAs(output_name + ".pdf")
+    c.SaveAs(output_name + ".png")
+    print(f"Saved: {output_name}.pdf/.png")
+
+
+def plot_invariant_mass_jjy(fin, output_dir, process, category, category_title):
+    c = ROOT.TCanvas(f"c_mass_{category}", "", 1800, 800)
+    c.Divide(3, 2)
+
+    mass_hists = [
+        (jjy_h(category, "mass_jpsi1_jpsi2"), "M(J/#psi_{1} + J/#psi_{2})"),
+        (jjy_h(category, "mass_jpsi1_ups"), "M(J/#psi_{1} + #Upsilon)"),
+        (jjy_h(category, "mass_jpsi2_ups"), "M(J/#psi_{2} + #Upsilon)"),
+        (jjy_h(category, "mass_all"), "M(J/#psi_{1} + J/#psi_{2} + #Upsilon)"),
+        (jjy_h(category, "pri_mass"), "Pri fit mass"),
+        (jjy_h(category, "pri_vtxprob"), "Pri VtxProb"),
+    ]
+
+    for i, (hname, title) in enumerate(mass_hists):
+        c.cd(i + 1)
+        ROOT.gPad.SetLeftMargin(0.12)
+        ROOT.gPad.SetRightMargin(0.05)
+
+        h = fin.Get(hname)
+        if not h:
+            print(f"Warning: histogram {hname} not found")
+            continue
+
+        h.SetLineColor(ROOT.kBlue)
+        h.SetLineWidth(2)
+        h.SetTitle(f"{title} ({process}, {category_title})")
+        h.GetYaxis().SetTitle("Events")
+        h.SetMinimum(0)
+        h.Draw("HIST")
+
+    output_name = os.path.join(output_dir, f"invariant_mass_{process}_{category}")
+    c.SaveAs(output_name + ".pdf")
+    c.SaveAs(output_name + ".png")
+    print(f"Saved: {output_name}.pdf/.png")
+
+
+def plot_jjy_category(fin, output_dir, process, category, category_title):
+    category_dir = os.path.join(output_dir, category)
+    os.makedirs(category_dir, exist_ok=True)
+
+    plot_1d_comparison(
+        fin,
+        [jjy_h(category, "dy_jpsi1_jpsi2"), jjy_h(category, "dy_jpsi1_ups"), jjy_h(category, "dy_jpsi2_ups")],
+        ["J/#psi_{1} - J/#psi_{2}", "J/#psi_{1} - #Upsilon", "J/#psi_{2} - #Upsilon"],
+        [ROOT.kRed, ROOT.kBlue, ROOT.kGreen + 2],
+        os.path.join(category_dir, f"delta_y_comparison_{process}_{category}"),
+        f"#Delta y Distributions ({process}, {category_title})",
+        "|#Delta y|",
+    )
+
+    plot_1d_comparison(
+        fin,
+        [jjy_h(category, "dphi_jpsi1_jpsi2"), jjy_h(category, "dphi_jpsi1_ups"), jjy_h(category, "dphi_jpsi2_ups")],
+        ["J/#psi_{1} - J/#psi_{2}", "J/#psi_{1} - #Upsilon", "J/#psi_{2} - #Upsilon"],
+        [ROOT.kRed, ROOT.kBlue, ROOT.kGreen + 2],
+        os.path.join(category_dir, f"delta_phi_comparison_{process}_{category}"),
+        f"#Delta#phi Distributions ({process}, {category_title})",
+        "|#Delta#phi|",
+    )
+
+    plot_2d(fin, jjy_h2(category, "dy_dphi_jpsi1_jpsi2"),
+            os.path.join(category_dir, f"correlation_2d_jpsi1_jpsi2_{process}_{category}"),
+            f"J/#psi_{{1}} - J/#psi_{{2}}: #Delta y vs #Delta#phi ({process}, {category_title})")
+    plot_2d(fin, jjy_h2(category, "dy_dphi_jpsi1_ups"),
+            os.path.join(category_dir, f"correlation_2d_jpsi1_ups_{process}_{category}"),
+            f"J/#psi_{{1}} - #Upsilon: #Delta y vs #Delta#phi ({process}, {category_title})")
+    plot_2d(fin, jjy_h2(category, "dy_dphi_jpsi2_ups"),
+            os.path.join(category_dir, f"correlation_2d_jpsi2_ups_{process}_{category}"),
+            f"J/#psi_{{2}} - #Upsilon: #Delta y vs #Delta#phi ({process}, {category_title})")
+
+    plot_2d_all_jjy(fin, category_dir, process, category, category_title)
+    plot_kinematics_jjy(fin, category_dir, process, category, category_title)
+    plot_resonance_mass_jjy(fin, category_dir, process, category, category_title)
+    plot_invariant_mass_jjy(fin, category_dir, process, category, category_title)
+
+
+def plot_jjy(fin, output_dir, process):
+    """绘制JJY四套vertexing选择图"""
+    for category, category_title in JJY_VERTEX_CATEGORIES:
+        plot_jjy_category(fin, output_dir, process, category, category_title)
+
+
 def plot_kinematics_jjp(fin, output_dir, process):
     """绘制JJP运动学分布"""
     # pT分布
@@ -667,8 +917,8 @@ def main():
     parser.add_argument('-o', '--output-dir', default='plots',
                         help='输出目录')
     parser.add_argument('-p', '--process', required=True,
-                        choices=['JJP', 'JUP'],
-                        help='过程类型 (JJP或JUP)')
+                        choices=['JJP', 'JUP', 'JJY'],
+                        help='过程类型 (JJP、JUP或JJY)')
     
     args = parser.parse_args()
     
@@ -687,8 +937,10 @@ def main():
     
     if args.process == 'JJP':
         plot_jjp(fin, args.output_dir, args.process)
-    else:
+    elif args.process == 'JUP':
         plot_jup(fin, args.output_dir, args.process)
+    else:
+        plot_jjy(fin, args.output_dir, args.process)
     
     fin.Close()
     print("\nDone!")

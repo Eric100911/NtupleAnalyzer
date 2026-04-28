@@ -12,7 +12,11 @@ import sys
 from collections import OrderedDict
 
 import ROOT
-import uproot
+
+try:
+    import uproot
+except ImportError:
+    uproot = None
 
 from ntuple_pipeline_common import (
     OUTPUT_BASE,
@@ -33,7 +37,7 @@ INPUT_TREE = "selected"
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run RooFit + SPlot on selected assocPV ntuples")
-    parser.add_argument("--channel", required=True, choices=["JJP", "JUP", "jjp", "jup"])
+    parser.add_argument("--channel", required=True, choices=["JJP", "JUP", "JJY", "jjp", "jup", "jjy"])
     parser.add_argument("--dataset", default="data", choices=["data", "mc"])
     parser.add_argument("--sample", default=None, help="MC sample tag")
     parser.add_argument("-i", "--input", default=None, help="Input selected ROOT file")
@@ -254,11 +258,84 @@ def build_jup_model(n_events: int, mc_only_1s: bool = False, mc_two_component: b
     return model, observables, yields, "yield_sss", keep
 
 
+def build_jjy_model(n_events: int, mc_only_1s: bool = True, mc_two_component: bool = True):
+    keep = []
+    m_jpsi1 = ROOT.RooRealVar("sel_Jpsi_1_mass", "m(Jpsi1)", 2.9, 3.3)
+    m_jpsi2 = ROOT.RooRealVar("sel_Jpsi_2_mass", "m(Jpsi2)", 2.9, 3.3)
+    m_ups = ROOT.RooRealVar("sel_Ups_mass", "m(Upsilon)", 8.5, 11.4)
+    keep.extend([m_jpsi1, m_jpsi2, m_ups])
+
+    shared_jpsi_tails = {
+        "alpha_l": ROOT.RooRealVar("jjy_jpsi_alpha_l", "jjy_jpsi_alpha_l", 1.5, 0.1, 10.0),
+        "n_l": ROOT.RooConstVar("jjy_jpsi_n_l", "jjy_jpsi_n_l", 5.0),
+        "alpha_r": ROOT.RooRealVar("jjy_jpsi_alpha_r", "jjy_jpsi_alpha_r", 1.5, 0.1, 10.0),
+        "n_r": ROOT.RooConstVar("jjy_jpsi_n_r", "jjy_jpsi_n_r", 5.0),
+    }
+    jpsi1_params = {
+        "mean": ROOT.RooRealVar("jjy_jpsi1_mean", "jjy_jpsi1_mean", 3.096, 3.05, 3.15),
+        "sigma": ROOT.RooRealVar("jjy_jpsi1_sigma", "jjy_jpsi1_sigma", 0.025, 0.003, 0.08),
+        **shared_jpsi_tails,
+    }
+    jpsi2_params = {
+        "mean": ROOT.RooRealVar("jjy_jpsi2_mean", "jjy_jpsi2_mean", 3.096, 3.05, 3.15),
+        "sigma": ROOT.RooRealVar("jjy_jpsi2_sigma", "jjy_jpsi2_sigma", 0.025, 0.003, 0.08),
+        **shared_jpsi_tails,
+    }
+    keep.extend(list(shared_jpsi_tails.values()))
+    keep.extend([jpsi1_params["mean"], jpsi1_params["sigma"], jpsi2_params["mean"], jpsi2_params["sigma"]])
+
+    jpsi1_slope = ROOT.RooRealVar("jjy_jpsi1_bkg_slope", "jjy_jpsi1_bkg_slope", -2.0, -50.0, -0.001)
+    jpsi2_slope = ROOT.RooRealVar("jjy_jpsi2_bkg_slope", "jjy_jpsi2_bkg_slope", -2.0, -50.0, -0.001)
+    keep.extend([jpsi1_slope, jpsi2_slope])
+
+    jpsi1_sig = build_jpsi_signal(m_jpsi1, "jjy1", jpsi1_params, keep)
+    jpsi2_sig = build_jpsi_signal(m_jpsi2, "jjy2", jpsi2_params, keep)
+    jpsi1_bkg = build_jpsi_background(m_jpsi1, "jjy1", jpsi1_slope, keep)
+    jpsi2_bkg = build_jpsi_background(m_jpsi2, "jjy2", jpsi2_slope, keep)
+    ups_sig, ups_keep = build_ups_signal(m_ups, mc_only_1s=mc_only_1s)
+    ups_bkg, ups_bkg_keep = build_ups_background(m_ups)
+    keep.extend(ups_keep)
+    keep.extend(ups_bkg_keep)
+
+    components = OrderedDict()
+    components["yield_sss"] = ROOT.RooProdPdf("pdf_sss", "pdf_sss", ROOT.RooArgSet(jpsi1_sig, jpsi2_sig, ups_sig))
+    if mc_two_component:
+        components["yield_bbb"] = ROOT.RooProdPdf("pdf_bbb", "pdf_bbb", ROOT.RooArgSet(jpsi1_bkg, jpsi2_bkg, ups_bkg))
+    else:
+        components["yield_ssb"] = ROOT.RooProdPdf("pdf_ssb", "pdf_ssb", ROOT.RooArgSet(jpsi1_sig, jpsi2_sig, ups_bkg))
+        components["yield_sbs"] = ROOT.RooProdPdf("pdf_sbs", "pdf_sbs", ROOT.RooArgSet(jpsi1_sig, jpsi2_bkg, ups_sig))
+        components["yield_bss"] = ROOT.RooProdPdf("pdf_bss", "pdf_bss", ROOT.RooArgSet(jpsi1_bkg, jpsi2_sig, ups_sig))
+        components["yield_sbb"] = ROOT.RooProdPdf("pdf_sbb", "pdf_sbb", ROOT.RooArgSet(jpsi1_sig, jpsi2_bkg, ups_bkg))
+        components["yield_bsb"] = ROOT.RooProdPdf("pdf_bsb", "pdf_bsb", ROOT.RooArgSet(jpsi1_bkg, jpsi2_sig, ups_bkg))
+        components["yield_bbs"] = ROOT.RooProdPdf("pdf_bbs", "pdf_bbs", ROOT.RooArgSet(jpsi1_bkg, jpsi2_bkg, ups_sig))
+        components["yield_bbb"] = ROOT.RooProdPdf("pdf_bbb", "pdf_bbb", ROOT.RooArgSet(jpsi1_bkg, jpsi2_bkg, ups_bkg))
+
+    yields = OrderedDict()
+    init = [0.9, 0.1] if mc_two_component else [0.5, 0.08, 0.08, 0.08, 0.06, 0.06, 0.06, 0.08]
+    for (yield_name, _), frac in zip(components.items(), init):
+        yields[yield_name] = ROOT.RooRealVar(yield_name, yield_name, max(5.0, n_events * frac), 0.0, max(20.0, n_events * 1.5))
+    keep.extend(list(components.values()))
+    keep.extend(list(yields.values()))
+
+    model = ROOT.RooAddPdf(
+        "model_jjy",
+        "model_jjy",
+        ROOT.RooArgList(*components.values()),
+        ROOT.RooArgList(*yields.values()),
+    )
+    keep.append(model)
+    observables = OrderedDict([("sel_Jpsi_1_mass", m_jpsi1), ("sel_Jpsi_2_mass", m_jpsi2), ("sel_Ups_mass", m_ups)])
+    return model, observables, yields, "yield_sss", keep
+
+
 def make_dataset(tree, observables):
     argset = ROOT.RooArgSet()
     for obs in observables.values():
         argset.add(obs)
-    return ROOT.RooDataSet("data", "data", tree, argset)
+    try:
+        return ROOT.RooDataSet("data", "data", argset, ROOT.RooFit.Import(tree))
+    except TypeError:
+        return ROOT.RooDataSet("data", "data", tree, argset)
 
 
 def save_projection_plots(channel: str, plot_dir: str, data, model, observables, signal_yield_name: str, yields):
@@ -367,6 +444,8 @@ def main():
     args = parse_args()
     channel = normalize_channel(args.channel)
     dataset = normalize_dataset(args.dataset)
+    if channel == "JJY" and dataset != "mc":
+        raise ValueError("JJY sPlot is currently supported only for MC samples")
     sample = normalize_sample(channel, args.sample) if dataset == "mc" else None
 
     input_file = args.input or default_merged_output(channel, dataset, sample)
@@ -375,8 +454,17 @@ def main():
     ensure_parent_dir(output_file)
     ensure_dir(plot_dir)
 
-    summary = uproot.open(input_file)[INPUT_TREE]
-    n_entries = summary.num_entries
+    if uproot is not None:
+        n_entries = uproot.open(input_file)[INPUT_TREE].num_entries
+    else:
+        entry_file = ROOT.TFile.Open(input_file)
+        entry_tree = entry_file.Get(INPUT_TREE) if entry_file else None
+        if not entry_tree:
+            if entry_file:
+                entry_file.Close()
+            raise RuntimeError(f"Input tree '{INPUT_TREE}' not found in {input_file}")
+        n_entries = int(entry_tree.GetEntries())
+        entry_file.Close()
     print("=" * 80)
     print("assocPV sPlot fit")
     print("=" * 80)
@@ -400,11 +488,17 @@ def main():
 
     if channel == "JJP":
         model, observables, yields, signal_yield_name, keepalive = build_jjp_model(n_entries, mc_two_component=(dataset == "mc"))
-    else:
+    elif channel == "JUP":
         model, observables, yields, signal_yield_name, keepalive = build_jup_model(
             n_entries,
             mc_only_1s=(dataset == "mc"),
             mc_two_component=(dataset == "mc"),
+        )
+    else:
+        model, observables, yields, signal_yield_name, keepalive = build_jjy_model(
+            n_entries,
+            mc_only_1s=True,
+            mc_two_component=True,
         )
 
     data = make_dataset(tree, observables)

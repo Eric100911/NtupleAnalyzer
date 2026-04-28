@@ -14,8 +14,8 @@ import ROOT
 
 
 TREE_NAME = "mkcands/X_data"
-OUTPUT_BASE = "/eos/user/x/xcheng/learn_MC/NtupleAnalyzer_assocPV"
-DEFAULT_PROXY = "/afs/cern.ch/user/x/xcheng/x509up_u180107"
+OUTPUT_BASE = "/eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV"
+DEFAULT_PROXY = "/afs/cern.ch/user/c/chiw/condor/x509up"
 
 DATA_PATHS = {
     "JJP": "/eos/user/c/chiw/JpsiJpsiPhi/rootNtuple",
@@ -30,6 +30,7 @@ JUP_REFACTOR_PREFIX = "crab3_JpsiUpsPhi_refactor"
 JUP_SUBMIT_PREFIX = "2604"
 
 MC_BASE = "/eos/ihep/cms/store/user/xcheng/MC_Production_v2/output"
+JJY_MC_BASE = "/eos/user/c/chiw/JpsiJpsiUps/MC_samples/rootNtuple_refactor"
 MC_SAMPLE_DIRS = {
     "JJP": {
         "SPS": "JJP_SPS",
@@ -46,6 +47,10 @@ MC_SAMPLE_DIRS = {
         "DPS_2": "JUP_DPS2",
         "DPS_3": "JUP_DPS3",
         "TPS": "JUP_TPS",
+    },
+    "JJY": {
+        "DPS_1": "DPS-Jpsi-JpsiY/filter_JpsiPtMin4p0_YPtMin6p0",
+        "DPS_2": "DPS-JpsiJpsi-Y/filter_JpsiPtMin4p0_YPtMin6p0",
     },
 }
 
@@ -271,6 +276,89 @@ CHANNEL_CONFIGS: Dict[str, ChannelConfig] = {
             ("sel_Phi_K_2", "sel_Phi_K_2"),
         ),
     ),
+    "JJY": ChannelConfig(
+        channel="JJY",
+        mass_branches=("sel_Jpsi_1_mass", "sel_Jpsi_2_mass", "sel_Ups_mass"),
+        fit_branches=("sel_Jpsi_1_mass", "sel_Jpsi_2_mass", "sel_Ups_mass"),
+        pair_specs=(
+            ("jpsi1_jpsi2", "sel_Jpsi_1", "sel_Jpsi_2"),
+            ("jpsi1_ups", "sel_Jpsi_1", "sel_Ups"),
+            ("jpsi2_ups", "sel_Jpsi_2", "sel_Ups"),
+        ),
+        selected_candidate_branches=(
+            "Jpsi_1_mass",
+            "Jpsi_1_massErr",
+            "Jpsi_1_massDiff",
+            "Jpsi_1_ctau",
+            "Jpsi_1_ctauErr",
+            "Jpsi_1_Chi2",
+            "Jpsi_1_ndof",
+            "Jpsi_1_VtxProb",
+            "Jpsi_1_px",
+            "Jpsi_1_py",
+            "Jpsi_1_pz",
+            "Jpsi_1_phi",
+            "Jpsi_1_eta",
+            "Jpsi_1_pt",
+            "Jpsi_1_mu_1_Idx",
+            "Jpsi_1_mu_2_Idx",
+            "Jpsi_2_mass",
+            "Jpsi_2_massErr",
+            "Jpsi_2_massDiff",
+            "Jpsi_2_ctau",
+            "Jpsi_2_ctauErr",
+            "Jpsi_2_Chi2",
+            "Jpsi_2_ndof",
+            "Jpsi_2_VtxProb",
+            "Jpsi_2_px",
+            "Jpsi_2_py",
+            "Jpsi_2_pz",
+            "Jpsi_2_phi",
+            "Jpsi_2_eta",
+            "Jpsi_2_pt",
+            "Jpsi_2_mu_1_Idx",
+            "Jpsi_2_mu_2_Idx",
+            "Ups_mass",
+            "Ups_massErr",
+            "Ups_massDiff",
+            "Ups_ctau",
+            "Ups_ctauErr",
+            "Ups_Chi2",
+            "Ups_ndof",
+            "Ups_VtxProb",
+            "Ups_px",
+            "Ups_py",
+            "Ups_pz",
+            "Ups_phi",
+            "Ups_eta",
+            "Ups_pt",
+            "Ups_mu_1_Idx",
+            "Ups_mu_2_Idx",
+            "Pri_mass",
+            "Pri_massErr",
+            "Pri_ctau",
+            "Pri_ctauErr",
+            "Pri_Chi2",
+            "Pri_ndof",
+            "Pri_VtxProb",
+            "Pri_fitValid",
+            "Pri_px",
+            "Pri_py",
+            "Pri_pz",
+            "Pri_phi",
+            "Pri_eta",
+            "Pri_pt",
+        ),
+        selected_muon_specs=(
+            ("sel_Jpsi_1_mu_1_Idx", "sel_Jpsi1_mu1"),
+            ("sel_Jpsi_1_mu_2_Idx", "sel_Jpsi1_mu2"),
+            ("sel_Jpsi_2_mu_1_Idx", "sel_Jpsi2_mu1"),
+            ("sel_Jpsi_2_mu_2_Idx", "sel_Jpsi2_mu2"),
+            ("sel_Ups_mu_1_Idx", "sel_Ups_mu1"),
+            ("sel_Ups_mu_2_Idx", "sel_Ups_mu2"),
+        ),
+        selected_kaon_specs=(),
+    ),
 }
 
 
@@ -291,7 +379,10 @@ def normalize_dataset(dataset: str) -> str:
 def normalize_sample(channel: str, sample: str | None) -> str | None:
     if sample is None:
         return None
-    sample_up = sample.upper().replace("DPS1", "DPS_1").replace("DPS2", "DPS_2").replace("DPS3", "DPS_3")
+    if channel == "JJY":
+        sample_up = sample.upper()
+    else:
+        sample_up = sample.upper().replace("DPS1", "DPS_1").replace("DPS2", "DPS_2").replace("DPS3", "DPS_3")
     valid = MC_SAMPLE_DIRS[channel]
     if sample_up not in valid:
         raise ValueError(f"Unsupported sample for {channel}: {sample}")
@@ -303,6 +394,8 @@ def default_input_dir(channel: str, dataset: str, sample: str | None = None) -> 
         return DATA_PATHS[channel]
     if sample is None:
         raise ValueError("MC input requires --sample")
+    if channel == "JJY":
+        return os.path.join(JJY_MC_BASE, MC_SAMPLE_DIRS[channel][sample])
     return os.path.join(MC_BASE, MC_SAMPLE_DIRS[channel][sample])
 
 
@@ -409,6 +502,8 @@ def discover_root_files(input_path: str, max_files: int = -1) -> List[str]:
             files = _discover_jup_refactor_data_files(resolved)
         if not files:
             files = sorted(glob.glob(os.path.join(resolved, "*.root")))
+        if not files:
+            files = sorted(glob.glob(os.path.join(resolved, "**", "*.root"), recursive=True))
     if max_files > 0:
         files = files[:max_files]
     if not files:
@@ -599,6 +694,10 @@ def _jup_selected_branch_map(input_prefix: str) -> Tuple[Tuple[str, str], ...]:
     return tuple(mapping)
 
 
+def _jjy_selected_branch_map() -> Tuple[Tuple[str, str], ...]:
+    return tuple((name, name) for name in CHANNEL_CONFIGS["JJY"].selected_candidate_branches)
+
+
 DATASET_SCHEMAS: Dict[Tuple[str, str], DatasetSchema] = {
     ("JJP", "data"): DatasetSchema(
         schema_key="JJP_data",
@@ -655,6 +754,22 @@ DATASET_SCHEMAS: Dict[Tuple[str, str], DatasetSchema] = {
             ("Ups_mu_2_Idx", "sel_Ups_mu2"),
         ),
         selected_particle_prefixes=("sel_Jpsi", "sel_Ups", "sel_Phi", "sel_Pri"),
+    ),
+    ("JJY", "mc"): DatasetSchema(
+        schema_key="JJY_mc",
+        channel="JJY",
+        dataset="mc",
+        best_index_kind="JJY",
+        selected_branch_map=_jjy_selected_branch_map(),
+        selected_muon_specs=(
+            ("Jpsi_1_mu_1_Idx", "sel_Jpsi1_mu1"),
+            ("Jpsi_1_mu_2_Idx", "sel_Jpsi1_mu2"),
+            ("Jpsi_2_mu_1_Idx", "sel_Jpsi2_mu1"),
+            ("Jpsi_2_mu_2_Idx", "sel_Jpsi2_mu2"),
+            ("Ups_mu_1_Idx", "sel_Ups_mu1"),
+            ("Ups_mu_2_Idx", "sel_Ups_mu2"),
+        ),
+        selected_particle_prefixes=("sel_Jpsi_1", "sel_Jpsi_2", "sel_Ups", "sel_Pri"),
     ),
 }
 
@@ -874,6 +989,66 @@ def declare_rdf_helpers() -> None:
                 PassCandidateTrackGenMotherMatch(phiK2GenMatchIdx, phiK2GenMatchSource, genMotherIdx, genMotherPdgId, candIdx, PHI_PDG_ID);
         }
 
+        bool PassSelectedJJYGenMatch(
+            int jpsi1_mu1_idx,
+            int jpsi1_mu2_idx,
+            int jpsi2_mu1_idx,
+            int jpsi2_mu2_idx,
+            int ups_mu1_idx,
+            int ups_mu2_idx,
+            const RVec<int>& muGenMatchIdx,
+            const RVec<int>& muGenMatchSource,
+            const RVec<int>& genMotherIdx,
+            const RVec<int>& genMotherPdgId
+        ) {
+            constexpr int JPSI_PDG_ID = 443;
+            constexpr int UPSILON_PDG_ID = 553;
+            return
+                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi1_mu1_idx, JPSI_PDG_ID) &&
+                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi1_mu2_idx, JPSI_PDG_ID) &&
+                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi2_mu1_idx, JPSI_PDG_ID) &&
+                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi2_mu2_idx, JPSI_PDG_ID) &&
+                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, ups_mu1_idx, UPSILON_PDG_ID) &&
+                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, ups_mu2_idx, UPSILON_PDG_ID);
+        }
+
+        bool AllMuonIndicesDistinct(int a, int b, int c, int d, int e, int f) {
+            const int values[6] = {a, b, c, d, e, f};
+            for (int i = 0; i < 6; ++i) {
+                if (values[i] < 0) return false;
+                for (int j = i + 1; j < 6; ++j) {
+                    if (values[i] == values[j]) return false;
+                }
+            }
+            return true;
+        }
+
+        bool AllSelectedMuonSameVertex(
+            const RVec<int>& muVertexId,
+            int a,
+            int b,
+            int c,
+            int d,
+            int e,
+            int f
+        ) {
+            const int values[6] = {a, b, c, d, e, f};
+            if (!AllMuonIndicesDistinct(a, b, c, d, e, f)) return false;
+            int vertex_id = -1;
+            for (int i = 0; i < 6; ++i) {
+                const int idx = values[i];
+                if (idx >= static_cast<int>(muVertexId.size())) return false;
+                const int current = muVertexId[idx];
+                if (current < 0) return false;
+                if (i == 0) {
+                    vertex_id = current;
+                } else if (current != vertex_id) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         double Score3(double pt1, double pt2, double pt3) {
             return std::sqrt(pt1 * pt1 + pt2 * pt2 + pt3 * pt3);
         }
@@ -1011,6 +1186,73 @@ def declare_rdf_helpers() -> None:
             return best_idx;
         }
 
+        int BestCandIndexJJY(
+            const RVec<float>& jpsi1_mass,
+            const RVec<float>& jpsi1_pt,
+            const RVec<float>& jpsi1_eta,
+            const RVec<float>& jpsi1_mu1_idx,
+            const RVec<float>& jpsi1_mu2_idx,
+            const RVec<float>& jpsi2_mass,
+            const RVec<float>& jpsi2_pt,
+            const RVec<float>& jpsi2_eta,
+            const RVec<float>& jpsi2_mu1_idx,
+            const RVec<float>& jpsi2_mu2_idx,
+            const RVec<float>& ups_mass,
+            const RVec<float>& ups_pt,
+            const RVec<float>& ups_eta,
+            const RVec<float>& ups_mu1_idx,
+            const RVec<float>& ups_mu2_idx,
+            const RVec<float>& muPx,
+            const RVec<float>& muPy,
+            const RVec<float>& muPz,
+            const RVec<int>& jpsiIdMask,
+            const RVec<int>& upsIdMask
+        ) {
+            int best_idx = -1;
+            double best_score = -1.;
+            const int n_cand = static_cast<int>(jpsi1_mass.size());
+            for (int i = 0; i < n_cand; ++i) {
+                if (i >= static_cast<int>(jpsi2_mass.size()) || i >= static_cast<int>(ups_mass.size()) ||
+                    i >= static_cast<int>(jpsi1_pt.size()) || i >= static_cast<int>(jpsi2_pt.size()) ||
+                    i >= static_cast<int>(ups_pt.size()) || i >= static_cast<int>(jpsi1_eta.size()) ||
+                    i >= static_cast<int>(jpsi2_eta.size()) || i >= static_cast<int>(ups_eta.size()) ||
+                    i >= static_cast<int>(jpsi1_mu1_idx.size()) || i >= static_cast<int>(jpsi1_mu2_idx.size()) ||
+                    i >= static_cast<int>(jpsi2_mu1_idx.size()) || i >= static_cast<int>(jpsi2_mu2_idx.size()) ||
+                    i >= static_cast<int>(ups_mu1_idx.size()) || i >= static_cast<int>(ups_mu2_idx.size())) {
+                    continue;
+                }
+
+                if (jpsi1_mass[i] < 2.9f || jpsi1_mass[i] > 3.3f) continue;
+                if (jpsi2_mass[i] < 2.9f || jpsi2_mass[i] > 3.3f) continue;
+                if (ups_mass[i] < 8.5f || ups_mass[i] > 11.4f) continue;
+                if (jpsi1_pt[i] <= 3.f || jpsi2_pt[i] <= 3.f || ups_pt[i] <= 4.f) continue;
+                if (std::fabs(RapidityFromPtEtaM(jpsi1_pt[i], jpsi1_eta[i], jpsi1_mass[i])) >= 2.5f) continue;
+                if (std::fabs(RapidityFromPtEtaM(jpsi2_pt[i], jpsi2_eta[i], jpsi2_mass[i])) >= 2.5f) continue;
+                if (std::fabs(RapidityFromPtEtaM(ups_pt[i], ups_eta[i], ups_mass[i])) >= 2.5f) continue;
+
+                const int mu11 = static_cast<int>(jpsi1_mu1_idx[i]);
+                const int mu12 = static_cast<int>(jpsi1_mu2_idx[i]);
+                const int mu21 = static_cast<int>(jpsi2_mu1_idx[i]);
+                const int mu22 = static_cast<int>(jpsi2_mu2_idx[i]);
+                const int umu1 = static_cast<int>(ups_mu1_idx[i]);
+                const int umu2 = static_cast<int>(ups_mu2_idx[i]);
+                if (!AllMuonIndicesDistinct(mu11, mu12, mu21, mu22, umu1, umu2)) continue;
+                if (!PassMuonSelection(muPx, muPy, muPz, jpsiIdMask, mu11)) continue;
+                if (!PassMuonSelection(muPx, muPy, muPz, jpsiIdMask, mu12)) continue;
+                if (!PassMuonSelection(muPx, muPy, muPz, jpsiIdMask, mu21)) continue;
+                if (!PassMuonSelection(muPx, muPy, muPz, jpsiIdMask, mu22)) continue;
+                if (!PassMuonSelection(muPx, muPy, muPz, upsIdMask, umu1)) continue;
+                if (!PassMuonSelection(muPx, muPy, muPz, upsIdMask, umu2)) continue;
+
+                const double score = Score3(jpsi1_pt[i], jpsi2_pt[i], ups_pt[i]);
+                if (score > best_score) {
+                    best_score = score;
+                    best_idx = i;
+                }
+            }
+            return best_idx;
+        }
+
         double InvariantMass2(
             float pt1, float eta1, float phi1, float m1,
             float pt2, float eta2, float phi2, float m2
@@ -1097,13 +1339,29 @@ def define_selected_columns(rdf, schema: DatasetSchema):
             "sel_Jpsi_2_pt, sel_Jpsi_2_eta, sel_Jpsi_2_phi, sel_Jpsi_2_mass, "
             "sel_Phi_pt, sel_Phi_eta, sel_Phi_phi, sel_Phi_mass)",
         )
-    else:
+    elif schema.channel == "JUP":
         rdf = rdf.Define(
             "sel_m_all",
             "InvariantMass3(sel_Jpsi_pt, sel_Jpsi_eta, sel_Jpsi_phi, sel_Jpsi_mass, "
             "sel_Ups_pt, sel_Ups_eta, sel_Ups_phi, sel_Ups_mass, "
             "sel_Phi_pt, sel_Phi_eta, sel_Phi_phi, sel_Phi_mass)",
         )
+    else:
+        rdf = rdf.Define(
+            "sel_m_all",
+            "InvariantMass3(sel_Jpsi_1_pt, sel_Jpsi_1_eta, sel_Jpsi_1_phi, sel_Jpsi_1_mass, "
+            "sel_Jpsi_2_pt, sel_Jpsi_2_eta, sel_Jpsi_2_phi, sel_Jpsi_2_mass, "
+            "sel_Ups_pt, sel_Ups_eta, sel_Ups_phi, sel_Ups_mass)",
+        )
+        rdf = rdf.Define(
+            "sel_same_mu_vertex",
+            "AllSelectedMuonSameVertex(muVertexId, "
+            "sel_Jpsi_1_mu_1_Idx, sel_Jpsi_1_mu_2_Idx, "
+            "sel_Jpsi_2_mu_1_Idx, sel_Jpsi_2_mu_2_Idx, "
+            "sel_Ups_mu_1_Idx, sel_Ups_mu_2_Idx)",
+        )
+        rdf = rdf.Define("sel_pri_valid", "static_cast<int>(sel_Pri_fitValid) != 0")
+        rdf = rdf.Define("sel_pri_vtxprob_gt_0p005", "sel_Pri_VtxProb > 0.005")
 
     return rdf
 
@@ -1128,4 +1386,6 @@ def selected_extra_columns(schema: DatasetSchema) -> List[str]:
     for name, _, _ in cfg.pair_specs:
         extra.extend([f"sel_abs_dy_{name}", f"sel_abs_dphi_{name}", f"sel_m_{name}"])
     extra.append("sel_m_all")
+    if schema.channel == "JJY":
+        extra.extend(["sel_same_mu_vertex", "sel_pri_valid", "sel_pri_vtxprob_gt_0p005"])
     return extra

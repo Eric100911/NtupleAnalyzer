@@ -11,7 +11,7 @@
 
 所有默认输出都写到：
 
-`/eos/user/x/xcheng/learn_MC/NtupleAnalyzer_assocPV`
+`/eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV`
 
 ## 输入路径
 
@@ -21,7 +21,9 @@
 - MC:
   - 基础目录: `/eos/ihep/cms/store/user/xcheng/MC_Production_v2/output`
   - 程序会自动转成 `root://cceos.ihep.ac.cn//eos/ihep/...` 并优先读取 `output_ntuple.root`
-  - 默认 proxy: `/afs/cern.ch/user/x/xcheng/x509up_u180107`
+  - JJY 基础目录: `/eos/user/c/chiw/JpsiJpsiUps/MC_samples/rootNtuple_refactor`
+  - JJY 样本: `DPS_1 = DPS-Jpsi-JpsiY/filter_JpsiPtMin4p0_YPtMin6p0`, `DPS_2 = DPS-JpsiJpsi-Y/filter_JpsiPtMin4p0_YPtMin6p0`
+  - 默认 proxy: `/afs/cern.ch/user/c/chiw/condor/x509up`
 
 ## 选择标准
 
@@ -39,6 +41,14 @@
   - 继承上面的 J/psi、muon、Kaon、Phi cut
   - `Ups mass in [8.5, 11.4]`
   - `abs(y_Ups) < 2.5`
+- JJY:
+  - 两个 J/psi 默认要求 `soft` muon，Upsilon 默认要求 `soft` muon；可用 `--jpsi-muon-id` 和 `--ups-muon-id` 覆盖
+  - `Jpsi_1/Jpsi_2 mass in [2.9, 3.3]`
+  - `Ups mass in [8.5, 11.4]`
+  - `Jpsi_1/Jpsi_2 pT > 3`, `Ups pT > 4`
+  - `abs(y_Jpsi_1)`, `abs(y_Jpsi_2)`, `abs(y_Ups) < 2.5`
+  - 6 个候选 muon index 必须有效且互不重复
+  - JJY MC merge 默认不加 gen-match cut
 
 多候选事件默认取 `sqrt(pt1^2 + pt2^2 + pt3^2)` 最大的候选。
 
@@ -68,18 +78,22 @@ JUP data 全流程：
 ```bash
 ./run_assoc_merge.sh --channel JJP --dataset data
 ./run_assoc_merge.sh --channel JUP --dataset mc --sample DPS_3
+./run_assoc_merge.sh --channel JJY --dataset mc --sample DPS_1 -j 1
+./run_assoc_merge.sh --channel JJY --dataset mc --sample DPS_2 -j 1
 ```
 
 只跑拟合：
 
 ```bash
 ./run_assoc_fit.sh --channel JJP --dataset data
+./run_assoc_fit.sh --channel JJY --dataset mc --sample DPS_1 -j 1
 ```
 
 只跑加权画图：
 
 ```bash
 ./run_assoc_plots.sh --channel JUP --dataset data
+./run_assoc_plots.sh --channel JJY --dataset mc --sample DPS_1
 ```
 
 ## HTCondor
@@ -89,6 +103,7 @@ HTCondor 只建议用于第 1 步 merge。
 - MC merge:
   - `condor/jjp_mc.sub`
   - `condor/jup_mc.sub`
+  - `condor/jjy_mc.sub`
 - DATA merge:
   - `condor/jjp_data.sub`
   - `condor/jup_data.sub`
@@ -98,6 +113,7 @@ HTCondor 只建议用于第 1 步 merge。
 ```bash
 cd condor
 ./submit.sh jup_mc --mode DPS_3
+./submit.sh jjy_mc --mode all --jobs 1
 ./submit.sh jjp_data
 ```
 
@@ -114,6 +130,7 @@ cd condor
   - J/psi: CrystalBall + Gaussian，背景 Exponential
   - Phi: Voigtian，背景二次 Chebychev
   - Ups: 1S/2S/3S 双侧 CrystalBall 组合，背景二次 Chebychev
+  - JJY MC: `sel_Jpsi_1_mass`, `sel_Jpsi_2_mass`, `sel_Ups_mass` 三维模型，`signal_sw = yield_sss_sw`
 
 ## 本地小规模测试
 

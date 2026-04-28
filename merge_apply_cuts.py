@@ -33,6 +33,29 @@ from ntuple_pipeline_common import (
 OUTPUT_TREE = "selected"
 
 
+def filter_snapshot_supported_branches(file_name: str, tree_name: str, branches: list[str]) -> tuple[list[str], list[str]]:
+    fin = ROOT.TFile.Open(file_name)
+    if not fin or fin.IsZombie():
+        return branches, []
+    tree = fin.Get(tree_name)
+    if tree is None:
+        fin.Close()
+        return branches, []
+
+    unsupported = set()
+    for branch in tree.GetListOfBranches():
+        branch_name = branch.GetName()
+        for leaf in branch.GetListOfLeaves():
+            if leaf.GetTypeName() in {"Float16_t", "Double32_t"}:
+                unsupported.add(branch_name)
+                break
+    fin.Close()
+
+    skipped = [branch for branch in branches if branch in unsupported]
+    kept = [branch for branch in branches if branch not in unsupported]
+    return kept, skipped
+
+
 def build_genmatch_expr(schema_key: str) -> str | None:
     if schema_key == "JJP_mc":
         return (
@@ -80,11 +103,19 @@ def build_best_index_expr(schema_key: str) -> str:
             "Phi_mass, Phi_pt, Phi_eta, Phi_K_1_pt, Phi_K_1_eta, Phi_K_2_pt, Phi_K_2_eta, "
             "muPx, muPy, muPz, jpsi_muon_id_mask, ups_muon_id_mask)"
         )
+    if schema_key == "JUP_mc":
+        return (
+            "BestCandIndexJUP("
+            "Jpsi_1_mass, Jpsi_1_pt, Jpsi_1_eta, Jpsi_1_mu_1_Idx, Jpsi_1_mu_2_Idx, "
+            "Ups_mass, Ups_pt, Ups_eta, Ups_mu_1_Idx, Ups_mu_2_Idx, "
+            "Phi_mass, Phi_pt, Phi_eta, Phi_K_1_pt, Phi_K_1_eta, Phi_K_2_pt, Phi_K_2_eta, "
+            "muPx, muPy, muPz, jpsi_muon_id_mask, ups_muon_id_mask)"
+        )
     return (
-        "BestCandIndexJUP("
+        "BestCandIndexJJY("
         "Jpsi_1_mass, Jpsi_1_pt, Jpsi_1_eta, Jpsi_1_mu_1_Idx, Jpsi_1_mu_2_Idx, "
+        "Jpsi_2_mass, Jpsi_2_pt, Jpsi_2_eta, Jpsi_2_mu_1_Idx, Jpsi_2_mu_2_Idx, "
         "Ups_mass, Ups_pt, Ups_eta, Ups_mu_1_Idx, Ups_mu_2_Idx, "
-        "Phi_mass, Phi_pt, Phi_eta, Phi_K_1_pt, Phi_K_1_eta, Phi_K_2_pt, Phi_K_2_eta, "
         "muPx, muPy, muPz, jpsi_muon_id_mask, ups_muon_id_mask)"
     )
 
@@ -116,9 +147,9 @@ def configure_rdf(schema, files, args):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Merge ntuples and apply assocPV cuts")
-    parser.add_argument("--channel", required=True, choices=["JJP", "JUP", "jjp", "jup"], help="Physics channel")
+    parser.add_argument("--channel", required=True, choices=["JJP", "JUP", "JJY", "jjp", "jup", "jjy"], help="Physics channel")
     parser.add_argument("--dataset", default="data", choices=["data", "mc"], help="Input dataset type")
-    parser.add_argument("--sample", default=None, help="MC sample tag (JJP: DPS/TPS, JUP: SPS/DPS_1/DPS_2/DPS_3/TPS)")
+    parser.add_argument("--sample", default=None, help="MC sample tag (JJP: DPS/TPS, JUP: SPS/DPS_1/DPS_2/DPS_3/TPS, JJY: DPS_1/DPS_2)")
     parser.add_argument("-i", "--input-dir", default=None, help="Override input directory or ROOT file")
     parser.add_argument("-o", "--output", default=None, help="Output ROOT file")
     parser.add_argument("-j", "--jobs", type=int, default=8, help="RDataFrame thread count")
@@ -134,6 +165,8 @@ def main():
     args = parse_args()
     channel = normalize_channel(args.channel)
     dataset = normalize_dataset(args.dataset)
+    if channel == "JJY" and dataset != "mc":
+        raise ValueError("JJY is currently supported only for MC samples")
     sample = normalize_sample(channel, args.sample) if dataset == "mc" else None
     schema = get_dataset_schema(channel, dataset)
 
@@ -147,6 +180,7 @@ def main():
 
     files = discover_root_files(input_dir, args.max_files)
     original_branches = get_tree_branches(files[0], TREE_NAME)
+    original_branches, skipped_snapshot_branches = filter_snapshot_supported_branches(files[0], TREE_NAME, original_branches)
     snapshot_columns = list(dict.fromkeys(original_branches + selected_extra_columns(schema)))
 
     ROOT.gROOT.SetBatch(True)
@@ -163,6 +197,8 @@ def main():
     print(f"[INFO] input        : {input_dir}")
     print(f"[INFO] files        : {len(files)}")
     print(f"[INFO] output       : {output_file}")
+    if skipped_snapshot_branches:
+        print(f"[INFO] skipped Snapshot branches with compact ROOT storage: {', '.join(skipped_snapshot_branches)}")
     print(f"[INFO] jobs         : {args.jobs}")
     print(f"[INFO] max events   : {args.max_events}")
     if channel == "JJP":
@@ -170,7 +206,9 @@ def main():
     else:
         print(f"[INFO] J/psi muon ID: {args.jpsi_muon_id}")
         print(f"[INFO] Ups muon ID : {args.ups_muon_id}")
-    if dataset == "mc":
+    if dataset == "mc" and channel == "JJY":
+        print("[INFO] genMatch     : disabled for JJY")
+    elif dataset == "mc":
         print("[INFO] genMatch     : source=1, valid mother, mother pdgId J/psi/Upsilon/Phi")
     print("=" * 80)
 

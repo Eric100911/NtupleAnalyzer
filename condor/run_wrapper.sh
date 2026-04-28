@@ -73,7 +73,7 @@ echo "[INFO] Setting up VOMS proxy..."
 # Check for proxy in standard locations
 PROXY_LOCATIONS=(
     "$X509_USER_PROXY"
-    "/afs/cern.ch/user/x/xcheng/x509up_u$(id -u)"
+    "/afs/cern.ch/user/c/chiw/condor/x509up"
     "/tmp/x509up_u$(id -u)"
 )
 

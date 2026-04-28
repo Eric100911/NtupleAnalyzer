@@ -37,7 +37,7 @@ PT_BIN_EDGES = np.asarray([0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 17.0, 21.0
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Plot weighted assocPV distributions")
-    parser.add_argument("--channel", required=True, choices=["JJP", "JUP", "jjp", "jup"])
+    parser.add_argument("--channel", required=True, choices=["JJP", "JUP", "JJY", "jjp", "jup", "jjy"])
     parser.add_argument("--dataset", default="data", choices=["data", "mc"])
     parser.add_argument("--sample", default=None, help="MC sample tag")
     parser.add_argument("-i", "--input", default=None, help="Input weighted ROOT file")
@@ -71,6 +71,8 @@ def label_for_branch(name: str) -> str:
 
 
 def infer_range(name: str):
+    if name in {"sel_same_mu_vertex", "sel_pri_valid", "sel_pri_vtxprob_gt_0p005"}:
+        return -0.5, 1.5
     if "abs_dphi" in name:
         return 0.0, math.pi
     if "abs_dy" in name:
@@ -233,6 +235,8 @@ def main():
     args = parse_args()
     channel = normalize_channel(args.channel)
     dataset = normalize_dataset(args.dataset)
+    if channel == "JJY" and dataset != "mc":
+        raise ValueError("JJY weighted plotting is currently supported only for MC samples")
     sample = normalize_sample(channel, args.sample) if dataset == "mc" else None
     input_file = args.input or default_weighted_output(channel, dataset, sample)
     output_dir = args.output_dir or default_plot_dir(channel, dataset, sample)
