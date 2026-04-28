@@ -44,9 +44,10 @@ request_disk = 10G
 should_transfer_files = NO
 
 # Environment and proxy
-getenv = True
+getenv = False
+environment = "LCG_VIEW=/cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt"
 use_x509userproxy = True
-x509userproxy = /afs/cern.ch/user/x/xcheng/x509up_u180107
+x509userproxy = /afs/cern.ch/user/c/chiw/condor/x509up
 
 # Notification
 notification = Error
