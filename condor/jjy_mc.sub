@@ -1,0 +1,65 @@
+# ==============================================================================
+# jjy_mc.sub - HTCondor submit file for JJY MC analysis
+# ==============================================================================
+# Submit J/psi + J/psi + Upsilon(1S) MC modes:
+#   DPS_1: DPS-Jpsi-JpsiY
+#   DPS_2: DPS-JpsiJpsi-Y
+#
+# Usage:
+#   condor_submit jjy_mc.sub                  # Submit DPS_1 (default)
+#   condor_submit jjy_mc.sub MODE=DPS_2       # Submit DPS_2
+# ==============================================================================
+
+# Job configuration
+universe = vanilla
+executable = ./run_wrapper.sh
+
+# Default parameters (can be overridden)
+MODE = DPS_1
+JOBS = 1
+MAX_EVENTS = -1
+JPSI_MUON_ID = soft
+UPS_MUON_ID = tight
+JPSI_MASS_BINS = 40
+JPSI_MASS_MIN = 2.8
+JPSI_MASS_MAX = 3.4
+UPS_MASS_BINS = 60
+UPS_MASS_MIN = 8.5
+UPS_MASS_MAX = 10.5
+
+# Arguments passed to run_wrapper.sh
+arguments = "run_jjy_mc_ntuple.sh -m $(MODE) -j $(JOBS) -n $(MAX_EVENTS) --jpsi-muon-id $(JPSI_MUON_ID) --ups-muon-id $(UPS_MUON_ID) --jpsi-mass-bins $(JPSI_MASS_BINS) --jpsi-mass-min $(JPSI_MASS_MIN) --jpsi-mass-max $(JPSI_MASS_MAX) --ups-mass-bins $(UPS_MASS_BINS) --ups-mass-min $(UPS_MASS_MIN) --ups-mass-max $(UPS_MASS_MAX)"
+
+# Log files
+log_dir = logs/jjy_mc
+output = $(log_dir)/jjy_mc_$(MODE)_$(Cluster)_$(Process).out
+error = $(log_dir)/jjy_mc_$(MODE)_$(Cluster)_$(Process).err
+log = $(log_dir)/jjy_mc_$(MODE)_$(Cluster)_$(Process).log
+
+# Resource requests: one Condor core and one analyzer worker per job.
+request_memory = 16000
+request_cpus = 1
+request_disk = 10G
+
+# Job flavor (max runtime)
++JobFlavour = "tomorrow"
+
+# File transfer settings
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_output_files = output
+
+# Environment and proxy
+getenv = True
+use_x509userproxy = True
+x509userproxy = /afs/cern.ch/user/c/chiw/condor/x509up
+
+# Notification
+notification = Error
+notify_user = chiw@cern.ch
+
+# Requirements
+requirements = (OpSysAndVer =?= "AlmaLinux9")
+
+# Queue
+queue

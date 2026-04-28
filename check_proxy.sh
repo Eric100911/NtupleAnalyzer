@@ -15,7 +15,7 @@ set -e
 
 # Configuration
 PROXY_SRC="/tmp/x509up_u$(id -u)"
-PROXY_DST="/afs/cern.ch/user/x/xcheng/x509up_u$(id -u)"
+PROXY_DST="/afs/cern.ch/user/c/chiw/condor/x509up"
 EOS_HOST="cceos.ihep.ac.cn"
 EOS_PATH_BASE="/eos/ihep/cms/store/user/xcheng/MC_Production"
 MIN_HOURS_LEFT=12

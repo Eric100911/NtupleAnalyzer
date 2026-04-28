@@ -1,6 +1,6 @@
 # Ntuple Angular Correlation Analysis
 
-Ntuple数据的角度关联和运动学分析工具，用于分析重建后的 J/ψ+J/ψ+φ (JJP) 和 J/ψ+Υ+φ (JUP) 过程。
+Ntuple数据的角度关联和运动学分析工具，用于分析重建后的 J/ψ+J/ψ+φ (JJP)、J/ψ+Υ+φ (JUP) 和 J/ψ+J/ψ+Υ(1S) (JJY) 过程。
 
 ## 文件结构
 
@@ -8,11 +8,13 @@ Ntuple数据的角度关联和运动学分析工具，用于分析重建后的 J
 NtupleAnalyzer/
 ├── analyze_ntuple_JJP.py    # JJP分析主程序
 ├── analyze_ntuple_JUP.py    # JUP分析主程序
+├── analyze_ntuple_JJY.py    # JJY MC分析主程序
 ├── plot_ntuple_results.py   # 绘图脚本
 ├── run_jjp_analysis.sh      # JJP Data运行脚本
 ├── run_jup_analysis.sh      # JUP Data运行脚本
 ├── run_jjp_mc_ntuple.sh     # JJP MC运行脚本
 ├── run_jup_mc_ntuple.sh     # JUP MC运行脚本
+├── run_jjy_mc_ntuple.sh     # JJY MC运行脚本
 ├── run_all.sh               # 同时运行JJP和JUP
 ├── check_proxy.sh           # VOMS代理检查脚本
 ├── condor/                  # HTCondor配置目录
@@ -42,6 +44,13 @@ NtupleAnalyzer/
 - **路径**: `/eos/user/x/xcheng/JpsiUpsPhi/merged_rootNtuple/`
 - **Tree**: `mkcands/X_data`
 - **粒子**: J/ψ, Υ, φ
+
+### JJY (J/ψ + J/ψ + Υ(1S))
+- **DPS_1路径**: `/eos/user/c/chiw/JpsiJpsiUps/MC_samples/rootNtuple_refactor/DPS-Jpsi-JpsiY/filter_JpsiPtMin4p0_YPtMin6p0/`
+- **DPS_2路径**: `/eos/user/c/chiw/JpsiJpsiUps/MC_samples/rootNtuple_refactor/DPS-JpsiJpsi-Y/filter_JpsiPtMin4p0_YPtMin6p0/`
+- **Tree**: `mkcands/X_data`
+- **粒子**: J/ψ₁, J/ψ₂, Υ(1S)
+- **可用模式**: `DPS_1`, `DPS_2` (`SPS`保留；不接受裸`DPS`)
 
 ## 事件选择 (Cuts)
 
@@ -73,6 +82,31 @@ NtupleAnalyzer/
 | J/ψ Muon ID | soft (默认) |
 | Υ Muon ID | tight (默认) |
 
+### JJY 选择条件
+| 变量 | 条件 |
+|------|------|
+| J/ψ₁, J/ψ₂ 质量 | 2.9 - 3.3 GeV |
+| Υ(1S) 质量 | 8.5 - 11.4 GeV |
+| J/ψ pT | > 3.0 GeV |
+| Υ pT | > 4.0 GeV |
+| J/ψ 顶点概率 | > 0.05 |
+| Υ 顶点概率 | > 0.10 |
+| J/ψ Muon ID | soft (默认) |
+| Υ Muon ID | tight (默认) |
+| Muon重用检查 | 6个候选muon index必须互不重复 |
+
+JJY会为以下4种vertexing选择分别输出一整套直方图和图片：
+- `no_vertex`: 不加额外六体顶点选择
+- `pri_valid`: `Pri_fitValid` 或 `Pri_VtxValid` 为真
+- `pri_vtxprob_gt_0p005`: `Pri_VtxProb > 0.005`
+- `same_mu_vertex`: 候选使用的6个muon具有相同且非负的 `muVertexId`
+
+每套JJY输出都包含主要共振质量谱：
+- `m(μ⁺μ⁻)` for `Jpsi_1`
+- `m(μ⁺μ⁻)` for `Jpsi_2`
+- 合并的 `J/ψ₁ + J/ψ₂` dimuon质量谱
+- `m(μ⁺μ⁻)` for `Υ(1S)`
+
 ### Multi-candidate 选择
 对于每个事件中的多个候选，选择 pT score 最高的候选：
 ```
@@ -91,6 +125,9 @@ cd /eos/user/x/xcheng/CMSSW_14_0_18/src/NtupleAnalyzer
 
 # 运行JUP分析
 ./run_jup_analysis.sh
+
+# 运行JJY MC分析 (默认DPS_1，单进程)
+./run_jjy_mc_ntuple.sh -n 10000 -j 1
 
 # 同时运行两个分析
 ./run_all.sh
@@ -127,6 +164,30 @@ python3 analyze_ntuple_JUP.py --jpsi-muon-id soft --ups-muon-id tight
 python3 analyze_ntuple_JUP.py --jpsi-muon-id none --ups-muon-id none
 ```
 
+### JJY MC 分析
+
+```bash
+# 直接读取一个EOS目录，递归读取所有ROOT ntuple文件
+python3 analyze_ntuple_JJY.py \
+  -i /eos/user/c/chiw/JpsiJpsiUps/MC_samples/rootNtuple_refactor/DPS-Jpsi-JpsiY/filter_JpsiPtMin4p0_YPtMin6p0/ \
+  -n 10000 -j 1
+
+# 指定输入目录和输出
+python3 analyze_ntuple_JJY.py \
+  -i /eos/user/c/chiw/JpsiJpsiUps/MC_samples/rootNtuple_refactor/DPS-JpsiJpsi-Y/filter_JpsiPtMin4p0_YPtMin6p0/ \
+  -o output/jjy_mc_DPS_2_correlations.root \
+  --jpsi-muon-id soft --ups-muon-id tight -j 1
+
+# 调整J/ψ和Υ dimuon质量谱binning
+python3 analyze_ntuple_JJY.py \
+  --jpsi-mass-bins 30 --jpsi-mass-min 2.8 --jpsi-mass-max 3.4 \
+  --ups-mass-bins 40 --ups-mass-min 8.5 --ups-mass-max 10.5
+
+# 同时运行分析和四套vertexing选择图
+./run_jjy_mc_ntuple.sh -m DPS_1 -n 10000 -j 1 --jpsi-mass-bins 30 --ups-mass-bins 40
+./run_jjy_mc_ntuple.sh -m DPS_2 -n 10000 -j 1 --jpsi-mass-bins 30 --ups-mass-bins 40
+```
+
 ### 绘图
 
 ```bash
@@ -135,6 +196,9 @@ python3 plot_ntuple_results.py -i output/jjp_ntuple_correlations.root -o plots_J
 
 # JUP绘图
 python3 plot_ntuple_results.py -i output/jup_ntuple_correlations.root -o plots_JUP -p JUP
+
+# JJY绘图，输出目录下会生成四个vertexing选择子目录
+python3 plot_ntuple_results.py -i output/jjy_mc_DPS_1_correlations.root -o plots_JJY_DPS_1 -p JJY
 ```
 
 ## 输出直方图
@@ -183,8 +247,8 @@ python3 plot_ntuple_results.py -i output/jup_ntuple_correlations.root -o plots_J
 # 初始化代理 (有效期7天)
 voms-proxy-init --voms cms --valid 168:00
 
-# 复制到AFS供HTCondor使用
-cp /tmp/x509up_u$(id -u) /afs/cern.ch/user/x/xcheng/
+# 确认HTCondor可读取的现有代理路径
+voms-proxy-info --path
 
 # 检查代理状态
 ./check_proxy.sh
@@ -217,6 +281,11 @@ cd condor/
 ./submit.sh jjp_mc --mode DPS
 ./submit.sh jjp_mc --mode TPS
 
+# 提交JJY MC分析 (两个完整ntuple目录，单核/单进程)
+./submit.sh jjy_mc --mode DPS_1 --jobs 1
+./submit.sh jjy_mc --mode DPS_2 --jobs 1
+./submit.sh jjy_mc --mode all --jobs 1
+
 # 提交数据分析
 ./submit.sh jup_data
 ./submit.sh jjp_data --max-events 100000
@@ -232,6 +301,7 @@ cd condor/
 
 # 试运行 (不实际提交)
 ./submit.sh jup_mc --mode DPS_1 --dry-run
+./submit.sh jjy_mc --mode all --jobs 1 --dry-run
 ```
 
 ### 直接使用condor_submit
@@ -248,6 +318,10 @@ condor_submit jup_mc.sub MODE=DPS_2 JOBS=16
 # 提交JJP MC
 condor_submit jjp_mc.sub MODE=TPS
 
+# 提交JJY MC
+condor_submit jjy_mc.sub MODE=DPS_1
+condor_submit jjy_mc.sub MODE=DPS_2 JOBS=1
+
 # 提交数据分析
 condor_submit jup_data.sub MAX_EVENTS=100000
 condor_submit jjp_data.sub MUON_ID=tight
@@ -257,8 +331,8 @@ condor_submit jjp_data.sub MUON_ID=tight
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `MODE` | MC模式 (JUP: SPS/DPS_1/DPS_2/DPS_3/TPS, JJP: DPS/TPS) | DPS_1 / DPS |
-| `JOBS` | 并行进程数 | 8 |
+| `MODE` | MC模式 (JUP: SPS/DPS_1/DPS_2/DPS_3/TPS, JJP: DPS/TPS, JJY: DPS_1/DPS_2) | DPS_1 / DPS |
+| `JOBS` | 分析脚本并行进程数 (JJY Condor默认单进程) | 8 / JJY: 1 |
 | `MAX_EVENTS` | 最大处理事件数 (-1=全部) | -1 |
 | `MUON_ID` | JJP muon ID | soft |
 | `JPSI_MUON_ID` | JUP J/psi muon ID | soft |
@@ -270,8 +344,8 @@ condor_submit jjp_data.sub MUON_ID=tight
 
 | 资源 | MC作业 | 数据作业 |
 |------|--------|----------|
-| 内存 | 48 GB | 64 GB |
-| CPU核心 | 8 | 16 |
+| 内存 | 48 GB (JJY: 16 GB) | 64 GB |
+| CPU核心 | 8 (JJY: 1) | 16 |
 | 磁盘 | 10 GB | 20 GB |
 | 时间限制 | workday (8h) | workday (8h) |
 
