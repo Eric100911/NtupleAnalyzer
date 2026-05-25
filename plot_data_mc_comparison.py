@@ -39,7 +39,7 @@ from plot_weighted_distributions import (
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Compare weighted data and MC distributions")
-    parser.add_argument("--channel", required=True, choices=["JJP", "JUP", "jjp", "jup"])
+    parser.add_argument("--channel", required=True, choices=["JJP", "JYP", "jjp", "jyp"])
     parser.add_argument("--mc-sample", required=True, help="MC sample tag, e.g. DPS_2")
     parser.add_argument("--data-input", default=None, help="Input weighted data ROOT file")
     parser.add_argument("--mc-input", default=None, help="Input weighted MC ROOT file")

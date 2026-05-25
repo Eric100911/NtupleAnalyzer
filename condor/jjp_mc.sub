@@ -1,10 +1,10 @@
 # ==============================================================================
 # jjp_mc.sub - HTCondor submit file for JJP MC analysis
 # ==============================================================================
-# Submit various JJP MC modes: DPS, TPS
+# Submit various JJP MC modes: DPS_1, DPS_2_CS, DPS_2_G, SPS_CS, SPS_G, TPS
 #
 # Usage:
-#   condor_submit jjp_mc.sub                    # Submit DPS (default)
+#   condor_submit jjp_mc.sub                    # Submit DPS_1 (default)
 #   condor_submit jjp_mc.sub MODE=TPS           # Submit TPS mode
 #   condor_submit jjp_mc.sub MODE=ALL           # Submit all modes
 # ==============================================================================
@@ -14,7 +14,7 @@ universe = vanilla
 executable = ./run_wrapper.sh
 
 # Default parameters (can be overridden)
-MODE = DPS
+MODE = DPS_1
 JOBS = 8
 MAX_EVENTS = -1
 MUON_ID = soft

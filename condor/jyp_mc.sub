@@ -1,11 +1,13 @@
 # ==============================================================================
-# jup_data.sub - HTCondor submit file for JUP Data analysis
+# jyp_mc.sub - HTCondor submit file for JYP MC analysis
 # ==============================================================================
-# Submit JUP data analysis jobs
+# Submit various JYP MC modes: SPS, DPS_1, DPS_2, DPS_3, TPS
 #
 # Usage:
-#   condor_submit jup_data.sub                      # Submit with defaults
-#   condor_submit jup_data.sub MAX_EVENTS=100000    # Limit events
+#   condor_submit jyp_mc.sub                    # Submit DPS_1 (default)
+#   condor_submit jyp_mc.sub MODE=SPS           # Submit specific mode
+#   condor_submit jyp_mc.sub MODE=DPS_1,DPS_2   # Submit multiple modes
+#   condor_submit jyp_mc.sub MODE=ALL           # Submit all modes
 # ==============================================================================
 
 # Job configuration
@@ -13,26 +15,29 @@ universe = vanilla
 executable = ./run_wrapper.sh
 
 # Default parameters (can be overridden)
-JOBS = 16
+MODE = DPS_1
+JOBS = 8
 MAX_EVENTS = -1
 JPSI_MUON_ID = soft
 UPS_MUON_ID = soft
 
 # Arguments passed to run_wrapper.sh
-arguments = "run_assoc_merge.sh --channel JUP --dataset data -j $(JOBS) -n $(MAX_EVENTS) --jpsi-muon-id $(JPSI_MUON_ID) --ups-muon-id $(UPS_MUON_ID)"
+arguments = "run_jyp_mc_ntuple.sh -m $(MODE) -j $(JOBS) -n $(MAX_EVENTS) --jpsi-muon-id $(JPSI_MUON_ID) --ups-muon-id $(UPS_MUON_ID)"
 
 # Log files
-log_dir = logs/jup_data
-output = $(log_dir)/jup_data_$(Cluster)_$(Process).out
-error = $(log_dir)/jup_data_$(Cluster)_$(Process).err
-log = $(log_dir)/jup_data_$(Cluster)_$(Process).log
+log_dir = logs/jyp_mc
+output = $(log_dir)/jyp_mc_$(MODE)_$(Cluster)_$(Process).out
+error = $(log_dir)/jyp_mc_$(MODE)_$(Cluster)_$(Process).err
+log = $(log_dir)/jyp_mc_$(MODE)_$(Cluster)_$(Process).log
 
 # Resource requests
-request_memory = 64000
+request_memory = 48000
 request_cpus = $(JOBS)
-request_disk = 20G
+request_disk = 10G
 
 # Job flavor (max runtime)
+# espresso = 20min, microcentury = 1h, longlunch = 2h, workday = 8h
+# tomorrow = 1d, testmatch = 3d, nextweek = 1w
 +JobFlavour = "workday"
 
 # File transfer settings

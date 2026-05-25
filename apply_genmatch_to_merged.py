@@ -37,7 +37,7 @@ REQUIRED_GENMATCH_BRANCHES = (
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Apply genMatch requirements to an already merged MC selected ntuple")
-    parser.add_argument("--channel", required=True, choices=["JJP", "JUP", "jjp", "jup"], help="Physics channel")
+    parser.add_argument("--channel", required=True, choices=["JJP", "JYP", "jjp", "jyp"], help="Physics channel")
     parser.add_argument("--sample", default=None, help="MC sample tag, required when --input is not specified")
     parser.add_argument("-i", "--input", default=None, help="Input merged selected ROOT file")
     parser.add_argument("-o", "--output", default=None, help="Output ROOT file after genMatch filtering")

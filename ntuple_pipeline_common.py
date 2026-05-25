@@ -19,38 +19,41 @@ DEFAULT_PROXY = "/afs/cern.ch/user/c/chiw/condor/x509up"
 
 DATA_PATHS = {
     "JJP": "/eos/user/c/chiw/JpsiJpsiPhi/rootNtuple",
-    "JUP": "/eos/user/c/chiw/JpsiUpsPhi/rootNtuple",
+    "JYP": "/eos/user/c/chiw/JpsiUpsPhi/rootNtuple",
+    "JJY": "/eos/user/c/chiw/JpsiJpsiUps/rootNtuple",
 }
 
 JJP_DATASET_DIRS = tuple(f"ParkingDoubleMuonLowMass{i}" for i in range(8))
 JJP_REFACTOR_PREFIX = "crab3_refactor"
 JJP_SUBMIT_PREFIX = "260411"
-JUP_DATASET_DIRS = tuple(f"ParkingDoubleMuonLowMass{i}" for i in range(8))
-JUP_REFACTOR_PREFIX = "crab3_JpsiUpsPhi_refactor"
-JUP_SUBMIT_PREFIX = "2604"
+JYP_DATASET_DIRS = tuple(f"ParkingDoubleMuonLowMass{i}" for i in range(8))
+JYP_REFACTOR_PREFIX = "crab3_JpsiUpsPhi_refactor"
+JYP_SUBMIT_PREFIX = "2604"
+JJY_DATASET_DIRS = tuple(f"ParkingDoubleMuonLowMass{i}" for i in range(8))
+JJY_REFACTOR_PREFIX = "crab3_refactor_JpsiJpsiUps"
+JJY_SUBMIT_PREFIX = "2604"
 
-MC_BASE = "/eos/ihep/cms/store/user/xcheng/MC_Production_v2/output"
+MC_BASE = "/eos/ihep/cms/store/user/xcheng/MC_Production_v3/output"
 JJY_MC_BASE = "/eos/user/c/chiw/JpsiJpsiUps/MC_samples/rootNtuple_refactor"
-MC_SAMPLE_DIRS = {
+MC_SAMPLE_PATHS = {
     "JJP": {
-        "SPS": "JJP_SPS",
-        "DPS": "JJP_DPS2",
-        "DPS1": "JJP_DPS1",
-        "DPS_1": "JJP_DPS1",
-        "DPS2": "JJP_DPS2",
-        "DPS_2": "JJP_DPS2",
-        "TPS": "JJP_TPS",
+        "DPS_1": os.path.join(MC_BASE, "JJP_DPS1"),
+        "DPS_2_CS": os.path.join(MC_BASE, "JJP_DPS2_CS"),
+        "DPS_2_G": os.path.join(MC_BASE, "JJP_DPS2_G"),
+        "SPS_CS": os.path.join(MC_BASE, "JJP_SPS_CS"),
+        "SPS_G": os.path.join(MC_BASE, "JJP_SPS_G"),
+        "TPS": os.path.join(MC_BASE, "JJP_TPS"),
     },
-    "JUP": {
-        "SPS": "JUP_SPS",
-        "DPS_1": "JUP_DPS1",
-        "DPS_2": "JUP_DPS2",
-        "DPS_3": "JUP_DPS3",
-        "TPS": "JUP_TPS",
+    "JYP": {
+        "SPS": os.path.join(MC_BASE, "JUP_SPS"),
+        "DPS_1": os.path.join(MC_BASE, "JUP_DPS1"),
+        "DPS_2": os.path.join(MC_BASE, "JUP_DPS2"),
+        "DPS_3": os.path.join(MC_BASE, "JUP_DPS3"),
+        "TPS": os.path.join(MC_BASE, "JUP_TPS"),
     },
     "JJY": {
-        "DPS_1": "DPS-Jpsi-JpsiY/filter_JpsiPtMin4p0_YPtMin6p0",
-        "DPS_2": "DPS-JpsiJpsi-Y/filter_JpsiPtMin4p0_YPtMin6p0",
+        "DPS_1": os.path.join(JJY_MC_BASE, "DPS-Jpsi-JpsiY/filter_JpsiPtMin4p0_YPtMin6p0"),
+        "DPS_2": os.path.join(JJY_MC_BASE, "DPS-JpsiJpsi-Y/filter_JpsiPtMin4p0_YPtMin6p0"),
     },
 }
 
@@ -181,8 +184,8 @@ CHANNEL_CONFIGS: Dict[str, ChannelConfig] = {
             ("sel_Phi_K_2", "sel_Phi_K_2"),
         ),
     ),
-    "JUP": ChannelConfig(
-        channel="JUP",
+    "JYP": ChannelConfig(
+        channel="JYP",
         mass_branches=("sel_Jpsi_mass", "sel_Ups_mass", "sel_Phi_mass"),
         fit_branches=("sel_Jpsi_mass", "sel_Ups_mass", "sel_Phi_mass"),
         pair_specs=(
@@ -379,11 +382,18 @@ def normalize_dataset(dataset: str) -> str:
 def normalize_sample(channel: str, sample: str | None) -> str | None:
     if sample is None:
         return None
-    if channel == "JJY":
-        sample_up = sample.upper()
-    else:
-        sample_up = sample.upper().replace("DPS1", "DPS_1").replace("DPS2", "DPS_2").replace("DPS3", "DPS_3")
-    valid = MC_SAMPLE_DIRS[channel]
+    sample_up = sample.upper()
+    sample_aliases = {
+        "DPS1": "DPS_1",
+        "DPS2": "DPS_2",
+        "DPS3": "DPS_3",
+        "DPS2_CS": "DPS_2_CS",
+        "DPS2_G": "DPS_2_G",
+        "SPSCS": "SPS_CS",
+        "SPSG": "SPS_G",
+    }
+    sample_up = sample_aliases.get(sample_up, sample_up)
+    valid = MC_SAMPLE_PATHS[channel]
     if sample_up not in valid:
         raise ValueError(f"Unsupported sample for {channel}: {sample}")
     return sample_up
@@ -394,9 +404,7 @@ def default_input_dir(channel: str, dataset: str, sample: str | None = None) -> 
         return DATA_PATHS[channel]
     if sample is None:
         raise ValueError("MC input requires --sample")
-    if channel == "JJY":
-        return os.path.join(JJY_MC_BASE, MC_SAMPLE_DIRS[channel][sample])
-    return os.path.join(MC_BASE, MC_SAMPLE_DIRS[channel][sample])
+    return MC_SAMPLE_PATHS[channel][sample]
 
 
 def make_tag(channel: str, dataset: str, sample: str | None = None) -> str:
@@ -440,38 +448,35 @@ def to_xrootd_if_needed(path: str) -> str:
 
 
 def _discover_jjp_refactor_data_files(input_path: str) -> List[str]:
+    return _discover_refactor_data_files(input_path, JJP_DATASET_DIRS, JJP_REFACTOR_PREFIX, JJP_SUBMIT_PREFIX)
+
+
+def _discover_jyp_refactor_data_files(input_path: str) -> List[str]:
+    return _discover_refactor_data_files(input_path, JYP_DATASET_DIRS, JYP_REFACTOR_PREFIX, JYP_SUBMIT_PREFIX)
+
+
+def _discover_jjy_refactor_data_files(input_path: str) -> List[str]:
+    return _discover_refactor_data_files(input_path, JJY_DATASET_DIRS, JJY_REFACTOR_PREFIX, JJY_SUBMIT_PREFIX)
+
+
+def _discover_refactor_data_files(
+    input_path: str,
+    dataset_dirs: Sequence[str],
+    task_prefix: str,
+    submit_prefix: str,
+) -> List[str]:
     files: List[str] = []
-    for dataset_dir in JJP_DATASET_DIRS:
+    for dataset_dir in dataset_dirs:
         base_dir = os.path.join(input_path, dataset_dir)
         if not os.path.isdir(base_dir):
             continue
 
-        task_dirs = sorted(glob.glob(os.path.join(base_dir, f"{JJP_REFACTOR_PREFIX}*")))
+        task_dirs = sorted(glob.glob(os.path.join(base_dir, f"{task_prefix}*")))
         for task_dir in task_dirs:
             if not os.path.isdir(task_dir):
                 continue
 
-            submit_dirs = sorted(glob.glob(os.path.join(task_dir, f"{JJP_SUBMIT_PREFIX}*")))
-            for submit_dir in submit_dirs:
-                if not os.path.isdir(submit_dir):
-                    continue
-                files.extend(sorted(glob.glob(os.path.join(submit_dir, "**", "*.root"), recursive=True)))
-    return files
-
-
-def _discover_jup_refactor_data_files(input_path: str) -> List[str]:
-    files: List[str] = []
-    for dataset_dir in JUP_DATASET_DIRS:
-        base_dir = os.path.join(input_path, dataset_dir)
-        if not os.path.isdir(base_dir):
-            continue
-
-        task_dirs = sorted(glob.glob(os.path.join(base_dir, f"{JUP_REFACTOR_PREFIX}*")))
-        for task_dir in task_dirs:
-            if not os.path.isdir(task_dir):
-                continue
-
-            submit_dirs = sorted(glob.glob(os.path.join(task_dir, f"{JUP_SUBMIT_PREFIX}*")))
+            submit_dirs = sorted(glob.glob(os.path.join(task_dir, f"{submit_prefix}*")))
             for submit_dir in submit_dirs:
                 if not os.path.isdir(submit_dir):
                     continue
@@ -499,7 +504,9 @@ def discover_root_files(input_path: str, max_files: int = -1) -> List[str]:
     else:
         files = _discover_jjp_refactor_data_files(resolved)
         if not files:
-            files = _discover_jup_refactor_data_files(resolved)
+            files = _discover_jyp_refactor_data_files(resolved)
+        if not files:
+            files = _discover_jjy_refactor_data_files(resolved)
         if not files:
             files = sorted(glob.glob(os.path.join(resolved, "*.root")))
         if not files:
@@ -615,7 +622,7 @@ def _jjp_selected_branch_map() -> Tuple[Tuple[str, str], ...]:
     return tuple((name, name) for name in names)
 
 
-def _jup_selected_branch_map(input_prefix: str) -> Tuple[Tuple[str, str], ...]:
+def _jyp_selected_branch_map(input_prefix: str) -> Tuple[Tuple[str, str], ...]:
     mapping = [
         ("Jpsi_mass", f"{input_prefix}_mass"),
         ("Jpsi_massErr", f"{input_prefix}_massErr"),
@@ -698,6 +705,14 @@ def _jjy_selected_branch_map() -> Tuple[Tuple[str, str], ...]:
     return tuple((name, name) for name in CHANNEL_CONFIGS["JJY"].selected_candidate_branches)
 
 
+def _jjy_data_selected_branch_map() -> Tuple[Tuple[str, str], ...]:
+    return tuple(
+        (name, name)
+        for name in CHANNEL_CONFIGS["JJY"].selected_candidate_branches
+        if name != "Pri_fitValid"
+    )
+
+
 DATASET_SCHEMAS: Dict[Tuple[str, str], DatasetSchema] = {
     ("JJP", "data"): DatasetSchema(
         schema_key="JJP_data",
@@ -727,12 +742,12 @@ DATASET_SCHEMAS: Dict[Tuple[str, str], DatasetSchema] = {
         ),
         selected_particle_prefixes=("sel_Jpsi_1", "sel_Jpsi_2", "sel_Phi", "sel_Pri"),
     ),
-    ("JUP", "data"): DatasetSchema(
-        schema_key="JUP_data",
-        channel="JUP",
+    ("JYP", "data"): DatasetSchema(
+        schema_key="JYP_data",
+        channel="JYP",
         dataset="data",
-        best_index_kind="JUP_DATA",
-        selected_branch_map=_jup_selected_branch_map("Jpsi"),
+        best_index_kind="JYP_DATA",
+        selected_branch_map=_jyp_selected_branch_map("Jpsi"),
         selected_muon_specs=(
             ("Jpsi_mu_1_Idx", "sel_Jpsi_mu1"),
             ("Jpsi_mu_2_Idx", "sel_Jpsi_mu2"),
@@ -741,12 +756,12 @@ DATASET_SCHEMAS: Dict[Tuple[str, str], DatasetSchema] = {
         ),
         selected_particle_prefixes=("sel_Jpsi", "sel_Ups", "sel_Phi", "sel_Pri"),
     ),
-    ("JUP", "mc"): DatasetSchema(
-        schema_key="JUP_mc",
-        channel="JUP",
+    ("JYP", "mc"): DatasetSchema(
+        schema_key="JYP_mc",
+        channel="JYP",
         dataset="mc",
-        best_index_kind="JUP_MC",
-        selected_branch_map=_jup_selected_branch_map("Jpsi_1"),
+        best_index_kind="JYP_MC",
+        selected_branch_map=_jyp_selected_branch_map("Jpsi_1"),
         selected_muon_specs=(
             ("Jpsi_mu_1_Idx", "sel_Jpsi_mu1"),
             ("Jpsi_mu_2_Idx", "sel_Jpsi_mu2"),
@@ -754,6 +769,22 @@ DATASET_SCHEMAS: Dict[Tuple[str, str], DatasetSchema] = {
             ("Ups_mu_2_Idx", "sel_Ups_mu2"),
         ),
         selected_particle_prefixes=("sel_Jpsi", "sel_Ups", "sel_Phi", "sel_Pri"),
+    ),
+    ("JJY", "data"): DatasetSchema(
+        schema_key="JJY_data",
+        channel="JJY",
+        dataset="data",
+        best_index_kind="JJY",
+        selected_branch_map=_jjy_data_selected_branch_map(),
+        selected_muon_specs=(
+            ("Jpsi_1_mu_1_Idx", "sel_Jpsi1_mu1"),
+            ("Jpsi_1_mu_2_Idx", "sel_Jpsi1_mu2"),
+            ("Jpsi_2_mu_1_Idx", "sel_Jpsi2_mu1"),
+            ("Jpsi_2_mu_2_Idx", "sel_Jpsi2_mu2"),
+            ("Ups_mu_1_Idx", "sel_Ups_mu1"),
+            ("Ups_mu_2_Idx", "sel_Ups_mu2"),
+        ),
+        selected_particle_prefixes=("sel_Jpsi_1", "sel_Jpsi_2", "sel_Ups", "sel_Pri"),
     ),
     ("JJY", "mc"): DatasetSchema(
         schema_key="JJY_mc",
@@ -936,6 +967,43 @@ def declare_rdf_helpers() -> None:
             );
         }
 
+        int GetMatchedGenMotherIdx(
+            int matchIdx,
+            int matchSource,
+            const RVec<int>& genMotherIdx
+        ) {
+            if (matchSource != 1 || matchIdx < 0 || matchIdx >= static_cast<int>(genMotherIdx.size())) {
+                return -1;
+            }
+            return genMotherIdx[matchIdx];
+        }
+
+        int GetMuonGenMotherIdx(
+            const RVec<int>& muGenMatchIdx,
+            const RVec<int>& muGenMatchSource,
+            const RVec<int>& genMotherIdx,
+            int muIdx
+        ) {
+            if (muIdx < 0 || muIdx >= static_cast<int>(muGenMatchIdx.size()) ||
+                muIdx >= static_cast<int>(muGenMatchSource.size())) {
+                return -1;
+            }
+            return GetMatchedGenMotherIdx(muGenMatchIdx[muIdx], muGenMatchSource[muIdx], genMotherIdx);
+        }
+
+        int GetCandidateTrackGenMotherIdx(
+            const RVec<int>& trackGenMatchIdx,
+            const RVec<int>& trackGenMatchSource,
+            const RVec<int>& genMotherIdx,
+            int candIdx
+        ) {
+            if (candIdx < 0 || candIdx >= static_cast<int>(trackGenMatchIdx.size()) ||
+                candIdx >= static_cast<int>(trackGenMatchSource.size())) {
+                return -1;
+            }
+            return GetMatchedGenMotherIdx(trackGenMatchIdx[candIdx], trackGenMatchSource[candIdx], genMotherIdx);
+        }
+
         bool PassSelectedJJPGenMatch(
             int jpsi1_mu1_idx,
             int jpsi1_mu2_idx,
@@ -953,16 +1021,32 @@ def declare_rdf_helpers() -> None:
         ) {
             constexpr int JPSI_PDG_ID = 443;
             constexpr int PHI_PDG_ID = 333;
-            return
-                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi1_mu1_idx, JPSI_PDG_ID) &&
-                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi1_mu2_idx, JPSI_PDG_ID) &&
-                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi2_mu1_idx, JPSI_PDG_ID) &&
-                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi2_mu2_idx, JPSI_PDG_ID) &&
-                PassCandidateTrackGenMotherMatch(phiK1GenMatchIdx, phiK1GenMatchSource, genMotherIdx, genMotherPdgId, candIdx, PHI_PDG_ID) &&
-                PassCandidateTrackGenMotherMatch(phiK2GenMatchIdx, phiK2GenMatchSource, genMotherIdx, genMotherPdgId, candIdx, PHI_PDG_ID);
+            if (!PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi1_mu1_idx, JPSI_PDG_ID) ||
+                !PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi1_mu2_idx, JPSI_PDG_ID) ||
+                !PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi2_mu1_idx, JPSI_PDG_ID) ||
+                !PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi2_mu2_idx, JPSI_PDG_ID) ||
+                !PassCandidateTrackGenMotherMatch(phiK1GenMatchIdx, phiK1GenMatchSource, genMotherIdx, genMotherPdgId, candIdx, PHI_PDG_ID) ||
+                !PassCandidateTrackGenMotherMatch(phiK2GenMatchIdx, phiK2GenMatchSource, genMotherIdx, genMotherPdgId, candIdx, PHI_PDG_ID)) {
+                return false;
+            }
+
+            const int jpsi1_mu1_mother = GetMuonGenMotherIdx(muGenMatchIdx, muGenMatchSource, genMotherIdx, jpsi1_mu1_idx);
+            const int jpsi1_mu2_mother = GetMuonGenMotherIdx(muGenMatchIdx, muGenMatchSource, genMotherIdx, jpsi1_mu2_idx);
+            const int jpsi2_mu1_mother = GetMuonGenMotherIdx(muGenMatchIdx, muGenMatchSource, genMotherIdx, jpsi2_mu1_idx);
+            const int jpsi2_mu2_mother = GetMuonGenMotherIdx(muGenMatchIdx, muGenMatchSource, genMotherIdx, jpsi2_mu2_idx);
+            const int phi_k1_mother = GetCandidateTrackGenMotherIdx(phiK1GenMatchIdx, phiK1GenMatchSource, genMotherIdx, candIdx);
+            const int phi_k2_mother = GetCandidateTrackGenMotherIdx(phiK2GenMatchIdx, phiK2GenMatchSource, genMotherIdx, candIdx);
+
+            return jpsi1_mu1_mother >= 0 &&
+                   jpsi1_mu1_mother == jpsi1_mu2_mother &&
+                   jpsi2_mu1_mother >= 0 &&
+                   jpsi2_mu1_mother == jpsi2_mu2_mother &&
+                   jpsi1_mu1_mother != jpsi2_mu1_mother &&
+                   phi_k1_mother >= 0 &&
+                   phi_k1_mother == phi_k2_mother;
         }
 
-        bool PassSelectedJUPGenMatch(
+        bool PassSelectedJYPGenMatch(
             int jpsi_mu1_idx,
             int jpsi_mu2_idx,
             int ups_mu1_idx,
@@ -980,13 +1064,29 @@ def declare_rdf_helpers() -> None:
             constexpr int JPSI_PDG_ID = 443;
             constexpr int UPSILON_PDG_ID = 553;
             constexpr int PHI_PDG_ID = 333;
-            return
-                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi_mu1_idx, JPSI_PDG_ID) &&
-                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi_mu2_idx, JPSI_PDG_ID) &&
-                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, ups_mu1_idx, UPSILON_PDG_ID) &&
-                PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, ups_mu2_idx, UPSILON_PDG_ID) &&
-                PassCandidateTrackGenMotherMatch(phiK1GenMatchIdx, phiK1GenMatchSource, genMotherIdx, genMotherPdgId, candIdx, PHI_PDG_ID) &&
-                PassCandidateTrackGenMotherMatch(phiK2GenMatchIdx, phiK2GenMatchSource, genMotherIdx, genMotherPdgId, candIdx, PHI_PDG_ID);
+            if (!PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi_mu1_idx, JPSI_PDG_ID) ||
+                !PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, jpsi_mu2_idx, JPSI_PDG_ID) ||
+                !PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, ups_mu1_idx, UPSILON_PDG_ID) ||
+                !PassMuonGenMotherMatch(muGenMatchIdx, muGenMatchSource, genMotherIdx, genMotherPdgId, ups_mu2_idx, UPSILON_PDG_ID) ||
+                !PassCandidateTrackGenMotherMatch(phiK1GenMatchIdx, phiK1GenMatchSource, genMotherIdx, genMotherPdgId, candIdx, PHI_PDG_ID) ||
+                !PassCandidateTrackGenMotherMatch(phiK2GenMatchIdx, phiK2GenMatchSource, genMotherIdx, genMotherPdgId, candIdx, PHI_PDG_ID)) {
+                return false;
+            }
+
+            const int jpsi_mu1_mother = GetMuonGenMotherIdx(muGenMatchIdx, muGenMatchSource, genMotherIdx, jpsi_mu1_idx);
+            const int jpsi_mu2_mother = GetMuonGenMotherIdx(muGenMatchIdx, muGenMatchSource, genMotherIdx, jpsi_mu2_idx);
+            const int ups_mu1_mother = GetMuonGenMotherIdx(muGenMatchIdx, muGenMatchSource, genMotherIdx, ups_mu1_idx);
+            const int ups_mu2_mother = GetMuonGenMotherIdx(muGenMatchIdx, muGenMatchSource, genMotherIdx, ups_mu2_idx);
+            const int phi_k1_mother = GetCandidateTrackGenMotherIdx(phiK1GenMatchIdx, phiK1GenMatchSource, genMotherIdx, candIdx);
+            const int phi_k2_mother = GetCandidateTrackGenMotherIdx(phiK2GenMatchIdx, phiK2GenMatchSource, genMotherIdx, candIdx);
+
+            return jpsi_mu1_mother >= 0 &&
+                   jpsi_mu1_mother == jpsi_mu2_mother &&
+                   ups_mu1_mother >= 0 &&
+                   ups_mu1_mother == ups_mu2_mother &&
+                   jpsi_mu1_mother != ups_mu1_mother &&
+                   phi_k1_mother >= 0 &&
+                   phi_k1_mother == phi_k2_mother;
         }
 
         bool PassSelectedJJYGenMatch(
@@ -1119,7 +1219,7 @@ def declare_rdf_helpers() -> None:
             return best_idx;
         }
 
-        int BestCandIndexJUP(
+        int BestCandIndexJYP(
             const RVec<float>& jpsi_mass,
             const RVec<float>& jpsi_pt,
             const RVec<float>& jpsi_eta,
@@ -1339,7 +1439,7 @@ def define_selected_columns(rdf, schema: DatasetSchema):
             "sel_Jpsi_2_pt, sel_Jpsi_2_eta, sel_Jpsi_2_phi, sel_Jpsi_2_mass, "
             "sel_Phi_pt, sel_Phi_eta, sel_Phi_phi, sel_Phi_mass)",
         )
-    elif schema.channel == "JUP":
+    elif schema.channel == "JYP":
         rdf = rdf.Define(
             "sel_m_all",
             "InvariantMass3(sel_Jpsi_pt, sel_Jpsi_eta, sel_Jpsi_phi, sel_Jpsi_mass, "
@@ -1353,15 +1453,16 @@ def define_selected_columns(rdf, schema: DatasetSchema):
             "sel_Jpsi_2_pt, sel_Jpsi_2_eta, sel_Jpsi_2_phi, sel_Jpsi_2_mass, "
             "sel_Ups_pt, sel_Ups_eta, sel_Ups_phi, sel_Ups_mass)",
         )
-        rdf = rdf.Define(
-            "sel_same_mu_vertex",
-            "AllSelectedMuonSameVertex(muVertexId, "
-            "sel_Jpsi_1_mu_1_Idx, sel_Jpsi_1_mu_2_Idx, "
-            "sel_Jpsi_2_mu_1_Idx, sel_Jpsi_2_mu_2_Idx, "
-            "sel_Ups_mu_1_Idx, sel_Ups_mu_2_Idx)",
-        )
-        rdf = rdf.Define("sel_pri_valid", "static_cast<int>(sel_Pri_fitValid) != 0")
-        rdf = rdf.Define("sel_pri_vtxprob_gt_0p005", "sel_Pri_VtxProb > 0.005")
+        if schema.schema_key == "JJY_mc":
+            rdf = rdf.Define(
+                "sel_same_mu_vertex",
+                "AllSelectedMuonSameVertex(muVertexId, "
+                "sel_Jpsi_1_mu_1_Idx, sel_Jpsi_1_mu_2_Idx, "
+                "sel_Jpsi_2_mu_1_Idx, sel_Jpsi_2_mu_2_Idx, "
+                "sel_Ups_mu_1_Idx, sel_Ups_mu_2_Idx)",
+            )
+            rdf = rdf.Define("sel_pri_valid", "static_cast<int>(sel_Pri_fitValid) != 0")
+            rdf = rdf.Define("sel_pri_vtxprob_gt_0p005", "sel_Pri_VtxProb > 0.005")
 
     return rdf
 
@@ -1386,6 +1487,6 @@ def selected_extra_columns(schema: DatasetSchema) -> List[str]:
     for name, _, _ in cfg.pair_specs:
         extra.extend([f"sel_abs_dy_{name}", f"sel_abs_dphi_{name}", f"sel_m_{name}"])
     extra.append("sel_m_all")
-    if schema.channel == "JJY":
+    if schema.schema_key == "JJY_mc":
         extra.extend(["sel_same_mu_vertex", "sel_pri_valid", "sel_pri_vtxprob_gt_0p005"])
     return extra

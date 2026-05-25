@@ -6,9 +6,9 @@
 #
 # Usage:
 #   ./submit.sh --help                       # Show help
-#   ./submit.sh jup_mc                       # Submit JUP MC (DPS_1)
-#   ./submit.sh jup_mc --mode SPS            # Submit JUP MC with mode
-#   ./submit.sh jup_mc --mode all            # Submit all JUP MC modes
+#   ./submit.sh jyp_mc                       # Submit JYP MC (DPS_1)
+#   ./submit.sh jyp_mc --mode SPS            # Submit JYP MC with mode
+#   ./submit.sh jyp_mc --mode all            # Submit all JYP MC modes
 #   ./submit.sh jjy_mc --mode DPS_1          # Submit JJY MC DPS_1
 #   ./submit.sh jjp_data                     # Submit JJP data analysis
 #   ./submit.sh --status                     # Check job status
@@ -45,20 +45,20 @@ ${YELLOW}Usage:${NC}
     $0 --status | --clean | --help
 
 ${YELLOW}Analysis Types:${NC}
-    jup_mc      J/psi + Upsilon + Phi MC analysis
+    jyp_mc      J/psi + Upsilon + Phi MC analysis
     jjp_mc      J/psi + J/psi + Phi MC analysis
     jjy_mc      J/psi + J/psi + Upsilon MC analysis
-    jup_data    J/psi + Upsilon + Phi data analysis
+    jyp_data    J/psi + Upsilon + Phi data analysis
     jjp_data    J/psi + J/psi + Phi data analysis
 
 ${YELLOW}Options:${NC}
-    -m, --mode MODE       MC mode (JUP: SPS/DPS_1/DPS_2/DPS_3/TPS, JJP: DPS/TPS, JJY: DPS_1/DPS_2)
+    -m, --mode MODE       MC mode (JYP: SPS/DPS_1/DPS_2/DPS_3/TPS, JJP: DPS_1/DPS_2_CS/DPS_2_G/SPS_CS/SPS_G/TPS, JJY: DPS_1/DPS_2)
                           Use 'all' to submit all modes
     -j, --jobs N          Number of analyzer worker processes (JJY default: 1)
     -n, --max-events N    Maximum events to process (-1=all)
     --muon-id TYPE        JJP muon ID (soft/medium/tight/loose/none)
-    --jpsi-muon-id TYPE   JUP J/psi muon ID
-    --ups-muon-id TYPE    JUP Upsilon muon ID
+    --jpsi-muon-id TYPE   JYP J/psi muon ID
+    --ups-muon-id TYPE    JYP Upsilon muon ID
     --dry-run             Show command without submitting
     --flavor FLAVOR       Job flavor (espresso/microcentury/longlunch/workday/tomorrow)
 
@@ -69,9 +69,9 @@ ${YELLOW}Management Commands:${NC}
     --check-proxy         Check VOMS proxy status
 
 ${YELLOW}Examples:${NC}
-    $0 jup_mc                           # Submit JUP MC DPS_1
-    $0 jup_mc -m DPS_2 -j 16            # Submit JUP MC DPS_2 with 16 cores
-    $0 jup_mc -m all                    # Submit all JUP MC modes
+    $0 jyp_mc                           # Submit JYP MC DPS_1
+    $0 jyp_mc -m DPS_2 -j 16            # Submit JYP MC DPS_2 with 16 cores
+    $0 jyp_mc -m all                    # Submit all JYP MC modes
     $0 jjy_mc -m all -j 1                # Submit both JJY MC samples single-core
     $0 jjp_data -n 100000               # Submit JJP data (100k events)
     $0 --status                         # Check job status
@@ -136,7 +136,7 @@ show_history() {
 clean_logs() {
     msg_info "Cleaning log files..."
     
-    LOG_DIRS=("logs/jup_mc" "logs/jjp_mc" "logs/jjy_mc" "logs/jup_data" "logs/jjp_data")
+    LOG_DIRS=("logs/jyp_mc" "logs/jjp_mc" "logs/jjy_mc" "logs/jyp_data" "logs/jjp_data")
     
     for dir in "${LOG_DIRS[@]}"; do
         if [ -d "$dir" ]; then
@@ -182,10 +182,10 @@ submit_job() {
     # Determine submit file
     local SUB_FILE=""
     case "$ANALYSIS_TYPE" in
-        jup_mc) SUB_FILE="jup_mc.sub";;
+        jyp_mc) SUB_FILE="jyp_mc.sub";;
         jjp_mc) SUB_FILE="jjp_mc.sub";;
         jjy_mc) SUB_FILE="jjy_mc.sub";;
-        jup_data) SUB_FILE="jup_data.sub";;
+        jyp_data) SUB_FILE="jyp_data.sub";;
         jjp_data) SUB_FILE="jjp_data.sub";;
         *) msg_error "Unknown analysis type: $ANALYSIS_TYPE"; exit 1;;
     esac
@@ -200,7 +200,7 @@ submit_job() {
     fi
     
     # Create log directories
-    mkdir -p logs/jup_mc logs/jjp_mc logs/jjy_mc logs/jup_data logs/jjp_data
+    mkdir -p logs/jyp_mc logs/jjp_mc logs/jjy_mc logs/jyp_data logs/jjp_data
     
     # Build condor_submit arguments
     local SUBMIT_APPEND_ARGS=()
@@ -227,8 +227,8 @@ submit_job() {
     local MODES_TO_SUBMIT=()
     if [ "${MODE,,}" = "all" ]; then
         case "$ANALYSIS_TYPE" in
-            jup_mc) MODES_TO_SUBMIT=(SPS DPS_1 DPS_2 DPS_3 TPS);;
-            jjp_mc) MODES_TO_SUBMIT=(DPS TPS);;
+            jyp_mc) MODES_TO_SUBMIT=(SPS DPS_1 DPS_2 DPS_3 TPS);;
+            jjp_mc) MODES_TO_SUBMIT=(DPS_1 DPS_2_CS DPS_2_G SPS_CS SPS_G TPS);;
             jjy_mc) MODES_TO_SUBMIT=(DPS_1 DPS_2);;
             *) MODES_TO_SUBMIT=("");;
         esac
@@ -290,7 +290,7 @@ main() {
             check_proxy
             exit $?
             ;;
-        jup_mc|jjp_mc|jjy_mc|jup_data|jjp_data)
+        jyp_mc|jjp_mc|jjy_mc|jyp_data|jjp_data)
             submit_job "$@"
             ;;
         *)

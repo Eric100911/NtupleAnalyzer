@@ -3,11 +3,11 @@
 """
 Ntuple分析结果绘图脚本
 
-绘制JJP和JUP角度关联分析的结果图
+绘制JJP和JYP角度关联分析的结果图
 
 使用方法:
     python plot_ntuple_results.py -i output.root -o plots/ -p JJP
-    python plot_ntuple_results.py -i output.root -o plots/ -p JUP
+    python plot_ntuple_results.py -i output.root -o plots/ -p JYP
 """
 
 import ROOT
@@ -137,8 +137,8 @@ def plot_2d_all_jjp(fin, output_dir, process):
     print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_2d_all_jup(fin, output_dir, process):
-    """绘制JUP的三个2D关联图"""
+def plot_2d_all_jyp(fin, output_dir, process):
+    """绘制JYP的三个2D关联图"""
     c = ROOT.TCanvas("c2d_all", "", 1800, 500)
     c.Divide(3, 1)
     
@@ -580,8 +580,8 @@ def plot_kinematics_jjp(fin, output_dir, process):
         print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_kinematics_jup(fin, output_dir, process):
-    """绘制JUP运动学分布"""
+def plot_kinematics_jyp(fin, output_dir, process):
+    """绘制JYP运动学分布"""
     # pT分布
     c = ROOT.TCanvas("c_pt", "", 800, 600)
     
@@ -780,8 +780,8 @@ def plot_invariant_mass_jjp(fin, output_dir, process):
     print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_invariant_mass_jup(fin, output_dir, process):
-    """绘制JUP不变质量分布"""
+def plot_invariant_mass_jyp(fin, output_dir, process):
+    """绘制JYP不变质量分布"""
     c = ROOT.TCanvas("c_mass", "", 1600, 500)
     c.Divide(4, 1)
     
@@ -863,8 +863,8 @@ def plot_jjp(fin, output_dir, process):
     plot_invariant_mass_jjp(fin, output_dir, process)
 
 
-def plot_jup(fin, output_dir, process):
-    """绘制JUP所有图"""
+def plot_jyp(fin, output_dir, process):
+    """绘制JYP所有图"""
     # Δy比较图
     plot_1d_comparison(
         fin,
@@ -901,13 +901,13 @@ def plot_jup(fin, output_dir, process):
             f"#Upsilon - #phi: #Delta y vs #Delta#phi ({process})")
     
     # 组合2D图
-    plot_2d_all_jup(fin, output_dir, process)
+    plot_2d_all_jyp(fin, output_dir, process)
     
     # 运动学分布
-    plot_kinematics_jup(fin, output_dir, process)
+    plot_kinematics_jyp(fin, output_dir, process)
     
     # 不变质量分布
-    plot_invariant_mass_jup(fin, output_dir, process)
+    plot_invariant_mass_jyp(fin, output_dir, process)
 
 
 def main():
@@ -917,8 +917,8 @@ def main():
     parser.add_argument('-o', '--output-dir', default='plots',
                         help='输出目录')
     parser.add_argument('-p', '--process', required=True,
-                        choices=['JJP', 'JUP', 'JJY'],
-                        help='过程类型 (JJP、JUP或JJY)')
+                        choices=['JJP', 'JYP', 'JJY'],
+                        help='过程类型 (JJP、JYP或JJY)')
     
     args = parser.parse_args()
     
@@ -937,8 +937,8 @@ def main():
     
     if args.process == 'JJP':
         plot_jjp(fin, args.output_dir, args.process)
-    elif args.process == 'JUP':
-        plot_jup(fin, args.output_dir, args.process)
+    elif args.process == 'JYP':
+        plot_jyp(fin, args.output_dir, args.process)
     else:
         plot_jjy(fin, args.output_dir, args.process)
     

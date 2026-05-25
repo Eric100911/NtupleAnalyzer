@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-J/psi + Upsilon + Phi (JUP) Ntuple角度关联分析
+J/psi + Upsilon + Phi (JYP) Ntuple角度关联分析
 
 功能:
 1. 从Ntuple加载数据并应用事件选择cuts
@@ -9,9 +9,9 @@ J/psi + Upsilon + Phi (JUP) Ntuple角度关联分析
 3. 填充直方图并保存
 
 使用方法:
-    python analyze_ntuple_JUP.py -o output_jup.root
-    python analyze_ntuple_JUP.py -n 10000  # 处理前10000个事件
-    python analyze_ntuple_JUP.py --jpsi-muon-id soft --ups-muon-id tight
+    python analyze_ntuple_JYP.py -o output_jyp.root
+    python analyze_ntuple_JYP.py -n 10000  # 处理前10000个事件
+    python analyze_ntuple_JYP.py --jpsi-muon-id soft --ups-muon-id tight
 """
 
 import ROOT
@@ -31,7 +31,7 @@ import subprocess
 # =============================================================================
 
 # 数据路径 (默认可被 --input-dir 覆盖)
-JUP_DATA_PATH_DEFAULT = "/eos/user/x/xcheng/JpsiUpsPhi/merged_rootNtuple/"
+JYP_DATA_PATH_DEFAULT = "/eos/user/x/xcheng/JpsiUpsPhi/merged_rootNtuple/"
 TREE_NAME = "mkcands/X_data"
 
 # 质量窗口
@@ -346,7 +346,7 @@ def process_file_batch(file_list, max_events, jpsi_muon_id, ups_muon_id, tree_na
             fill_histograms(histos, jpsi_4vec, ups_4vec, phi_4vec)
             n_passed += 1
 
-    fd, tmp_path = tempfile.mkstemp(suffix=".root", prefix="jup_ntuple_tmp_")
+    fd, tmp_path = tempfile.mkstemp(suffix=".root", prefix="jyp_ntuple_tmp_")
     os.close(fd)
     fout = TFile(tmp_path, "RECREATE")
     for h in histos.values():
@@ -411,9 +411,9 @@ def fill_histograms(histograms, jpsi_4vec, ups_4vec, phi_4vec):
     histograms['h_mass_all'].Fill((jpsi_4vec + ups_4vec + phi_4vec).M())
 
 
-def analyze_jup_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', output_file=None, input_dir=None, n_workers=1):
+def analyze_jyp_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', output_file=None, input_dir=None, n_workers=1):
     """
-    分析JUP Ntuple
+    分析JYP Ntuple
     
     Args:
         max_events: 最大处理事件数 (-1表示全部)
@@ -428,7 +428,7 @@ def analyze_jup_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', 
     start_time = time.time()
     
     # 数据路径选择
-    data_path = input_dir if input_dir else JUP_DATA_PATH_DEFAULT
+    data_path = input_dir if input_dir else JYP_DATA_PATH_DEFAULT
 
     if data_path.startswith("root://"):
         # Enumerate files via xrdfs to avoid wildcard-on-directory issues
@@ -527,7 +527,7 @@ def analyze_jup_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', 
 
     if output_file is None:
         os.makedirs(OUTPUT_DIR, exist_ok=True)
-        output_file = os.path.join(OUTPUT_DIR, "jup_ntuple_correlations.root")
+        output_file = os.path.join(OUTPUT_DIR, "jyp_ntuple_correlations.root")
 
     fout = TFile(output_file, "RECREATE")
     for h in histograms.values():
@@ -540,7 +540,7 @@ def analyze_jup_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', 
 
 
 def main():
-    parser = argparse.ArgumentParser(description='JUP Ntuple角度关联分析')
+    parser = argparse.ArgumentParser(description='JYP Ntuple角度关联分析')
     parser.add_argument('-n', '--max-events', type=int, default=-1,
                         help='最大处理事件数 (-1=全部)')
     parser.add_argument('-o', '--output', type=str, default=None,
@@ -563,7 +563,7 @@ def main():
     jpsi_muon_id = None if args.jpsi_muon_id == 'none' else args.jpsi_muon_id
     ups_muon_id = None if args.ups_muon_id == 'none' else args.ups_muon_id
     
-    result = analyze_jup_ntuple(
+    result = analyze_jyp_ntuple(
         max_events=args.max_events,
         jpsi_muon_id=jpsi_muon_id,
         ups_muon_id=ups_muon_id,

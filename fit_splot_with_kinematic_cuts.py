@@ -73,7 +73,7 @@ JJP_CUTS = {
     "jpsi_ctau_max": None,
 }
 
-JUP_CUTS = {
+JYP_CUTS = {
     "jpsi_muon_id": "soft",
     "ups_muon_id": "tight",
     "jpsi_trigger_min_matched_muons": 0,
@@ -96,7 +96,7 @@ _PREFIT_HELPERS_DECLARED = False
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Apply pre-fit kinematic cuts, then run RooFit + SPlot")
-    parser.add_argument("--channel", required=True, choices=["JJP", "JUP", "jjp", "jup"])
+    parser.add_argument("--channel", required=True, choices=["JJP", "JYP", "jjp", "jyp"])
     parser.add_argument("--dataset", default="data", choices=["data", "mc"])
     parser.add_argument("--sample", default=None, help="MC sample tag")
     parser.add_argument("-i", "--input", default=None, help="Input selected ROOT file")
@@ -180,7 +180,7 @@ def declare_prefit_helpers():
             return true;
         }
 
-        bool PassTrackMisuseVetoJUP(
+        bool PassTrackMisuseVetoJYP(
             float mu1_pt, float mu1_eta, float mu1_phi,
             float mu2_pt, float mu2_eta, float mu2_phi,
             float mu3_pt, float mu3_eta, float mu3_phi,
@@ -353,7 +353,7 @@ def build_prefit_filters(channel: str, available_branches: set[str]):
             ]
         else:
             expr = (
-                "PassTrackMisuseVetoJUP("
+                "PassTrackMisuseVetoJYP("
                 "sel_Jpsi_mu1_pt, sel_Jpsi_mu1_eta, sel_Jpsi_mu1_phi, "
                 "sel_Jpsi_mu2_pt, sel_Jpsi_mu2_eta, sel_Jpsi_mu2_phi, "
                 "sel_Ups_mu1_pt, sel_Ups_mu1_eta, sel_Ups_mu1_phi, "
@@ -400,43 +400,43 @@ def build_prefit_filters(channel: str, available_branches: set[str]):
             )
             add_filter(filters, warnings, available_branches, expr, "jpsi_trigger_match", ["muIsJpsiTrigMatch", "sel_Jpsi_1_mu_1_Idx", "sel_Jpsi_1_mu_2_Idx", "sel_Jpsi_2_mu_1_Idx", "sel_Jpsi_2_mu_2_Idx"])
     else:
-        add_filter(filters, warnings, available_branches, range_expression("sel_Jpsi_pt", min_value=JUP_CUTS["jpsi_pt_min"]), "jpsi_pt", ["sel_Jpsi_pt"])
-        add_filter(filters, warnings, available_branches, range_expression("sel_Jpsi_eta", max_value=JUP_CUTS["jpsi_abs_eta_max"], abs_value=True), "jpsi_eta", ["sel_Jpsi_eta"])
-        add_filter(filters, warnings, available_branches, range_expression("sel_Jpsi_VtxProb", min_value=JUP_CUTS["jpsi_vtxprob_min"]), "jpsi_vtxprob", ["sel_Jpsi_VtxProb"])
-        add_filter(filters, warnings, available_branches, range_expression("sel_Jpsi_ctau", JUP_CUTS["jpsi_ctau_min"], JUP_CUTS["jpsi_ctau_max"]), "jpsi_ctau", ["sel_Jpsi_ctau"])
+        add_filter(filters, warnings, available_branches, range_expression("sel_Jpsi_pt", min_value=JYP_CUTS["jpsi_pt_min"]), "jpsi_pt", ["sel_Jpsi_pt"])
+        add_filter(filters, warnings, available_branches, range_expression("sel_Jpsi_eta", max_value=JYP_CUTS["jpsi_abs_eta_max"], abs_value=True), "jpsi_eta", ["sel_Jpsi_eta"])
+        add_filter(filters, warnings, available_branches, range_expression("sel_Jpsi_VtxProb", min_value=JYP_CUTS["jpsi_vtxprob_min"]), "jpsi_vtxprob", ["sel_Jpsi_VtxProb"])
+        add_filter(filters, warnings, available_branches, range_expression("sel_Jpsi_ctau", JYP_CUTS["jpsi_ctau_min"], JYP_CUTS["jpsi_ctau_max"]), "jpsi_ctau", ["sel_Jpsi_ctau"])
 
-        add_filter(filters, warnings, available_branches, range_expression("sel_Ups_pt", min_value=JUP_CUTS["ups_pt_min"]), "ups_pt", ["sel_Ups_pt"])
-        add_filter(filters, warnings, available_branches, range_expression("sel_Ups_eta", max_value=JUP_CUTS["ups_abs_eta_max"], abs_value=True), "ups_eta", ["sel_Ups_eta"])
-        add_filter(filters, warnings, available_branches, range_expression("sel_Ups_VtxProb", min_value=JUP_CUTS["ups_vtxprob_min"]), "ups_vtxprob", ["sel_Ups_VtxProb"])
-        add_filter(filters, warnings, available_branches, range_expression("sel_Ups_ctau", JUP_CUTS["ups_ctau_min"], JUP_CUTS["ups_ctau_max"]), "ups_ctau", ["sel_Ups_ctau"])
+        add_filter(filters, warnings, available_branches, range_expression("sel_Ups_pt", min_value=JYP_CUTS["ups_pt_min"]), "ups_pt", ["sel_Ups_pt"])
+        add_filter(filters, warnings, available_branches, range_expression("sel_Ups_eta", max_value=JYP_CUTS["ups_abs_eta_max"], abs_value=True), "ups_eta", ["sel_Ups_eta"])
+        add_filter(filters, warnings, available_branches, range_expression("sel_Ups_VtxProb", min_value=JYP_CUTS["ups_vtxprob_min"]), "ups_vtxprob", ["sel_Ups_VtxProb"])
+        add_filter(filters, warnings, available_branches, range_expression("sel_Ups_ctau", JYP_CUTS["ups_ctau_min"], JYP_CUTS["ups_ctau_max"]), "ups_ctau", ["sel_Ups_ctau"])
 
-        jpsi_id_branch = MUON_ID_BRANCHES.get(JUP_CUTS["jpsi_muon_id"])
+        jpsi_id_branch = MUON_ID_BRANCHES.get(JYP_CUTS["jpsi_muon_id"])
         if jpsi_id_branch is not None:
             expr = (
                 f"TakeMask({jpsi_id_branch}, sel_Jpsi_mu_1_Idx) > 0 && "
                 f"TakeMask({jpsi_id_branch}, sel_Jpsi_mu_2_Idx) > 0"
             )
-            add_filter(filters, warnings, available_branches, expr, f"jpsi_muon_id_{JUP_CUTS['jpsi_muon_id']}", [jpsi_id_branch, "sel_Jpsi_mu_1_Idx", "sel_Jpsi_mu_2_Idx"])
+            add_filter(filters, warnings, available_branches, expr, f"jpsi_muon_id_{JYP_CUTS['jpsi_muon_id']}", [jpsi_id_branch, "sel_Jpsi_mu_1_Idx", "sel_Jpsi_mu_2_Idx"])
 
-        ups_id_branch = MUON_ID_BRANCHES.get(JUP_CUTS["ups_muon_id"])
+        ups_id_branch = MUON_ID_BRANCHES.get(JYP_CUTS["ups_muon_id"])
         if ups_id_branch is not None:
             expr = (
                 f"TakeMask({ups_id_branch}, sel_Ups_mu_1_Idx) > 0 && "
                 f"TakeMask({ups_id_branch}, sel_Ups_mu_2_Idx) > 0"
             )
-            add_filter(filters, warnings, available_branches, expr, f"ups_muon_id_{JUP_CUTS['ups_muon_id']}", [ups_id_branch, "sel_Ups_mu_1_Idx", "sel_Ups_mu_2_Idx"])
+            add_filter(filters, warnings, available_branches, expr, f"ups_muon_id_{JYP_CUTS['ups_muon_id']}", [ups_id_branch, "sel_Ups_mu_1_Idx", "sel_Ups_mu_2_Idx"])
 
-        if JUP_CUTS["jpsi_trigger_min_matched_muons"] > 0:
+        if JYP_CUTS["jpsi_trigger_min_matched_muons"] > 0:
             expr = (
                 "CountSelectedMatches2(muIsJpsiTrigMatch, sel_Jpsi_mu_1_Idx, sel_Jpsi_mu_2_Idx) "
-                f">= {int(JUP_CUTS['jpsi_trigger_min_matched_muons'])}"
+                f">= {int(JYP_CUTS['jpsi_trigger_min_matched_muons'])}"
             )
             add_filter(filters, warnings, available_branches, expr, "jpsi_trigger_match", ["muIsJpsiTrigMatch", "sel_Jpsi_mu_1_Idx", "sel_Jpsi_mu_2_Idx"])
 
-        if JUP_CUTS["ups_trigger_min_matched_muons"] > 0:
+        if JYP_CUTS["ups_trigger_min_matched_muons"] > 0:
             expr = (
                 "CountSelectedMatches2(muIsUpsTrigMatch, sel_Ups_mu_1_Idx, sel_Ups_mu_2_Idx) "
-                f">= {int(JUP_CUTS['ups_trigger_min_matched_muons'])}"
+                f">= {int(JYP_CUTS['ups_trigger_min_matched_muons'])}"
             )
             add_filter(filters, warnings, available_branches, expr, "ups_trigger_match", ["muIsUpsTrigMatch", "sel_Ups_mu_1_Idx", "sel_Ups_mu_2_Idx"])
 
@@ -493,7 +493,7 @@ def run_fit(filtered_input: str, output_file: str, plot_dir: str, channel: str, 
     if channel == "JJP":
         model, observables, yields, signal_yield_name, keepalive = fit_core.build_jjp_model(n_entries, mc_two_component=(dataset == "mc"))
     else:
-        model, observables, yields, signal_yield_name, keepalive = fit_core.build_jup_model(
+        model, observables, yields, signal_yield_name, keepalive = fit_core.build_jyp_model(
             n_entries,
             mc_only_1s=(dataset == "mc"),
             mc_two_component=(dataset == "mc"),

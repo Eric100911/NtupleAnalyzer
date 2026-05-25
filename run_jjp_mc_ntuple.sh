@@ -3,7 +3,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-MODE="DPS_2"
+MODE="DPS_1"
 MAX_EVENTS=-1
 JOBS=8
 MUON_ID="soft"

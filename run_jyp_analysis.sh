@@ -38,19 +38,19 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-MERGE_ARGS=(--channel JUP --dataset data -n "$MAX_EVENTS" -j "$JOBS" --jpsi-muon-id "$JPSI_MUON_ID" --ups-muon-id "$UPS_MUON_ID")
+MERGE_ARGS=(--channel JYP --dataset data -n "$MAX_EVENTS" -j "$JOBS" --jpsi-muon-id "$JPSI_MUON_ID" --ups-muon-id "$UPS_MUON_ID")
 [[ -n "$INPUT_DIR" ]] && MERGE_ARGS+=(-i "$INPUT_DIR")
 [[ -n "$MERGE_OUTPUT" ]] && MERGE_ARGS+=(-o "$MERGE_OUTPUT")
 
 ./run_assoc_merge.sh "${MERGE_ARGS[@]}" || exit $?
 
-FIT_ARGS=(--channel JUP --dataset data -j "$JOBS")
+FIT_ARGS=(--channel JYP --dataset data -j "$JOBS")
 [[ -n "$MERGE_OUTPUT" ]] && FIT_ARGS+=(-i "$MERGE_OUTPUT")
 [[ -n "$WEIGHTED_OUTPUT" ]] && FIT_ARGS+=(-o "$WEIGHTED_OUTPUT")
 [[ -n "$PLOT_DIR" ]] && FIT_ARGS+=(--plot-dir "$PLOT_DIR/fit")
 ./run_assoc_fit.sh "${FIT_ARGS[@]}" || exit $?
 
-PLOT_ARGS=(--channel JUP --dataset data -j "$JOBS")
+PLOT_ARGS=(--channel JYP --dataset data -j "$JOBS")
 [[ -n "$WEIGHTED_OUTPUT" ]] && PLOT_ARGS+=(-i "$WEIGHTED_OUTPUT")
 [[ -n "$PLOT_DIR" ]] && PLOT_ARGS+=(-o "$PLOT_DIR")
 ./run_assoc_plots.sh "${PLOT_ARGS[@]}"

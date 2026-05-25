@@ -51,7 +51,7 @@ class CutScenario:
 
 def parse_args():
     parser = vertex_core.argparse.ArgumentParser(description="Study DiOnia vertex-cut effects on sWeighted ctau shapes")
-    parser.add_argument("--channel", required=True, choices=["JJP", "JUP", "jjp", "jup"])
+    parser.add_argument("--channel", required=True, choices=["JJP", "JYP", "jjp", "jyp"])
     parser.add_argument("--dataset", default="data", choices=["data", "mc"])
     parser.add_argument("--sample", default=None, help="MC sample tag")
     parser.add_argument("-i", "--input", default=None, help="Input merged selected ROOT file")
@@ -169,7 +169,7 @@ def run_splot_fit(input_file: str, output_file: str, plot_dir: str, channel: str
     if channel == "JJP":
         model, observables, yields, signal_yield_name, keepalive = fit_core.build_jjp_model(n_entries, mc_two_component=(dataset == "mc"))
     else:
-        model, observables, yields, signal_yield_name, keepalive = fit_core.build_jup_model(
+        model, observables, yields, signal_yield_name, keepalive = fit_core.build_jyp_model(
             n_entries,
             mc_only_1s=(dataset == "mc"),
             mc_two_component=(dataset == "mc"),

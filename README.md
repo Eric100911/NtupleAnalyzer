@@ -1,6 +1,14 @@
 # NtupleAnalyzer assocPV Workflow
 
-这个包现在按 3 步工作流运行：
+这个包现在按 assocPV merge/fit/plot 和 JJP efficiency 工作流运行。公开 channel 名称固定为：
+
+- `JJP`: `J/psi + J/psi + phi`
+- `JYP`: `J/psi + Upsilon + phi`
+- `JJY`: `J/psi + J/psi + Upsilon`
+
+`JUP` 和 `JJU` 不作为 CLI channel 名称使用；外部 EOS/XRootD 目录里已有的 `JUP_*` 或 `JpsiUpsPhi` 字符串只是存储命名。
+
+主分析按 3 步运行：
 
 1. `merge_apply_cuts.py`
    合并全部 ntuple，做 assocPV 动力学 cut，事件内选最佳候选，输出带原始 branch 和统一 `sel_*` 标量分支的 ROOT 文件。
@@ -13,14 +21,23 @@
 
 `/eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV`
 
+推荐运行环境：
+
+```bash
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+```
+
 ## 输入路径
 
 - DATA:
-  - JJP: `/eos/user/x/xcheng/JpsiJpsiPhi_muon_pt_cut/merged_rootNtuple`
-  - JUP: `/eos/user/x/xcheng/JpsiUpsPhi/merged_rootNtuple`
+  - JJP: `/eos/user/c/chiw/JpsiJpsiPhi/rootNtuple`
+  - JYP: `/eos/user/c/chiw/JpsiUpsPhi/rootNtuple`
+  - JJY: `/eos/user/c/chiw/JpsiJpsiUps/rootNtuple`
 - MC:
-  - 基础目录: `/eos/ihep/cms/store/user/xcheng/MC_Production_v2/output`
+  - 基础目录: `/eos/ihep/cms/store/user/xcheng/MC_Production_v3/output`
   - 程序会自动转成 `root://cceos.ihep.ac.cn//eos/ihep/...` 并优先读取 `output_ntuple.root`
+  - JJP 样本: `DPS_1`, `DPS_2_CS`, `DPS_2_G`, `SPS_CS`, `SPS_G`, `TPS`
+  - JYP 样本: `SPS`, `DPS_1`, `DPS_2`, `DPS_3`, `TPS`
   - JJY 基础目录: `/eos/user/c/chiw/JpsiJpsiUps/MC_samples/rootNtuple_refactor`
   - JJY 样本: `DPS_1 = DPS-Jpsi-JpsiY/filter_JpsiPtMin4p0_YPtMin6p0`, `DPS_2 = DPS-JpsiJpsi-Y/filter_JpsiPtMin4p0_YPtMin6p0`
   - 默认 proxy: `/afs/cern.ch/user/c/chiw/condor/x509up`
@@ -37,7 +54,7 @@
   - `abs(eta_K) < 2.5`
   - `Phi mass in [0.99, 1.07]`
   - `Phi pT > 4`
-- JUP:
+- JYP:
   - 继承上面的 J/psi、muon、Kaon、Phi cut
   - `Ups mass in [8.5, 11.4]`
   - `abs(y_Ups) < 2.5`
@@ -67,19 +84,20 @@ JJP data 全流程：
 ./run_jjp_analysis.sh
 ```
 
-JUP data 全流程：
+JYP data 全流程：
 
 ```bash
-./run_jup_analysis.sh
+./run_jyp_analysis.sh
 ```
 
 只跑 merge：
 
 ```bash
 ./run_assoc_merge.sh --channel JJP --dataset data
-./run_assoc_merge.sh --channel JUP --dataset mc --sample DPS_3
+./run_assoc_merge.sh --channel JYP --dataset mc --sample DPS_3
 ./run_assoc_merge.sh --channel JJY --dataset mc --sample DPS_1 -j 1
 ./run_assoc_merge.sh --channel JJY --dataset mc --sample DPS_2 -j 1
+./run_assoc_merge.sh --channel JJY --dataset data -j 1
 ```
 
 只跑拟合：
@@ -92,7 +110,7 @@ JUP data 全流程：
 只跑加权画图：
 
 ```bash
-./run_assoc_plots.sh --channel JUP --dataset data
+./run_assoc_plots.sh --channel JYP --dataset data
 ./run_assoc_plots.sh --channel JJY --dataset mc --sample DPS_1
 ```
 
@@ -102,20 +120,42 @@ HTCondor 只建议用于第 1 步 merge。
 
 - MC merge:
   - `condor/jjp_mc.sub`
-  - `condor/jup_mc.sub`
+  - `condor/jyp_mc.sub`
   - `condor/jjy_mc.sub`
 - DATA merge:
   - `condor/jjp_data.sub`
-  - `condor/jup_data.sub`
+  - `condor/jyp_data.sub`
 
 提交辅助脚本仍然是：
 
 ```bash
 cd condor
-./submit.sh jup_mc --mode DPS_3
+./submit.sh jyp_mc --mode DPS_3
 ./submit.sh jjy_mc --mode all --jobs 1
 ./submit.sh jjp_data
 ```
+
+## JJP efficiency
+
+JJP acceptance/efficiency uses full-GEN ntuples directly, not merged selected ROOT files. The first supported mode is `JpsiJpsiPhi`.
+
+```bash
+./run_assoc_efficiency.sh \
+  --input-files root://cceos.ihep.ac.cn///eos/ihep/cms/store/user/xcheng/MC_Production_v3/output/JJP_DPS1/0/output_ntuple.root \
+  --sample-name JJP_DPS1_smoke \
+  --skip-plots \
+  --output-dir /tmp/chiw/jjp_eff_smoke
+```
+
+Full discovery defaults to:
+
+```bash
+./run_assoc_efficiency.sh \
+  --samples JJP_DPS1,JJP_DPS2_CS,JJP_DPS2_G,JJP_SPS_CS,JJP_SPS_G \
+  --output-dir /tmp/chiw/jjp_efficiency_v1
+```
+
+Outputs include `gen_systems.parquet`, `event_step_flags.parquet`, `efficiency_counts.parquet`, `efficiency_maps.parquet`, `cutflow.csv`, per-sample manifests, and optional CMS-style efficiency plots.
 
 ## 技术实现
 
@@ -137,26 +177,26 @@ cd condor
 已在本地完成以下链路测试：
 
 ```bash
-python3 merge_apply_cuts.py --channel JUP --dataset mc --sample DPS_3 \
+python3 merge_apply_cuts.py --channel JYP --dataset mc --sample DPS_3 \
   --input-dir /afs/cern.ch/user/x/xcheng/condor/JUP_DPS3_0_output_ntuple.root \
-  -n 200 -j 1 -o /tmp/xcheng/jup_mc_test_selected.root
+  -n 200 -j 1 -o /tmp/xcheng/jyp_mc_test_selected.root
 
 python3 merge_apply_cuts.py --channel JJP --dataset mc --sample DPS_2 \
   --input-dir /afs/cern.ch/user/x/xcheng/condor/JJP_DPS2_0_output_ntuple.root \
   -n 200 -j 1 -o /tmp/xcheng/jjp_mc_test_selected.root
 
-python3 merge_apply_cuts.py --channel JUP --dataset data \
+python3 merge_apply_cuts.py --channel JYP --dataset data \
   --input-dir /eos/user/x/xcheng/JpsiUpsPhi/merged_rootNtuple/ParkingDoubleMuonLowMass0_Run2022Cv1.root \
-  -n 10000 -j 1 -o /tmp/xcheng/jup_data_test_selected.root
+  -n 10000 -j 1 -o /tmp/xcheng/jyp_data_test_selected.root
 
-python3 fit_splot.py --channel JUP --dataset data \
-  -i /tmp/xcheng/jup_data_test_selected.root \
-  -o /tmp/xcheng/jup_data_test_weighted_v2.root \
-  --plot-dir /tmp/xcheng/jup_fit_plots_v2 -j 1
+python3 fit_splot.py --channel JYP --dataset data \
+  -i /tmp/xcheng/jyp_data_test_selected.root \
+  -o /tmp/xcheng/jyp_data_test_weighted_v2.root \
+  --plot-dir /tmp/xcheng/jyp_fit_plots_v2 -j 1
 
-python3 plot_weighted_distributions.py --channel JUP --dataset data \
-  -i /tmp/xcheng/jup_data_test_weighted.root \
-  -o /tmp/xcheng/jup_weighted_plots -j 1
+python3 plot_weighted_distributions.py --channel JYP --dataset data \
+  -i /tmp/xcheng/jyp_data_test_weighted.root \
+  -o /tmp/xcheng/jyp_weighted_plots -j 1
 ```
 
 说明：

@@ -37,7 +37,7 @@ INPUT_TREE = "selected"
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run RooFit + SPlot on selected assocPV ntuples")
-    parser.add_argument("--channel", required=True, choices=["JJP", "JUP", "JJY", "jjp", "jup", "jjy"])
+    parser.add_argument("--channel", required=True, choices=["JJP", "JYP", "JJY", "jjp", "jyp", "jjy"])
     parser.add_argument("--dataset", default="data", choices=["data", "mc"])
     parser.add_argument("--sample", default=None, help="MC sample tag")
     parser.add_argument("-i", "--input", default=None, help="Input selected ROOT file")
@@ -200,7 +200,7 @@ def build_jjp_model(n_events: int, mc_two_component: bool = False):
     return model, observables, yields, "yield_sss", keep
 
 
-def build_jup_model(n_events: int, mc_only_1s: bool = False, mc_two_component: bool = False):
+def build_jyp_model(n_events: int, mc_only_1s: bool = False, mc_two_component: bool = False):
     keep = []
     m_jpsi = ROOT.RooRealVar("sel_Jpsi_mass", "m(Jpsi)", 2.9, 3.3)
     m_ups = ROOT.RooRealVar("sel_Ups_mass", "m(Upsilon)", 8.5, 11.4)
@@ -248,8 +248,8 @@ def build_jup_model(n_events: int, mc_only_1s: bool = False, mc_two_component: b
     keep.extend(list(yields.values()))
 
     model = ROOT.RooAddPdf(
-        "model_jup",
-        "model_jup",
+        "model_jyp",
+        "model_jyp",
         ROOT.RooArgList(*components.values()),
         ROOT.RooArgList(*yields.values()),
     )
@@ -488,8 +488,8 @@ def main():
 
     if channel == "JJP":
         model, observables, yields, signal_yield_name, keepalive = build_jjp_model(n_entries, mc_two_component=(dataset == "mc"))
-    elif channel == "JUP":
-        model, observables, yields, signal_yield_name, keepalive = build_jup_model(
+    elif channel == "JYP":
+        model, observables, yields, signal_yield_name, keepalive = build_jyp_model(
             n_entries,
             mc_only_1s=(dataset == "mc"),
             mc_two_component=(dataset == "mc"),

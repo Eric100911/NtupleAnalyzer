@@ -5,7 +5,7 @@
 # This wrapper sets up the LCG Python/ROOT environment and runs the analysis script.
 #
 # Usage (from HTCondor):
-#   arguments = "run_jup_mc_ntuple.sh -m DPS_1 -j 8"
+#   arguments = "run_jyp_mc_ntuple.sh -m DPS_1 -j 8"
 # ==============================================================================
 
 set -e

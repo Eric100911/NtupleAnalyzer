@@ -37,7 +37,7 @@ PT_BIN_EDGES = np.asarray([0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 17.0, 21.0
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Plot weighted assocPV distributions")
-    parser.add_argument("--channel", required=True, choices=["JJP", "JUP", "JJY", "jjp", "jup", "jjy"])
+    parser.add_argument("--channel", required=True, choices=["JJP", "JYP", "JJY", "jjp", "jyp", "jjy"])
     parser.add_argument("--dataset", default="data", choices=["data", "mc"])
     parser.add_argument("--sample", default=None, help="MC sample tag")
     parser.add_argument("-i", "--input", default=None, help="Input weighted ROOT file")
