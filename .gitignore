@@ -4,3 +4,5 @@ output/
 *.root
 __pycache__/
 /condor/logs/
+.codex
+notebook_outputs/

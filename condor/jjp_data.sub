@@ -18,7 +18,7 @@ MAX_EVENTS = -1
 MUON_ID = soft
 
 # Arguments passed to run_wrapper.sh
-arguments = "run_jjp_analysis.sh -j $(JOBS) -n $(MAX_EVENTS) --muon-id $(MUON_ID)"
+arguments = "run_assoc_merge.sh --channel JJP --dataset data -j $(JOBS) -n $(MAX_EVENTS) --muon-id $(MUON_ID)"
 
 # Log files
 log_dir = logs/jjp_data
@@ -35,14 +35,13 @@ request_disk = 20G
 +JobFlavour = "workday"
 
 # File transfer settings
-should_transfer_files = YES
-when_to_transfer_output = ON_EXIT
-transfer_output_files = output
+should_transfer_files = NO
 
 # Environment and proxy
-getenv = True
+getenv = False
+environment = "LCG_VIEW=/cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt"
 use_x509userproxy = True
-x509userproxy = /afs/cern.ch/user/x/xcheng/x509up_u180107
+x509userproxy = /afs/cern.ch/user/c/chiw/condor/x509up
 
 # Notification
 notification = Error

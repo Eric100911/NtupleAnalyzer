@@ -29,7 +29,10 @@ import multiprocessing
 # =============================================================================
 
 # 数据路径 (默认可被 --input-dir 覆盖)
-JJP_DATA_PATH_DEFAULT = "/eos/user/x/xcheng/JpsiJpsiPhi_muon_pt_cut/merged_rootNtuple/"
+JJP_DATA_PATH_DEFAULT = "/eos/user/c/chiw/JpsiJpsiPhi/rootNtuple"
+JJP_DATASET_DIRS = tuple(f"ParkingDoubleMuonLowMass{i}" for i in range(8))
+JJP_REFACTOR_PREFIX = "crab3_refactor"
+JJP_SUBMIT_PREFIX = "260411"
 TREE_NAME = "mkcands/X_data"
 
 # 质量窗口
@@ -190,6 +193,33 @@ def create_histograms():
         "M(J/#psi_{1} + J/#psi_{2} + #phi);M [GeV];Events", 100, 7, 40)
     
     return histograms
+
+
+def discover_jjp_input_files(data_path):
+    if os.path.isfile(data_path) and data_path.lower().endswith(".root"):
+        return [data_path]
+
+    files = []
+    for dataset_dir in JJP_DATASET_DIRS:
+        base_dir = os.path.join(data_path, dataset_dir)
+        if not os.path.isdir(base_dir):
+            continue
+
+        task_dirs = sorted(glob.glob(os.path.join(base_dir, f"{JJP_REFACTOR_PREFIX}*")))
+        for task_dir in task_dirs:
+            if not os.path.isdir(task_dir):
+                continue
+
+            submit_dirs = sorted(glob.glob(os.path.join(task_dir, f"{JJP_SUBMIT_PREFIX}*")))
+            for submit_dir in submit_dirs:
+                if not os.path.isdir(submit_dir):
+                    continue
+                files.extend(sorted(glob.glob(os.path.join(submit_dir, "**", "*.root"), recursive=True)))
+
+    if files:
+        return files
+
+    return sorted(glob.glob(os.path.join(data_path, "*.root")))
 
 
 def merge_histograms(dest, src):
@@ -431,10 +461,7 @@ def analyze_jjp_ntuple(max_events=-1, muon_id='soft', output_file=None, input_di
     
     # 数据路径选择
     data_path = input_dir if input_dir else JJP_DATA_PATH_DEFAULT
-    data_files = [os.path.basename(f) for f in glob.glob(os.path.join(data_path, "*.root"))]
-    
-    # 组装文件全路径
-    full_files = [os.path.join(data_path, f) for f in data_files if os.path.exists(os.path.join(data_path, f))]
+    full_files = discover_jjp_input_files(data_path)
     n_files = len(full_files)
     print(f"[INFO] 数据路径: {data_path}")
     print(f"[INFO] 加载 {n_files} 个文件")

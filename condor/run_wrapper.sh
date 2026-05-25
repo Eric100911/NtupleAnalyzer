@@ -2,8 +2,7 @@
 # ==============================================================================
 # run_wrapper.sh - HTCondor wrapper for NtupleAnalyzer jobs
 # ==============================================================================
-# This wrapper sets up the CMSSW environment and runs the analysis script.
-# It handles both lxplus (CERN) and IHEP environments.
+# This wrapper sets up the LCG Python/ROOT environment and runs the analysis script.
 #
 # Usage (from HTCondor):
 #   arguments = "run_jup_mc_ntuple.sh -m DPS_1 -j 8"
@@ -16,7 +15,7 @@ set -e
 # ==============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ANALYZER_DIR="$(dirname "$SCRIPT_DIR")"
-CMSSW_BASE_DIR="$(dirname "$(dirname "$ANALYZER_DIR")")"
+LCG_VIEW="${LCG_VIEW:-/cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt}"
 
 # Parse wrapper arguments
 ANALYSIS_SCRIPT="$1"
@@ -29,8 +28,8 @@ echo "=============================================="
 echo "Date: $(date)"
 echo "Host: $(hostname)"
 echo "Working dir: $(pwd)"
-echo "CMSSW base: $CMSSW_BASE_DIR"
 echo "Analyzer dir: $ANALYZER_DIR"
+echo "LCG view: $LCG_VIEW"
 echo "Script: $ANALYSIS_SCRIPT"
 echo "Args: $SCRIPT_ARGS"
 echo "=============================================="
@@ -38,25 +37,19 @@ echo "=============================================="
 # ==============================================================================
 # Setup Environment
 # ==============================================================================
-echo "[INFO] Setting up CMS environment..."
+echo "[INFO] Setting up LCG_109a environment..."
 
-# Source CMS environment
-if [ -f /cvmfs/cms.cern.ch/cmsset_default.sh ]; then
-    source /cvmfs/cms.cern.ch/cmsset_default.sh
+# Source LCG environment. This provides ROOT, RooFit, XRootD, and uproot without
+# paying the CMSSW project-space setup cost on batch nodes.
+if [ -f "$LCG_VIEW/setup.sh" ]; then
+    source "$LCG_VIEW/setup.sh"
 else
-    echo "[ERROR] CMS environment not found at /cvmfs/cms.cern.ch"
+    echo "[ERROR] LCG view not found: $LCG_VIEW"
     exit 1
 fi
 
-# Setup CMSSW
-cd "$CMSSW_BASE_DIR"
-if [ -f "$CMSSW_BASE_DIR/src/.SCRAM/Environment" ]; then
-    eval $(scramv1 runtime -sh)
-    echo "[INFO] CMSSW environment set: $CMSSW_VERSION"
-else
-    echo "[ERROR] CMSSW not properly initialized in $CMSSW_BASE_DIR"
-    exit 1
-fi
+echo "[INFO] Python: $(command -v python3)"
+echo "[INFO] ROOT: $(root-config --version 2>/dev/null || echo unavailable)"
 
 # ==============================================================================
 # Setup VOMS Proxy (for xrootd access)
