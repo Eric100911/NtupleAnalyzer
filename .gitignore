@@ -2,8 +2,11 @@ output/
 *.pdf
 *.png
 *.root
+chiw.cc
+xcheng.cc
 __pycache__/
 /condor/logs/
+/condor/runtime/
 .codex
 notebook_outputs/
 efficiency_map_products/

@@ -24,7 +24,7 @@ arguments = "run_assoc_merge.sh --channel JJP --dataset data -j $(JOBS) -n $(MAX
 log_dir = logs/jjp_data
 output = $(log_dir)/jjp_data_$(Cluster)_$(Process).out
 error = $(log_dir)/jjp_data_$(Cluster)_$(Process).err
-log = $(log_dir)/jjp_data_$(Cluster)_$(Process).log
+log = $(log_dir)/jjp_data_$(Cluster).log
 
 # Resource requests
 request_memory = 64000

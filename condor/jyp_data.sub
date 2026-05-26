@@ -25,7 +25,7 @@ arguments = "run_assoc_merge.sh --channel JYP --dataset data -j $(JOBS) -n $(MAX
 log_dir = logs/jyp_data
 output = $(log_dir)/jyp_data_$(Cluster)_$(Process).out
 error = $(log_dir)/jyp_data_$(Cluster)_$(Process).err
-log = $(log_dir)/jyp_data_$(Cluster)_$(Process).log
+log = $(log_dir)/jyp_data_$(Cluster).log
 
 # Resource requests
 request_memory = 64000

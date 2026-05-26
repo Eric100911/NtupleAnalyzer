@@ -111,6 +111,7 @@ class EfficiencyBinning:
     jpsi_pt_edges: tuple[float, ...] = (0.0, 5.0, 10.0, 15.0, 20.0, 30.0, 50.0, 100.0)
     phi_pt_edges: tuple[float, ...] = (0.0, 2.0, 4.0, 6.0, 10.0, 20.0, 50.0)
     object_abs_y_edges: tuple[float, ...] = (0.0, 0.6, 1.2, 1.8, 2.4)
+    object_y_edges: tuple[float, ...] = (-2.4, -1.8, -1.2, -0.6, 0.0, 0.6, 1.2, 1.8, 2.4)
     triple_pt_edges: tuple[float, ...] = (0.0, 10.0, 20.0, 30.0, 50.0, 100.0, 200.0)
     triple_abs_y_edges: tuple[float, ...] = (0.0, 0.6, 1.2, 1.8, 2.4)
     triple_mass_edges: tuple[float, ...] = (0.0, 10.0, 15.0, 20.0, 30.0, 50.0, 100.0)
@@ -300,6 +301,21 @@ def _p4_components_array(pt: ak.Array, eta: ak.Array, phi: ak.Array, mass: ak.Ar
     pz = pt * np.sinh(eta)
     energy = np.sqrt(np.maximum(px * px + py * py + pz * pz + mass * mass, 0.0))
     return px, py, pz, energy
+
+
+def _rapidity_from_pt_eta_mass(pt: float, eta: float, mass: float) -> float:
+    pz = pt * math.sinh(eta)
+    energy = math.sqrt(max(pt * pt + pz * pz + mass * mass, 0.0))
+    if energy + pz <= 0.0 or energy - pz <= 0.0:
+        return math.nan
+    return 0.5 * math.log((energy + pz) / (energy - pz))
+
+
+def _rapidity_from_pt_eta_mass_array(pt: ak.Array, eta: ak.Array, mass: ak.Array) -> ak.Array:
+    pz = pt * np.sinh(eta)
+    energy = np.sqrt(np.maximum(pt * pt + pz * pz + mass * mass, 0.0))
+    valid = (energy + pz > 0.0) & (energy - pz > 0.0)
+    return ak.where(valid, 0.5 * np.log((energy + pz) / (energy - pz)), np.nan)
 
 
 def _ancestor_idx_to_pdg(match_idx: ak.Array, gen_pdg: ak.Array, gen_mother: ak.Array, target_abs_pdg: int, max_depth: int = 16) -> ak.Array:
@@ -576,6 +592,9 @@ def build_event_efficiency_row(
     raw = {step: False for step in EFFICIENCY_STEPS}
     raw["full_gen"] = True
     raw["fiducial_acceptance"] = gen_system_fiducial(event, system, cfg)
+    raw["fiducial_jpsi_lead"] = _daughter_fiducial(event, system.jpsi_lead, cfg, "muon")
+    raw["fiducial_jpsi_sublead"] = _daughter_fiducial(event, system.jpsi_sublead, cfg, "muon")
+    raw["fiducial_phi"] = _daughter_fiducial(event, system.phi, cfg, "kaon")
     raw["hlt_event_path_or"] = _event_path_or(event)
 
     matched_candidates = [cand_idx for cand_idx in range(n_candidates) if _candidate_matches_system(event, cand_idx, system)]
@@ -623,8 +642,14 @@ def build_event_efficiency_row(
         "n_gen_phi": int(system.n_phi),
         "n_triple_gen_matched_candidates": int(len(matched_candidates)),
         "hlt_event_path_or": int(raw["hlt_event_path_or"]),
+        "fiducial_jpsi_lead": int(raw["fiducial_jpsi_lead"]),
+        "fiducial_jpsi_sublead": int(raw["fiducial_jpsi_sublead"]),
+        "fiducial_phi": int(raw["fiducial_phi"]),
         **cumulative,
     }
+    jpsi_lead_y = _rapidity_from_pt_eta_mass(system.jpsi_lead.pt, system.jpsi_lead.eta, system.jpsi_lead.mass)
+    jpsi_sublead_y = _rapidity_from_pt_eta_mass(system.jpsi_sublead.pt, system.jpsi_sublead.eta, system.jpsi_sublead.mass)
+    phi_y = _rapidity_from_pt_eta_mass(system.phi.pt, system.phi.eta, system.phi.mass)
     gen_row = {
         "sample": sample,
         "source_file": source_file,
@@ -636,11 +661,14 @@ def build_event_efficiency_row(
         "jpsi_sublead_gen_idx": system.jpsi_sublead.idx,
         "phi_gen_idx": system.phi.idx,
         "jpsi_lead_pt": system.jpsi_lead.pt,
-        "jpsi_lead_abs_y": abs(system.jpsi_lead.eta),
+        "jpsi_lead_y": jpsi_lead_y,
+        "jpsi_lead_abs_y": abs(jpsi_lead_y),
         "jpsi_sublead_pt": system.jpsi_sublead.pt,
-        "jpsi_sublead_abs_y": abs(system.jpsi_sublead.eta),
+        "jpsi_sublead_y": jpsi_sublead_y,
+        "jpsi_sublead_abs_y": abs(jpsi_sublead_y),
         "phi_pt": system.phi.pt,
-        "phi_abs_y": abs(system.phi.eta),
+        "phi_y": phi_y,
+        "phi_abs_y": abs(phi_y),
         "triple_pt": system.triple_pt,
         "triple_abs_y": system.triple_abs_y,
         "triple_mass": system.triple_mass,
@@ -730,7 +758,9 @@ def _process_efficiency_chunk_vectorized(
     jpsi1_mass = _safe_first(jpsi_mass_sorted, np.nan)
     jpsi2_mass = _safe_second(jpsi_mass_sorted, np.nan)
     phi_mass = _safe_first(phi_mass_sorted, np.nan)
-
+    jpsi1_y_gen = _rapidity_from_pt_eta_mass_array(jpsi1_pt, jpsi1_eta, jpsi1_mass)
+    jpsi2_y_gen = _rapidity_from_pt_eta_mass_array(jpsi2_pt, jpsi2_eta, jpsi2_mass)
+    phi_y_gen = _rapidity_from_pt_eta_mass_array(phi_pt, phi_eta, phi_mass)
     j1_px, j1_py, j1_pz, j1_e = _p4_components_array(jpsi1_pt, jpsi1_eta, jpsi1_phi, jpsi1_mass)
     j2_px, j2_py, j2_pz, j2_e = _p4_components_array(jpsi2_pt, jpsi2_eta, jpsi2_phi, jpsi2_mass)
     p_px, p_py, p_pz, p_e = _p4_components_array(phi_pt, phi_eta, phi_phi, phi_mass)
@@ -750,15 +780,16 @@ def _process_efficiency_chunk_vectorized(
     jpsi1_daughters = is_mu & (mother == jpsi1_idx)
     jpsi2_daughters = is_mu & (mother == jpsi2_idx)
     phi_daughters = is_kaon & (mother == phi_idx)
-    fiducial_acceptance = (
-        has_full_gen
-        & (ak.sum(jpsi1_daughters, axis=1) >= 2)
-        & (ak.sum(jpsi2_daughters, axis=1) >= 2)
-        & (ak.sum(phi_daughters, axis=1) >= 2)
-        & ak.all(mu_fid[jpsi1_daughters], axis=1)
-        & ak.all(mu_fid[jpsi2_daughters], axis=1)
-        & ak.all(kaon_fid[phi_daughters], axis=1)
+    fiducial_jpsi_lead = (
+        has_full_gen & (ak.sum(jpsi1_daughters, axis=1) >= 2) & ak.all(mu_fid[jpsi1_daughters], axis=1)
     )
+    fiducial_jpsi_sublead = (
+        has_full_gen & (ak.sum(jpsi2_daughters, axis=1) >= 2) & ak.all(mu_fid[jpsi2_daughters], axis=1)
+    )
+    fiducial_phi = (
+        has_full_gen & (ak.sum(phi_daughters, axis=1) >= 2) & ak.all(kaon_fid[phi_daughters], axis=1)
+    )
+    fiducial_acceptance = fiducial_jpsi_lead & fiducial_jpsi_sublead & fiducial_phi
 
     j1_mu1_idx = _as_index_array(arrays["Jpsi_1_mu_1_Idx"])
     j1_mu2_idx = _as_index_array(arrays["Jpsi_1_mu_2_Idx"])
@@ -844,6 +875,9 @@ def _process_efficiency_chunk_vectorized(
     raw = {
         "full_gen": has_full_gen,
         "fiducial_acceptance": fiducial_acceptance,
+        "fiducial_jpsi_lead": fiducial_jpsi_lead,
+        "fiducial_jpsi_sublead": fiducial_jpsi_sublead,
+        "fiducial_phi": fiducial_phi,
         "hlt_muon_matched": ak.any(matched_candidate & candidate_hlt, axis=1),
         "single_jpsi_reco": single_jpsi_reco,
         "double_jpsi_reco": double_jpsi_reco,
@@ -887,6 +921,8 @@ def _process_efficiency_chunk_vectorized(
     }
     for step in EFFICIENCY_STEPS:
         event_data[step] = _to_numpy(cumulative[step], has_full_gen, 0).astype(np.int8)
+    for key in ("fiducial_jpsi_lead", "fiducial_jpsi_sublead", "fiducial_phi"):
+        event_data[key] = _to_numpy(raw[key], has_full_gen, 0).astype(np.int8)
 
     gen_data: dict[str, Any] = {
         "sample": np.full(np.count_nonzero(full_mask), sample, dtype=object),
@@ -899,11 +935,14 @@ def _process_efficiency_chunk_vectorized(
         "jpsi_sublead_gen_idx": _to_numpy(jpsi2_idx, has_full_gen, -1).astype(np.int64),
         "phi_gen_idx": _to_numpy(phi_idx, has_full_gen, -1).astype(np.int64),
         "jpsi_lead_pt": _to_numpy(jpsi1_pt, has_full_gen, np.nan).astype(float),
-        "jpsi_lead_abs_y": np.abs(_to_numpy(jpsi1_eta, has_full_gen, np.nan).astype(float)),
+        "jpsi_lead_y": _to_numpy(jpsi1_y_gen, has_full_gen, np.nan).astype(float),
+        "jpsi_lead_abs_y": np.abs(_to_numpy(jpsi1_y_gen, has_full_gen, np.nan).astype(float)),
         "jpsi_sublead_pt": _to_numpy(jpsi2_pt, has_full_gen, np.nan).astype(float),
-        "jpsi_sublead_abs_y": np.abs(_to_numpy(jpsi2_eta, has_full_gen, np.nan).astype(float)),
+        "jpsi_sublead_y": _to_numpy(jpsi2_y_gen, has_full_gen, np.nan).astype(float),
+        "jpsi_sublead_abs_y": np.abs(_to_numpy(jpsi2_y_gen, has_full_gen, np.nan).astype(float)),
         "phi_pt": _to_numpy(phi_pt, has_full_gen, np.nan).astype(float),
-        "phi_abs_y": np.abs(_to_numpy(phi_eta, has_full_gen, np.nan).astype(float)),
+        "phi_y": _to_numpy(phi_y_gen, has_full_gen, np.nan).astype(float),
+        "phi_abs_y": np.abs(_to_numpy(phi_y_gen, has_full_gen, np.nan).astype(float)),
         "triple_pt": _to_numpy(triple_pt, has_full_gen, np.nan).astype(float),
         "triple_abs_y": _to_numpy(triple_abs_y, has_full_gen, np.nan).astype(float),
         "triple_mass": _to_numpy(triple_mass, has_full_gen, np.nan).astype(float),
@@ -1218,3 +1257,261 @@ def build_subprocess_envelope(sample_count_tables: dict[str, pd.DataFrame]) -> p
         )
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+def build_acceptance_maps(counts_df: pd.DataFrame) -> pd.DataFrame:
+    if counts_df.empty:
+        return pd.DataFrame()
+    acc = counts_df.loc[counts_df["step"] == "fiducial_acceptance"].copy()
+    acc["quantity"] = "acceptance_vs_full_gen"
+    return acc.reset_index(drop=True)
+
+
+def build_per_object_acceptance_maps(
+    gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning
+) -> pd.DataFrame:
+    merged = _merged_gen_events(gen_df, event_df)
+    if merged.empty:
+        return pd.DataFrame()
+    required = ["fiducial_jpsi_lead", "fiducial_jpsi_sublead", "fiducial_phi"]
+    if not all(c in merged.columns for c in required):
+        return pd.DataFrame()
+    y_required = ["jpsi_lead_y", "jpsi_sublead_y", "phi_y"]
+    if not all(c in merged.columns for c in y_required):
+        return pd.DataFrame()
+
+    rows: list[dict[str, Any]] = []
+    specs = (
+        ("jpsi_lead", "jpsi_lead_pt", "jpsi_lead_y", "fiducial_jpsi_lead", binning.jpsi_pt_edges, binning.object_y_edges),
+        ("jpsi_sublead", "jpsi_sublead_pt", "jpsi_sublead_y", "fiducial_jpsi_sublead", binning.jpsi_pt_edges, binning.object_y_edges),
+        ("phi", "phi_pt", "phi_y", "fiducial_phi", binning.phi_pt_edges, binning.object_y_edges),
+    )
+    for obj, pt_col, y_col, flag_col, pt_edges, y_edges in specs:
+        for ix in range(len(pt_edges) - 1):
+            for iy in range(len(y_edges) - 1):
+                subset = merged[
+                    (merged[pt_col] >= pt_edges[ix])
+                    & (merged[pt_col] < pt_edges[ix + 1])
+                    & (merged[y_col] >= y_edges[iy])
+                    & (merged[y_col] < y_edges[iy + 1])
+                ]
+                total = int(subset["full_gen"].sum())
+                rows.append(
+                    _efficiency_row(
+                        {
+                            "map_type": "object_acceptance_2d",
+                            "object": obj,
+                            "step": "fiducial_acceptance",
+                            "x_axis": "pt",
+                            "y_axis": "y",
+                            "x_bin": ix,
+                            "y_bin": iy,
+                            "x_min": pt_edges[ix],
+                            "x_max": pt_edges[ix + 1],
+                            "y_min": y_edges[iy],
+                            "y_max": y_edges[iy + 1],
+                            "x_label": _bin_label(pt_edges, ix),
+                            "y_label": _bin_label(y_edges, iy),
+                        },
+                        total,
+                        int(subset[flag_col].sum()) if total else 0,
+                    )
+                )
+    result = pd.DataFrame(rows)
+    if not result.empty:
+        result["quantity"] = "per_object_acceptance"
+    return result
+
+
+def _stacked_jpsi_frame(gen_df: pd.DataFrame, event_df: pd.DataFrame) -> pd.DataFrame:
+    merged = _merged_gen_events(gen_df, event_df)
+    required = ["jpsi_lead_pt", "jpsi_lead_y", "jpsi_sublead_pt", "jpsi_sublead_y", "fiducial_jpsi_lead", "fiducial_jpsi_sublead"]
+    if merged.empty or not all(c in merged.columns for c in required):
+        return pd.DataFrame()
+    parts: list[pd.DataFrame] = []
+    for role, flag_col in (("lead", "fiducial_jpsi_lead"), ("sublead", "fiducial_jpsi_sublead")):
+        part = merged.copy()
+        part["object"] = "jpsi"
+        part["jpsi_role"] = role
+        part["jpsi_pt"] = part[f"jpsi_{role}_pt"]
+        part["jpsi_y"] = part[f"jpsi_{role}_y"]
+        part["jpsi_fiducial_acceptance"] = part[flag_col].astype(int)
+        parts.append(part)
+    return pd.concat(parts, ignore_index=True)
+
+
+def build_stacked_jpsi_acceptance_maps(
+    gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning
+) -> pd.DataFrame:
+    stacked = _stacked_jpsi_frame(gen_df, event_df)
+    if stacked.empty:
+        return pd.DataFrame()
+    rows: list[dict[str, Any]] = []
+    pt_edges = binning.jpsi_pt_edges
+    y_edges = binning.object_y_edges
+    for ix in range(len(pt_edges) - 1):
+        for iy in range(len(y_edges) - 1):
+            subset = stacked[
+                (stacked["jpsi_pt"] >= pt_edges[ix])
+                & (stacked["jpsi_pt"] < pt_edges[ix + 1])
+                & (stacked["jpsi_y"] >= y_edges[iy])
+                & (stacked["jpsi_y"] < y_edges[iy + 1])
+            ]
+            total = int(len(subset))
+            rows.append(
+                _efficiency_row(
+                    {
+                        "map_type": "stacked_jpsi_acceptance_2d",
+                        "object": "jpsi",
+                        "step": "fiducial_acceptance",
+                        "x_axis": "pt",
+                        "y_axis": "y",
+                        "x_bin": ix,
+                        "y_bin": iy,
+                        "x_min": pt_edges[ix],
+                        "x_max": pt_edges[ix + 1],
+                        "y_min": y_edges[iy],
+                        "y_max": y_edges[iy + 1],
+                        "x_label": _bin_label(pt_edges, ix),
+                        "y_label": _bin_label(y_edges, iy),
+                        "quantity": "stacked_jpsi_acceptance",
+                    },
+                    total,
+                    int(subset["jpsi_fiducial_acceptance"].sum()) if total else 0,
+                )
+            )
+    return pd.DataFrame(rows)
+
+
+def build_stacked_jpsi_efficiency_maps(
+    gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning
+) -> pd.DataFrame:
+    stacked = _stacked_jpsi_frame(gen_df, event_df)
+    if stacked.empty:
+        return pd.DataFrame()
+    rows: list[dict[str, Any]] = []
+    pt_edges = binning.jpsi_pt_edges
+    y_edges = binning.object_y_edges
+    for ix in range(len(pt_edges) - 1):
+        for iy in range(len(y_edges) - 1):
+            subset = stacked[
+                (stacked["jpsi_pt"] >= pt_edges[ix])
+                & (stacked["jpsi_pt"] < pt_edges[ix + 1])
+                & (stacked["jpsi_y"] >= y_edges[iy])
+                & (stacked["jpsi_y"] < y_edges[iy + 1])
+            ]
+            total = int(len(subset))
+            for step in EFFICIENCY_STEPS[1:]:
+                rows.append(
+                    _efficiency_row(
+                        {
+                            "map_type": "stacked_jpsi_efficiency_2d",
+                            "object": "jpsi",
+                            "step": step,
+                            "x_axis": "pt",
+                            "y_axis": "y",
+                            "x_bin": ix,
+                            "y_bin": iy,
+                            "x_min": pt_edges[ix],
+                            "x_max": pt_edges[ix + 1],
+                            "y_min": y_edges[iy],
+                            "y_max": y_edges[iy + 1],
+                            "x_label": _bin_label(pt_edges, ix),
+                            "y_label": _bin_label(y_edges, iy),
+                            "quantity": "stacked_jpsi_event_efficiency",
+                        },
+                        total,
+                        int(subset[step].sum()) if total and step in subset.columns else 0,
+                    )
+                )
+    return pd.DataFrame(rows)
+
+
+def _recompute_efficiency(frame: pd.DataFrame, total_col: str, passed_col: str) -> None:
+    totals = frame[total_col].to_numpy(dtype=int)
+    n_passed = frame[passed_col].to_numpy(dtype=int)
+    efficiency = np.full(len(totals), np.nan)
+    err_low = np.full(len(totals), np.nan)
+    err_high = np.full(len(totals), np.nan)
+    err_sym = np.full(len(totals), np.nan)
+    for i, (t, p) in enumerate(zip(totals, n_passed)):
+        row = _efficiency_row({}, int(t), int(p))
+        efficiency[i] = row["efficiency"]
+        err_low[i] = row["err_low"]
+        err_high[i] = row["err_high"]
+        err_sym[i] = row["err_sym"]
+    frame["total"] = totals
+    frame["passed"] = n_passed
+    frame["efficiency"] = efficiency
+    frame["err_low"] = err_low
+    frame["err_high"] = err_high
+    frame["err_sym"] = err_sym
+
+
+_MAP_TYPE_KEYS: dict[str, list[str]] = {
+    "inclusive": [],
+    "object_2d": ["object", "x_bin", "y_bin"],
+    "correlated_3d": ["x_bin", "y_bin", "z_bin"],
+    "triple_1d": ["x_axis", "x_bin"],
+}
+
+
+def build_conditional_maps(counts_df: pd.DataFrame) -> pd.DataFrame:
+    if counts_df.empty:
+        return pd.DataFrame()
+    parts: list[pd.DataFrame] = []
+    for map_type, keys in _MAP_TYPE_KEYS.items():
+        subset = counts_df.loc[counts_df["map_type"] == map_type].copy()
+        if subset.empty:
+            continue
+
+        # Order steps present in this map_type by EFFICIENCY_STEPS index
+        present_steps = sorted(
+            subset["step"].drop_duplicates().tolist(),
+            key=lambda s: EFFICIENCY_STEPS.index(s) if s in EFFICIENCY_STEPS else -1,
+        )
+        if not present_steps:
+            continue
+
+        # First step in this map_type: baseline with previous_step = "total"
+        first = subset.loc[subset["step"] == present_steps[0]].copy()
+        first["previous_step"] = "total"
+        first["conditional_total"] = first["total"].astype(int)
+        first["conditional_passed"] = first["passed"].astype(int)
+        first["absolute_total"] = first["total"].astype(int)
+        first["absolute_passed"] = first["passed"].astype(int)
+        first["absolute_efficiency"] = first["efficiency"].astype(float)
+        _recompute_efficiency(first, "conditional_total", "conditional_passed")
+        first["quantity"] = "conditional_efficiency_vs_previous_step"
+        parts.append(first)
+
+        # Subsequent steps: merge with previous step within this map_type
+        for prev_step, this_step in zip(present_steps, present_steps[1:]):
+            this = subset.loc[subset["step"] == this_step].copy()
+            prev = subset.loc[subset["step"] == prev_step].copy()
+            if this.empty or prev.empty:
+                continue
+            if keys:
+                merged = this.merge(
+                    prev[keys + ["passed"]],
+                    on=keys,
+                    how="left",
+                    suffixes=("", "_prev"),
+                )
+            else:
+                merged = this.copy()
+                merged["passed_prev"] = prev["passed"].iloc[0] if len(prev) > 0 else 0
+            merged["previous_step"] = prev_step
+            merged["conditional_total"] = merged["passed_prev"].fillna(0).astype(int)
+            merged["conditional_passed"] = merged["passed"].astype(int)
+            merged["absolute_total"] = merged["total"].astype(int)
+            merged["absolute_passed"] = merged["passed"].astype(int)
+            merged["absolute_efficiency"] = merged["efficiency"].astype(float)
+            _recompute_efficiency(merged, "conditional_total", "conditional_passed")
+            merged["quantity"] = "conditional_efficiency_vs_previous_step"
+            parts.append(merged)
+    if not parts:
+        return pd.DataFrame()
+    result = pd.concat(parts, ignore_index=True)
+    result.drop(columns=["passed_prev"], errors="ignore", inplace=True)
+    return result

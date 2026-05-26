@@ -28,7 +28,7 @@ arguments = "run_assoc_merge.sh --channel JJY --dataset mc --sample $(MODE) -j $
 log_dir = logs/jjy_mc
 output = $(log_dir)/jjy_mc_$(MODE)_$(Cluster)_$(Process).out
 error = $(log_dir)/jjy_mc_$(MODE)_$(Cluster)_$(Process).err
-log = $(log_dir)/jjy_mc_$(MODE)_$(Cluster)_$(Process).log
+log = $(log_dir)/jjy_mc_$(MODE)_$(Cluster).log
 
 # Resource requests: one Condor core and one analyzer worker per job.
 request_memory = 16000

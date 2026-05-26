@@ -28,7 +28,7 @@ arguments = "run_jyp_mc_ntuple.sh -m $(MODE) -j $(JOBS) -n $(MAX_EVENTS) --jpsi-
 log_dir = logs/jyp_mc
 output = $(log_dir)/jyp_mc_$(MODE)_$(Cluster)_$(Process).out
 error = $(log_dir)/jyp_mc_$(MODE)_$(Cluster)_$(Process).err
-log = $(log_dir)/jyp_mc_$(MODE)_$(Cluster)_$(Process).log
+log = $(log_dir)/jyp_mc_$(MODE)_$(Cluster).log
 
 # Resource requests
 request_memory = 48000
