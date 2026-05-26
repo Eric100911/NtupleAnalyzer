@@ -172,6 +172,9 @@ def load_efficiency_file_manifest(
     except json.JSONDecodeError as exc:
         raise ValueError(f"Input file manifest is not valid JSON: {manifest_path}") from exc
 
+    if isinstance(payload, dict) and isinstance(payload.get("sample"), str) and isinstance(payload.get("files"), list):
+        payload = {payload["sample"]: payload["files"]}
+
     if not isinstance(payload, dict):
         raise ValueError("Input file manifest must be a JSON object mapping sample names to file lists.")
 
@@ -253,6 +256,83 @@ def _record_fields(arrays: Any) -> list[str]:
     if isinstance(arrays, dict):
         return list(arrays)
     return list(arrays.fields)
+
+
+def _as_index_array(array: Any) -> ak.Array:
+    return ak.values_astype(ak.fill_none(ak.nan_to_none(array), -1), np.int64)
+
+
+def _safe_take_jagged(values: ak.Array, indices: ak.Array, default: Any = -1) -> ak.Array:
+    counts = ak.num(values, axis=1)
+    valid = (indices >= 0) & (indices < counts)
+    safe = ak.where(valid, indices, 0)
+    padded = ak.pad_none(values, 1, axis=1, clip=False)
+    taken = padded[safe]
+    return ak.fill_none(ak.where(valid, taken, default), default)
+
+
+def _safe_take_scalar(values: ak.Array, indices: ak.Array, default: Any = -1) -> ak.Array:
+    counts = ak.num(values, axis=1)
+    valid = (indices >= 0) & (indices < counts)
+    safe = ak.where(valid, indices, 0)
+    padded = ak.pad_none(values, 1, axis=1, clip=False)
+    taken = ak.firsts(padded[safe[:, None]])
+    return ak.fill_none(ak.where(valid, taken, default), default)
+
+
+def _safe_first(array: ak.Array, default: Any = -1) -> ak.Array:
+    return ak.fill_none(ak.firsts(array), default)
+
+
+def _safe_second(array: ak.Array, default: Any = -1) -> ak.Array:
+    return ak.fill_none(ak.firsts(array[:, 1:]), default)
+
+
+def _scalar_rapidity_array(px: ak.Array, py: ak.Array, pz: ak.Array, mass: ak.Array) -> ak.Array:
+    energy = np.sqrt(np.maximum(px * px + py * py + pz * pz + mass * mass, 0.0))
+    valid = (energy + pz > 0.0) & (energy - pz > 0.0)
+    return ak.where(valid, 0.5 * np.log((energy + pz) / (energy - pz)), np.nan)
+
+
+def _p4_components_array(pt: ak.Array, eta: ak.Array, phi: ak.Array, mass: ak.Array) -> tuple[ak.Array, ak.Array, ak.Array, ak.Array]:
+    px = pt * np.cos(phi)
+    py = pt * np.sin(phi)
+    pz = pt * np.sinh(eta)
+    energy = np.sqrt(np.maximum(px * px + py * py + pz * pz + mass * mass, 0.0))
+    return px, py, pz, energy
+
+
+def _ancestor_idx_to_pdg(match_idx: ak.Array, gen_pdg: ak.Array, gen_mother: ak.Array, target_abs_pdg: int, max_depth: int = 16) -> ak.Array:
+    idx = _as_index_array(match_idx)
+    found = ak.full_like(idx, -1)
+    active = idx >= 0
+    for _ in range(max_depth):
+        pdg_at_idx = _safe_take_jagged(gen_pdg, idx, 0)
+        is_target = active & (abs(pdg_at_idx) == target_abs_pdg)
+        found = ak.where((found < 0) & is_target, idx, found)
+        next_idx = _safe_take_jagged(gen_mother, idx, -1)
+        active = active & (found < 0) & (next_idx >= 0)
+        idx = ak.where(active, next_idx, idx)
+    return found
+
+
+def _ancestor_idx_to_pdg_from_scalar(match_idx: ak.Array, gen_pdg: ak.Array, gen_mother: ak.Array, target_abs_pdg: int, max_depth: int = 16) -> ak.Array:
+    idx = _as_index_array(match_idx)
+    found = ak.full_like(idx, -1)
+    active = idx >= 0
+    for _ in range(max_depth):
+        pdg_at_idx = _safe_take_scalar(gen_pdg, idx, 0)
+        is_target = active & (abs(pdg_at_idx) == target_abs_pdg)
+        found = ak.where((found < 0) & is_target, idx, found)
+        next_idx = _safe_take_scalar(gen_mother, idx, -1)
+        active = active & (found < 0) & (next_idx >= 0)
+        idx = ak.where(active, next_idx, idx)
+    return found
+
+
+def _to_numpy(array: Any, mask: Any | None = None, default: Any = 0) -> np.ndarray:
+    selected = array if mask is None else array[mask]
+    return ak.to_numpy(ak.fill_none(selected, default))
 
 
 def _pythonize_event(arrays: Any, entry: int) -> dict[str, Any]:
@@ -590,17 +670,296 @@ def process_efficiency_file(path: str, sample: str, cfg: OfflineSelectionConfig,
     }
 
 
+def _process_efficiency_chunk_vectorized(
+    arrays: ak.Array,
+    source_file: str,
+    sample: str,
+    cfg: OfflineSelectionConfig,
+    entry_start: int,
+) -> dict[str, pd.DataFrame]:
+    n_events = len(_record_field(arrays, "evtNum"))
+    if n_events == 0:
+        return {"gen_systems": pd.DataFrame(), "event_step_flags": pd.DataFrame()}
+
+    pdg = arrays["MC_GenPart_pdgId"]
+    mother = _as_index_array(arrays["MC_GenPart_motherGenIdx"])
+    gen_idx = ak.local_index(pdg)
+    gen_pt = arrays["MC_GenPart_pt"]
+    gen_eta = arrays["MC_GenPart_eta"]
+    gen_phi = arrays["MC_GenPart_phi"]
+    gen_mass = arrays["MC_GenPart_mass"]
+
+    is_mu = abs(pdg) == 13
+    is_kaon = abs(pdg) == 321
+    mu_mother = mother[is_mu]
+    kaon_mother = mother[is_kaon]
+    n_mu_daughters = ak.sum(mu_mother[:, :, None] == gen_idx[:, None, :], axis=1)
+    n_kaon_daughters = ak.sum(kaon_mother[:, :, None] == gen_idx[:, None, :], axis=1)
+
+    valid_jpsi = (abs(pdg) == 443) & (n_mu_daughters >= 2)
+    valid_phi = (abs(pdg) == 333) & (n_kaon_daughters >= 2)
+
+    jpsi_order = ak.argsort(gen_pt[valid_jpsi], ascending=False)
+    jpsi_idx_sorted = gen_idx[valid_jpsi][jpsi_order]
+    jpsi_pt_sorted = gen_pt[valid_jpsi][jpsi_order]
+    jpsi_eta_sorted = gen_eta[valid_jpsi][jpsi_order]
+    jpsi_phi_sorted = gen_phi[valid_jpsi][jpsi_order]
+    jpsi_mass_sorted = gen_mass[valid_jpsi][jpsi_order]
+
+    phi_order = ak.argsort(gen_pt[valid_phi], ascending=False)
+    phi_idx_sorted = gen_idx[valid_phi][phi_order]
+    phi_pt_sorted = gen_pt[valid_phi][phi_order]
+    phi_eta_sorted = gen_eta[valid_phi][phi_order]
+    phi_phi_sorted = gen_phi[valid_phi][phi_order]
+    phi_mass_sorted = gen_mass[valid_phi][phi_order]
+
+    jpsi1_idx = _safe_first(jpsi_idx_sorted, -1)
+    jpsi2_idx = _safe_second(jpsi_idx_sorted, -1)
+    phi_idx = _safe_first(phi_idx_sorted, -1)
+    has_full_gen = (ak.num(jpsi_idx_sorted) >= 2) & (ak.num(phi_idx_sorted) >= 1)
+
+    jpsi1_pt = _safe_first(jpsi_pt_sorted, np.nan)
+    jpsi2_pt = _safe_second(jpsi_pt_sorted, np.nan)
+    phi_pt = _safe_first(phi_pt_sorted, np.nan)
+    jpsi1_eta = _safe_first(jpsi_eta_sorted, np.nan)
+    jpsi2_eta = _safe_second(jpsi_eta_sorted, np.nan)
+    phi_eta = _safe_first(phi_eta_sorted, np.nan)
+    jpsi1_phi = _safe_first(jpsi_phi_sorted, np.nan)
+    jpsi2_phi = _safe_second(jpsi_phi_sorted, np.nan)
+    phi_phi = _safe_first(phi_phi_sorted, np.nan)
+    jpsi1_mass = _safe_first(jpsi_mass_sorted, np.nan)
+    jpsi2_mass = _safe_second(jpsi_mass_sorted, np.nan)
+    phi_mass = _safe_first(phi_mass_sorted, np.nan)
+
+    j1_px, j1_py, j1_pz, j1_e = _p4_components_array(jpsi1_pt, jpsi1_eta, jpsi1_phi, jpsi1_mass)
+    j2_px, j2_py, j2_pz, j2_e = _p4_components_array(jpsi2_pt, jpsi2_eta, jpsi2_phi, jpsi2_mass)
+    p_px, p_py, p_pz, p_e = _p4_components_array(phi_pt, phi_eta, phi_phi, phi_mass)
+    triple_px = j1_px + j2_px + p_px
+    triple_py = j1_py + j2_py + p_py
+    triple_pz = j1_pz + j2_pz + p_pz
+    triple_e = j1_e + j2_e + p_e
+    triple_pt = np.sqrt(triple_px * triple_px + triple_py * triple_py)
+    triple_mass = np.sqrt(np.maximum(triple_e * triple_e - triple_px * triple_px - triple_py * triple_py - triple_pz * triple_pz, 0.0))
+    triple_abs_y = abs(ak.where((triple_e + triple_pz > 0.0) & (triple_e - triple_pz > 0.0), 0.5 * np.log((triple_e + triple_pz) / (triple_e - triple_pz)), np.nan))
+
+    mu_fid = (
+        ((abs(gen_eta) < 1.2) & (gen_pt > cfg.mu_pt_barrel_min))
+        | ((abs(gen_eta) >= 1.2) & (abs(gen_eta) < cfg.mu_abs_eta_max) & (gen_pt > cfg.mu_pt_endcap_min))
+    )
+    kaon_fid = (gen_pt > cfg.track_pt_min) & (abs(gen_eta) < cfg.track_abs_eta_max)
+    jpsi1_daughters = is_mu & (mother == jpsi1_idx)
+    jpsi2_daughters = is_mu & (mother == jpsi2_idx)
+    phi_daughters = is_kaon & (mother == phi_idx)
+    fiducial_acceptance = (
+        has_full_gen
+        & (ak.sum(jpsi1_daughters, axis=1) >= 2)
+        & (ak.sum(jpsi2_daughters, axis=1) >= 2)
+        & (ak.sum(phi_daughters, axis=1) >= 2)
+        & ak.all(mu_fid[jpsi1_daughters], axis=1)
+        & ak.all(mu_fid[jpsi2_daughters], axis=1)
+        & ak.all(kaon_fid[phi_daughters], axis=1)
+    )
+
+    j1_mu1_idx = _as_index_array(arrays["Jpsi_1_mu_1_Idx"])
+    j1_mu2_idx = _as_index_array(arrays["Jpsi_1_mu_2_Idx"])
+    j2_mu1_idx = _as_index_array(arrays["Jpsi_2_mu_1_Idx"])
+    j2_mu2_idx = _as_index_array(arrays["Jpsi_2_mu_2_Idx"])
+
+    j1_a1 = _ancestor_idx_to_pdg(_safe_take_jagged(arrays["muGenMatchIdx"], j1_mu1_idx, -1), pdg, mother, 443)
+    j1_a2 = _ancestor_idx_to_pdg(_safe_take_jagged(arrays["muGenMatchIdx"], j1_mu2_idx, -1), pdg, mother, 443)
+    j2_a1 = _ancestor_idx_to_pdg(_safe_take_jagged(arrays["muGenMatchIdx"], j2_mu1_idx, -1), pdg, mother, 443)
+    j2_a2 = _ancestor_idx_to_pdg(_safe_take_jagged(arrays["muGenMatchIdx"], j2_mu2_idx, -1), pdg, mother, 443)
+    jpsi1_leg = ak.where((j1_a1 >= 0) & (j1_a1 == j1_a2), j1_a1, -1)
+    jpsi2_leg = ak.where((j2_a1 >= 0) & (j2_a1 == j2_a2), j2_a1, -1)
+
+    phi_a1 = _ancestor_idx_to_pdg(arrays["Phi_K_1_genMatchIdx"], pdg, mother, 333)
+    phi_a2 = _ancestor_idx_to_pdg(arrays["Phi_K_2_genMatchIdx"], pdg, mother, 333)
+    phi_leg = ak.where((phi_a1 >= 0) & (phi_a1 == phi_a2), phi_a1, -1)
+
+    matched_candidate = (
+        (phi_leg == phi_idx)
+        & (
+            ((jpsi1_leg == jpsi1_idx) & (jpsi2_leg == jpsi2_idx))
+            | ((jpsi1_leg == jpsi2_idx) & (jpsi2_leg == jpsi1_idx))
+        )
+    )
+    n_matched = ak.sum(matched_candidate, axis=1)
+
+    has_jpsi1_reco = ak.any((jpsi1_leg == jpsi1_idx) | (jpsi2_leg == jpsi1_idx), axis=1)
+    has_jpsi2_reco = ak.any((jpsi1_leg == jpsi2_idx) | (jpsi2_leg == jpsi2_idx), axis=1)
+    single_jpsi_reco = has_jpsi1_reco | has_jpsi2_reco
+    double_jpsi_reco = has_jpsi1_reco & has_jpsi2_reco
+    single_phi_reco = ak.any(phi_leg == phi_idx, axis=1)
+
+    j1_mu1_filter = _safe_take_jagged(arrays["muIsJpsiFilterMatch"], j1_mu1_idx, 0) != 0
+    j1_mu2_filter = _safe_take_jagged(arrays["muIsJpsiFilterMatch"], j1_mu2_idx, 0) != 0
+    j2_mu1_filter = _safe_take_jagged(arrays["muIsJpsiFilterMatch"], j2_mu1_idx, 0) != 0
+    j2_mu2_filter = _safe_take_jagged(arrays["muIsJpsiFilterMatch"], j2_mu2_idx, 0) != 0
+    j1_mu1_trig = _safe_take_jagged(arrays["muIsJpsiTrigMatch"], j1_mu1_idx, 0) != 0
+    j1_mu2_trig = _safe_take_jagged(arrays["muIsJpsiTrigMatch"], j1_mu2_idx, 0) != 0
+    j2_mu1_trig = _safe_take_jagged(arrays["muIsJpsiTrigMatch"], j2_mu1_idx, 0) != 0
+    j2_mu2_trig = _safe_take_jagged(arrays["muIsJpsiTrigMatch"], j2_mu2_idx, 0) != 0
+    candidate_hlt = (j1_mu1_filter & j1_mu2_filter) | (j2_mu1_filter & j2_mu2_filter) | (j1_mu1_trig & j1_mu2_trig) | (j2_mu1_trig & j2_mu2_trig)
+
+    jpsi1_y = abs(_scalar_rapidity_array(arrays["Jpsi_1_px"], arrays["Jpsi_1_py"], arrays["Jpsi_1_pz"], arrays["Jpsi_1_mass"]))
+    jpsi2_y = abs(_scalar_rapidity_array(arrays["Jpsi_2_px"], arrays["Jpsi_2_py"], arrays["Jpsi_2_pz"], arrays["Jpsi_2_mass"]))
+    jpsi_quality = (
+        (arrays["Jpsi_1_mass"] >= cfg.jpsi_mass_window[0])
+        & (arrays["Jpsi_1_mass"] <= cfg.jpsi_mass_window[1])
+        & (arrays["Jpsi_1_pt"] > cfg.jpsi_pt_min)
+        & (jpsi1_y < cfg.jpsi_abs_y_max)
+        & (arrays["Jpsi_1_VtxProb"] > cfg.jpsi_vtxprob_min)
+        & (arrays["Jpsi_2_mass"] >= cfg.jpsi_mass_window[0])
+        & (arrays["Jpsi_2_mass"] <= cfg.jpsi_mass_window[1])
+        & (arrays["Jpsi_2_pt"] > cfg.jpsi_pt_min)
+        & (jpsi2_y < cfg.jpsi_abs_y_max)
+        & (arrays["Jpsi_2_VtxProb"] > cfg.jpsi_vtxprob_min)
+    )
+    phi_quality = (
+        (arrays["Phi_mass"] >= cfg.phi_mass_window[0])
+        & (arrays["Phi_mass"] <= cfg.phi_mass_window[1])
+        & (arrays["Phi_pt"] > cfg.phi_pt_min)
+        & (arrays["Phi_VtxProb"] > cfg.phi_vtxprob_min)
+        & (arrays["Phi_K_1_pt"] > cfg.track_pt_min)
+        & (arrays["Phi_K_2_pt"] > cfg.track_pt_min)
+        & (abs(arrays["Phi_K_1_eta"]) < cfg.track_abs_eta_max)
+        & (abs(arrays["Phi_K_2_eta"]) < cfg.track_abs_eta_max)
+    )
+
+    mu_v1 = _safe_take_jagged(arrays["muVertexId"], j1_mu1_idx, -1)
+    mu_v2 = _safe_take_jagged(arrays["muVertexId"], j1_mu2_idx, -1)
+    mu_v3 = _safe_take_jagged(arrays["muVertexId"], j2_mu1_idx, -1)
+    mu_v4 = _safe_take_jagged(arrays["muVertexId"], j2_mu2_idx, -1)
+    kv1 = _as_index_array(arrays["Phi_K_1_vertexId"])
+    kv2 = _as_index_array(arrays["Phi_K_2_vertexId"])
+    same_vtx = (mu_v1 >= 0) & (mu_v1 == mu_v2) & (mu_v1 == mu_v3) & (mu_v1 == mu_v4) & (mu_v1 == kv1) & (mu_v1 == kv2)
+
+    if "TrigNames" in arrays.fields and "TrigRes" in arrays.fields:
+        hlt_name_match = ak.str.find_substring(arrays["TrigNames"], "HLT_Dimuon0_Jpsi") >= 0
+        hlt_name_match = hlt_name_match | (ak.str.find_substring(arrays["TrigNames"], "HLT_DoubleMu4_3_LowMass") >= 0)
+        hlt_event_path_or = ak.values_astype(ak.any(hlt_name_match & (arrays["TrigRes"] != 0), axis=1), np.int8)
+    else:
+        hlt_event_path_or = ak.zeros_like(has_full_gen, dtype=np.int8)
+
+    raw = {
+        "full_gen": has_full_gen,
+        "fiducial_acceptance": fiducial_acceptance,
+        "hlt_muon_matched": ak.any(matched_candidate & candidate_hlt, axis=1),
+        "single_jpsi_reco": single_jpsi_reco,
+        "double_jpsi_reco": double_jpsi_reco,
+        "single_phi_reco": single_phi_reco,
+        "triple_gen_matched_candidate": n_matched > 0,
+        "jpsi_quality": ak.any(matched_candidate & jpsi_quality, axis=1),
+        "phi_quality": ak.any(matched_candidate & phi_quality, axis=1),
+        "all6_same_recVtx": ak.any(matched_candidate & same_vtx, axis=1),
+        "Pri_fitValid": ak.any(matched_candidate & (_as_index_array(arrays["Pri_fitValid"]) == 1), axis=1),
+        "Pri_fitPass": ak.any(matched_candidate & (_as_index_array(arrays["Pri_fitPass"]) == 1), axis=1),
+        "Pri_assocPVPass": ak.any(matched_candidate & (_as_index_array(arrays["Pri_assocPVPass"]) == 1), axis=1),
+        "Pri_trackPVPass": ak.any(matched_candidate & (_as_index_array(arrays["Pri_trackPVPass"]) == 1), axis=1),
+    }
+
+    cumulative: dict[str, ak.Array] = {}
+    keep = ak.ones_like(has_full_gen, dtype=bool)
+    for step in EFFICIENCY_STEPS[:-1]:
+        keep = keep & raw[step]
+        cumulative[step] = ak.values_astype(keep, np.int8)
+    cumulative["final_nominal"] = ak.values_astype(
+        (cumulative["Pri_fitPass"] == 1)
+        & (cumulative["Pri_assocPVPass"] == 1)
+        & (cumulative["Pri_trackPVPass"] == 1),
+        np.int8,
+    )
+
+    full_mask = ak.to_numpy(has_full_gen)
+    entries = np.arange(entry_start, entry_start + n_events, dtype=np.int64)
+    event_data: dict[str, Any] = {
+        "sample": np.full(np.count_nonzero(full_mask), sample, dtype=object),
+        "source_file": np.full(np.count_nonzero(full_mask), source_file, dtype=object),
+        "entry": entries[full_mask],
+        "run": _to_numpy(arrays["runNum"], has_full_gen, 0).astype(np.int64),
+        "lumi": _to_numpy(arrays["lumiNum"], has_full_gen, 0).astype(np.int64),
+        "event": _to_numpy(arrays["evtNum"], has_full_gen, 0).astype(np.int64),
+        "n_candidates": ak.to_numpy(ak.num(arrays["Jpsi_1_mass"], axis=1)[has_full_gen]).astype(np.int64),
+        "n_gen_jpsi": ak.to_numpy(ak.num(jpsi_idx_sorted, axis=1)[has_full_gen]).astype(np.int64),
+        "n_gen_phi": ak.to_numpy(ak.num(phi_idx_sorted, axis=1)[has_full_gen]).astype(np.int64),
+        "n_triple_gen_matched_candidates": _to_numpy(n_matched, has_full_gen, 0).astype(np.int64),
+        "hlt_event_path_or": _to_numpy(hlt_event_path_or, has_full_gen, 0).astype(np.int8),
+    }
+    for step in EFFICIENCY_STEPS:
+        event_data[step] = _to_numpy(cumulative[step], has_full_gen, 0).astype(np.int8)
+
+    gen_data: dict[str, Any] = {
+        "sample": np.full(np.count_nonzero(full_mask), sample, dtype=object),
+        "source_file": np.full(np.count_nonzero(full_mask), source_file, dtype=object),
+        "entry": entries[full_mask],
+        "run": event_data["run"],
+        "lumi": event_data["lumi"],
+        "event": event_data["event"],
+        "jpsi_lead_gen_idx": _to_numpy(jpsi1_idx, has_full_gen, -1).astype(np.int64),
+        "jpsi_sublead_gen_idx": _to_numpy(jpsi2_idx, has_full_gen, -1).astype(np.int64),
+        "phi_gen_idx": _to_numpy(phi_idx, has_full_gen, -1).astype(np.int64),
+        "jpsi_lead_pt": _to_numpy(jpsi1_pt, has_full_gen, np.nan).astype(float),
+        "jpsi_lead_abs_y": np.abs(_to_numpy(jpsi1_eta, has_full_gen, np.nan).astype(float)),
+        "jpsi_sublead_pt": _to_numpy(jpsi2_pt, has_full_gen, np.nan).astype(float),
+        "jpsi_sublead_abs_y": np.abs(_to_numpy(jpsi2_eta, has_full_gen, np.nan).astype(float)),
+        "phi_pt": _to_numpy(phi_pt, has_full_gen, np.nan).astype(float),
+        "phi_abs_y": np.abs(_to_numpy(phi_eta, has_full_gen, np.nan).astype(float)),
+        "triple_pt": _to_numpy(triple_pt, has_full_gen, np.nan).astype(float),
+        "triple_abs_y": _to_numpy(triple_abs_y, has_full_gen, np.nan).astype(float),
+        "triple_mass": _to_numpy(triple_mass, has_full_gen, np.nan).astype(float),
+    }
+    return {
+        "gen_systems": pd.DataFrame(gen_data),
+        "event_step_flags": pd.DataFrame(event_data),
+    }
+
+
+def process_efficiency_file_vectorized(
+    path: str,
+    sample: str,
+    cfg: OfflineSelectionConfig,
+    tree_path: str = "mkcands/X_data",
+    step_size: str = "100 MB",
+) -> dict[str, pd.DataFrame]:
+    gen_parts: list[pd.DataFrame] = []
+    event_parts: list[pd.DataFrame] = []
+    iterator = uproot.iterate(
+        f"{path}:{tree_path}",
+        filter_name=list(EFFICIENCY_BRANCHES),
+        library="ak",
+        step_size=step_size,
+        report=True,
+    )
+    for arrays, report in iterator:
+        chunk = _process_efficiency_chunk_vectorized(arrays, path, sample, cfg, int(report.start))
+        if not chunk["gen_systems"].empty:
+            gen_parts.append(chunk["gen_systems"])
+        if not chunk["event_step_flags"].empty:
+            event_parts.append(chunk["event_step_flags"])
+    return {
+        "gen_systems": pd.concat(gen_parts, ignore_index=True) if gen_parts else pd.DataFrame(),
+        "event_step_flags": pd.concat(event_parts, ignore_index=True) if event_parts else pd.DataFrame(),
+    }
+
+
 def run_efficiency_for_sample(
     files: list[str],
     sample: str,
     cfg: OfflineSelectionConfig | None = None,
     tree_path: str = "mkcands/X_data",
+    backend: str = "vectorized",
+    step_size: str = "100 MB",
 ) -> dict[str, pd.DataFrame]:
     cfg = cfg or OfflineSelectionConfig()
     gen_parts: list[pd.DataFrame] = []
     event_parts: list[pd.DataFrame] = []
     for path in files:
-        tables = process_efficiency_file(path, sample, cfg, tree_path=tree_path)
+        if backend == "python-loop":
+            tables = process_efficiency_file(path, sample, cfg, tree_path=tree_path)
+        elif backend == "vectorized":
+            tables = process_efficiency_file_vectorized(path, sample, cfg, tree_path=tree_path, step_size=step_size)
+        else:
+            raise ValueError(f"Unsupported efficiency backend: {backend}")
         if not tables["gen_systems"].empty:
             gen_parts.append(tables["gen_systems"])
         if not tables["event_step_flags"].empty:

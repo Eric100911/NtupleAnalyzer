@@ -1,0 +1,44 @@
+# ==============================================================================
+# jjp_efficiency.sub - HTCondor submit file for sharded JJP efficiency jobs
+# ==============================================================================
+
+universe = vanilla
+executable = ./run_wrapper.sh
+
+SAMPLE = JJP_DPS2_CS
+SHARD_INDEX = 0
+SHARD_MANIFEST = manifest.json
+OUTPUT_DIR = /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency
+REMOTE_ACCESS_MODE = fallback
+EFFICIENCY_BACKEND = vectorized
+STAGE_RETRIES = 3
+COPY_TIMEOUT = 180
+WORKER_TIMEOUT = 180
+QUEUE_FILE = jjp_efficiency_queue.txt
+
+arguments = "run_jjp_efficiency_shard.sh --sample $(SAMPLE) --shard-index $(SHARD_INDEX) --shard-manifest $(SHARD_MANIFEST) --output-dir $(OUTPUT_DIR) --remote-access-mode $(REMOTE_ACCESS_MODE) --efficiency-backend $(EFFICIENCY_BACKEND) --stage-retries $(STAGE_RETRIES) --copy-timeout $(COPY_TIMEOUT) --worker-timeout $(WORKER_TIMEOUT) --skip-plots"
+
+log_dir = logs/jjp_efficiency
+output = $(log_dir)/jjp_efficiency_$(SAMPLE)_$(SHARD_INDEX)_$(Cluster)_$(Process).out
+error = $(log_dir)/jjp_efficiency_$(SAMPLE)_$(SHARD_INDEX)_$(Cluster)_$(Process).err
+log = $(log_dir)/jjp_efficiency_$(SAMPLE)_$(SHARD_INDEX)_$(Cluster)_$(Process).log
+
+request_memory = 8000
+request_cpus = 1
+request_disk = 5G
+
++JobFlavour = "tomorrow"
+
+should_transfer_files = NO
+
+getenv = False
+environment = "LCG_VIEW=/cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt ANALYZER_DIR=/afs/cern.ch/user/c/chiw/condor/NtupleAnalyzer"
+use_x509userproxy = True
+x509userproxy = /afs/cern.ch/user/c/chiw/condor/x509up
+
+notification = Error
+notify_user = chiw@cern.ch
+
+requirements = (OpSysAndVer =?= "AlmaLinux9")
+
+queue SAMPLE,SHARD_INDEX,SHARD_MANIFEST from $(QUEUE_FILE)

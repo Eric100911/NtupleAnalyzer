@@ -14,7 +14,7 @@ set -e
 # Configuration
 # ==============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ANALYZER_DIR="$(dirname "$SCRIPT_DIR")"
+ANALYZER_DIR="${ANALYZER_DIR:-$(dirname "$SCRIPT_DIR")}"
 LCG_VIEW="${LCG_VIEW:-/cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt}"
 
 # Parse wrapper arguments

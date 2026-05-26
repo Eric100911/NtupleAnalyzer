@@ -152,9 +152,43 @@ def unique_stage_name(source: str, global_index: int) -> str:
     return f"{global_index:06d}_{parent}_{base}"
 
 
+def remote_copy_command(source: str, destination: str) -> list[str]:
+    if shutil.which("gfal-copy"):
+        return ["gfal-copy", "-f", source, destination]
+    if shutil.which("xrdcp"):
+        return ["xrdcp", "-f", source, destination]
+    raise RuntimeError("No remote copy tool found. Install gfal-copy or xrdcp, or use --stage-mode never.")
+
+
+def remote_copy_environment(command: list[str]):
+    if command[0] != "gfal-copy" or os.environ.get("GFAL_PYTHONBIN"):
+        return None
+    if os.path.exists("/usr/bin/python3"):
+        env = os.environ.copy()
+        env["GFAL_PYTHONBIN"] = "/usr/bin/python3"
+        env.pop("PYTHONHOME", None)
+        env.pop("PYTHONPATH", None)
+        env.pop("LD_LIBRARY_PATH", None)
+        return env
+    return None
+
+
 def copy_remote_file(source: str, destination: str) -> None:
     ensure_parent_dir(destination)
-    subprocess.run(["xrdcp", "-f", source, destination], check=True)
+    attempts = 3
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        if os.path.exists(destination):
+            os.remove(destination)
+        try:
+            command = remote_copy_command(source, destination)
+            subprocess.run(command, check=True, env=remote_copy_environment(command))
+            return
+        except subprocess.CalledProcessError as exc:
+            last_error = exc
+            if attempt < attempts:
+                time.sleep(min(30, 2 ** (attempt - 1)))
+    raise RuntimeError(f"Failed to stage {source} after {attempts} attempt(s)") from last_error
 
 
 def stage_remote_batch(remote_files, batch_index: int, stage_root: str, copy_jobs: int, start_index: int):
@@ -340,8 +374,8 @@ def parse_args():
     parser.add_argument("--ups-muon-id", default="soft", choices=list(MUON_ID_BRANCHES), help="Muon ID for Upsilon daughters in JYP/JJY")
     parser.add_argument("--stage-mode", default="auto", choices=["auto", "always", "never"], help="Stage remote files to local scratch before processing")
     parser.add_argument("--stage-dir", default=None, help="Parent directory for staged local files, defaults to TMPDIR or /tmp")
-    parser.add_argument("--stage-batch-files", type=int, default=32, help="How many remote input files to xrdcp into local scratch before processing and cleanup")
-    parser.add_argument("--stage-copy-jobs", type=int, default=0, help="Parallel xrdcp workers used while filling a staged batch, defaults to min(4, jobs)")
+    parser.add_argument("--stage-batch-files", type=int, default=32, help="How many remote input files to copy into local scratch before processing and cleanup")
+    parser.add_argument("--stage-copy-jobs", type=int, default=0, help="Parallel remote-copy workers used while filling a staged batch, defaults to min(4, jobs)")
     parser.add_argument("--keep-staged-files", action="store_true", help="Keep staged inputs and chunk outputs for debugging")
     return parser.parse_args()
 
