@@ -52,6 +52,18 @@ echo "[INFO] Python: $(command -v python3)"
 echo "[INFO] ROOT: $(root-config --version 2>/dev/null || echo unavailable)"
 
 # ==============================================================================
+# Unpack runtime tarball (if present)
+# ==============================================================================
+if [ -n "$RUNTIME_TARBALL" ]; then
+    RUNTIME_DIR="$PWD/NtupleAnalyzer_runtime"
+    mkdir -p "$RUNTIME_DIR"
+    TARBALL_BASENAME="$(basename "$RUNTIME_TARBALL")"
+    echo "[INFO] Unpacking runtime tarball: $TARBALL_BASENAME"
+    tar -xzf "$TARBALL_BASENAME" -C "$RUNTIME_DIR"
+    ANALYZER_DIR="$RUNTIME_DIR"
+fi
+
+# ==============================================================================
 # Setup VOMS Proxy (for xrootd access)
 # ==============================================================================
 echo "[INFO] Setting up VOMS proxy..."

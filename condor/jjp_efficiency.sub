@@ -29,10 +29,12 @@ request_disk = 5G
 
 +JobFlavour = "tomorrow"
 
-should_transfer_files = NO
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files = $(RUNTIME_TARBALL)
 
 getenv = False
-environment = "LCG_VIEW=/cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt ANALYZER_DIR=/afs/cern.ch/user/c/chiw/condor/NtupleAnalyzer"
+environment = "LCG_VIEW=/cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt RUNTIME_TARBALL=$(RUNTIME_TARBALL)"
 use_x509userproxy = True
 x509userproxy = /afs/cern.ch/user/c/chiw/condor/x509up
 

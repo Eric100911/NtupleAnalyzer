@@ -256,8 +256,14 @@ submit_job() {
         msg_info "Preparing efficiency shards..."
         local QUEUE_FILE
         QUEUE_FILE="$("${PREPARE_CMD[@]}")"
+
+        msg_info "Building runtime tarball..."
+        local RUNTIME_TARBALL
+        RUNTIME_TARBALL="$(bash "${SCRIPT_DIR}/build_runtime_tarball.sh" | tail -1)"
+
         local CMD_PARTS=("condor_submit")
         CMD_PARTS+=("-append" "QUEUE_FILE = $QUEUE_FILE")
+        CMD_PARTS+=("-append" "RUNTIME_TARBALL = $RUNTIME_TARBALL")
         CMD_PARTS+=("-append" "OUTPUT_DIR = $OUTPUT_DIR")
         CMD_PARTS+=("-append" "REMOTE_ACCESS_MODE = $REMOTE_ACCESS_MODE")
         CMD_PARTS+=("-append" "EFFICIENCY_BACKEND = $EFFICIENCY_BACKEND")
@@ -270,6 +276,7 @@ submit_job() {
         echo ""
         msg_info "Submitting: $ANALYSIS_TYPE sample=${SAMPLE} files/job=${FILES_PER_JOB}"
         echo "Shard queue: $QUEUE_FILE"
+        echo "Runtime tarball: $RUNTIME_TARBALL"
         echo "Command: $CMD"
         if [ "$DRY_RUN" = true ]; then
             msg_warn "Dry run - not submitting"
