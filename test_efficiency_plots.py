@@ -61,11 +61,12 @@ def render_smoke_plots(derived_dir: Path, output_dir: Path, min_plot_total: int,
         written["stacked_jpsi_acceptance_pair"] = save_efficiency_heatmap_pair(
             output_dir / "qa_stacked_jpsi_acceptance_pair.png",
             stacked_acc_df,
-            title=r"stacked $J/\psi$ fiducial acceptance",
+            title=r"Stacked $J/\psi$ fiducial acceptance",
             xlabel=None,
             ylabel=None,
             plot_style_cfg=style,
             min_total=min_plot_total,
+            zlabel="Acceptance",
         )
     return written
 

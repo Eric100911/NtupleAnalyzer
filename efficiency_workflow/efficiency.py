@@ -108,8 +108,8 @@ EFFICIENCY_BRANCHES = sorted(
 
 @dataclass(frozen=True)
 class EfficiencyBinning:
-    jpsi_pt_edges: tuple[float, ...] = (0.0, 5.0, 10.0, 15.0, 20.0, 30.0, 50.0, 100.0)
-    phi_pt_edges: tuple[float, ...] = (0.0, 2.0, 4.0, 6.0, 10.0, 20.0, 50.0)
+    jpsi_pt_edges: tuple[float, ...] = (6.0, 10.0, 15.0, 20.0, 30.0, 50.0, 100.0)
+    phi_pt_edges: tuple[float, ...] = (4.0, 6.0, 10.0, 20.0, 50.0)
     object_abs_y_edges: tuple[float, ...] = (0.0, 0.6, 1.2, 1.8, 2.4)
     object_y_edges: tuple[float, ...] = (-2.4, -1.8, -1.2, -0.6, 0.0, 0.6, 1.2, 1.8, 2.4)
     triple_pt_edges: tuple[float, ...] = (0.0, 10.0, 20.0, 30.0, 50.0, 100.0, 200.0)
@@ -503,15 +503,33 @@ def _candidate_matches_system(event: dict[str, Any], cand_idx: int, system: GenS
 
 
 def _candidate_hlt_muon_matched(event: dict[str, Any], cand_idx: int) -> bool:
-    for slot1, slot2 in (("Jpsi_1_mu_1_Idx", "Jpsi_1_mu_2_Idx"), ("Jpsi_2_mu_1_Idx", "Jpsi_2_mu_2_Idx")):
-        idx1 = to_int_idx(_event_value(event, slot1, cand_idx, -1), -1)
-        idx2 = to_int_idx(_event_value(event, slot2, cand_idx, -1), -1)
-        filter1 = bool(to_int_idx(_event_value(event, "muIsJpsiFilterMatch", idx1, 0), 0))
-        filter2 = bool(to_int_idx(_event_value(event, "muIsJpsiFilterMatch", idx2, 0), 0))
-        trig1 = bool(to_int_idx(_event_value(event, "muIsJpsiTrigMatch", idx1, 0), 0))
-        trig2 = bool(to_int_idx(_event_value(event, "muIsJpsiTrigMatch", idx2, 0), 0))
-        if (filter1 and filter2) or (trig1 and trig2):
-            return True
+    j1_mu1 = to_int_idx(_event_value(event, "Jpsi_1_mu_1_Idx", cand_idx, -1), -1)
+    j1_mu2 = to_int_idx(_event_value(event, "Jpsi_1_mu_2_Idx", cand_idx, -1), -1)
+    j2_mu1 = to_int_idx(_event_value(event, "Jpsi_2_mu_1_Idx", cand_idx, -1), -1)
+    j2_mu2 = to_int_idx(_event_value(event, "Jpsi_2_mu_2_Idx", cand_idx, -1), -1)
+    f_matches = [
+        bool(to_int_idx(_event_value(event, "muIsJpsiFilterMatch", idx, 0), 0))
+        for idx in (j1_mu1, j1_mu2, j2_mu1, j2_mu2)
+    ]
+    t_matches = [
+        bool(to_int_idx(_event_value(event, "muIsJpsiTrigMatch", idx, 0), 0))
+        for idx in (j1_mu1, j1_mu2, j2_mu1, j2_mu2)
+    ]
+    n_filter = sum(f_matches)
+    n_trig = sum(t_matches)
+    j1_pair_filter = f_matches[0] and f_matches[1]
+    j2_pair_filter = f_matches[2] and f_matches[3]
+    j1_pair_trig = t_matches[0] and t_matches[1]
+    j2_pair_trig = t_matches[2] and t_matches[3]
+
+    # DoubleMu4_3_LowMass_v (2 muons): either J/psi dimuon pair matched
+    if j1_pair_filter or j2_pair_filter or j1_pair_trig or j2_pair_trig:
+        return True
+    # Dimuon0_Jpsi3p5_Muon2_v (3 muons): one J/psi pair + >=3 matched total
+    if (j1_pair_filter and n_filter >= 3) or (j2_pair_filter and n_filter >= 3):
+        return True
+    if (j1_pair_trig and n_trig >= 3) or (j2_pair_trig and n_trig >= 3):
+        return True
     return False
 
 
@@ -568,7 +586,7 @@ def _phi_quality(event: dict[str, Any], cand_idx: int, cfg: OfflineSelectionConf
     )
 
 
-def _event_path_or(event: dict[str, Any], patterns: tuple[str, ...] = ("HLT_Dimuon0_Jpsi", "HLT_DoubleMu4_3_LowMass")) -> bool:
+def _event_path_or(event: dict[str, Any], patterns: tuple[str, ...] = ("HLT_Dimuon0_Jpsi3p5_Muon2_v", "HLT_DoubleMu4_3_LowMass_v")) -> bool:
     names = event.get("TrigNames", [])
     results = event.get("TrigRes", [])
     for name, result in zip(names, results):
@@ -830,7 +848,31 @@ def _process_efficiency_chunk_vectorized(
     j1_mu2_trig = _safe_take_jagged(arrays["muIsJpsiTrigMatch"], j1_mu2_idx, 0) != 0
     j2_mu1_trig = _safe_take_jagged(arrays["muIsJpsiTrigMatch"], j2_mu1_idx, 0) != 0
     j2_mu2_trig = _safe_take_jagged(arrays["muIsJpsiTrigMatch"], j2_mu2_idx, 0) != 0
-    candidate_hlt = (j1_mu1_filter & j1_mu2_filter) | (j2_mu1_filter & j2_mu2_filter) | (j1_mu1_trig & j1_mu2_trig) | (j2_mu1_trig & j2_mu2_trig)
+    j1_pair_filter = j1_mu1_filter & j1_mu2_filter
+    j2_pair_filter = j2_mu1_filter & j2_mu2_filter
+    j1_pair_trig = j1_mu1_trig & j1_mu2_trig
+    j2_pair_trig = j2_mu1_trig & j2_mu2_trig
+    n_filter_matched = (
+        ak.values_astype(j1_mu1_filter, np.int8)
+        + ak.values_astype(j1_mu2_filter, np.int8)
+        + ak.values_astype(j2_mu1_filter, np.int8)
+        + ak.values_astype(j2_mu2_filter, np.int8)
+    )
+    n_trig_matched = (
+        ak.values_astype(j1_mu1_trig, np.int8)
+        + ak.values_astype(j1_mu2_trig, np.int8)
+        + ak.values_astype(j2_mu1_trig, np.int8)
+        + ak.values_astype(j2_mu2_trig, np.int8)
+    )
+    # DoubleMu4_3_LowMass_v (2 muons): either J/psi dimuon pair matched
+    # Dimuon0_Jpsi3p5_Muon2_v (3 muons): one J/psi pair + >=3 matched total
+    candidate_hlt = (
+        j1_pair_filter | j2_pair_filter | j1_pair_trig | j2_pair_trig
+        | (j1_pair_filter & (n_filter_matched >= 3))
+        | (j2_pair_filter & (n_filter_matched >= 3))
+        | (j1_pair_trig & (n_trig_matched >= 3))
+        | (j2_pair_trig & (n_trig_matched >= 3))
+    )
 
     jpsi1_y = abs(_scalar_rapidity_array(arrays["Jpsi_1_px"], arrays["Jpsi_1_py"], arrays["Jpsi_1_pz"], arrays["Jpsi_1_mass"]))
     jpsi2_y = abs(_scalar_rapidity_array(arrays["Jpsi_2_px"], arrays["Jpsi_2_py"], arrays["Jpsi_2_pz"], arrays["Jpsi_2_mass"]))
@@ -857,6 +899,37 @@ def _process_efficiency_chunk_vectorized(
         & (abs(arrays["Phi_K_2_eta"]) < cfg.track_abs_eta_max)
     )
 
+    # ── Best-by-score RECO candidate (quality only, no gen-match requirement) ──
+    candidate_quality = jpsi_quality & phi_quality
+    candidate_score = arrays["Jpsi_1_pt"] ** 2 + arrays["Jpsi_2_pt"] ** 2 + arrays["Phi_pt"] ** 2
+    best_idx = ak.argmax(ak.where(candidate_quality, candidate_score, -1.0), axis=1)
+    has_quality_candidate = ak.any(candidate_quality, axis=1)
+    n_quality_candidates = ak.sum(candidate_quality, axis=1)
+
+    cand_i = ak.local_index(phi_leg, axis=1)
+    at_best = cand_i == best_idx
+
+    def _best_or(val, default):
+        return ak.fill_none(ak.firsts(val[at_best]), default)
+
+    reco_best_phi_pt = ak.where(has_quality_candidate, _best_or(arrays["Phi_pt"], np.nan), np.nan)
+    reco_best_jpsi1_pt = ak.where(has_quality_candidate, _best_or(arrays["Jpsi_1_pt"], np.nan), np.nan)
+    reco_best_jpsi2_pt = ak.where(has_quality_candidate, _best_or(arrays["Jpsi_2_pt"], np.nan), np.nan)
+    reco_best_score = ak.where(has_quality_candidate, _best_or(candidate_score, np.nan), np.nan)
+    reco_best_phi_gen_idx = ak.values_astype(
+        ak.where(has_quality_candidate, _best_or(phi_leg, -1), -1), np.int64
+    )
+    reco_best_phi_matches_gen = ak.where(
+        has_quality_candidate,
+        _best_or(phi_leg == phi_idx, False),
+        False,
+    )
+    reco_best_is_gen_matched = ak.where(
+        has_quality_candidate,
+        _best_or(matched_candidate, False),
+        False,
+    )
+
     mu_v1 = _safe_take_jagged(arrays["muVertexId"], j1_mu1_idx, -1)
     mu_v2 = _safe_take_jagged(arrays["muVertexId"], j1_mu2_idx, -1)
     mu_v3 = _safe_take_jagged(arrays["muVertexId"], j2_mu1_idx, -1)
@@ -866,8 +939,8 @@ def _process_efficiency_chunk_vectorized(
     same_vtx = (mu_v1 >= 0) & (mu_v1 == mu_v2) & (mu_v1 == mu_v3) & (mu_v1 == mu_v4) & (mu_v1 == kv1) & (mu_v1 == kv2)
 
     if "TrigNames" in arrays.fields and "TrigRes" in arrays.fields:
-        hlt_name_match = ak.str.find_substring(arrays["TrigNames"], "HLT_Dimuon0_Jpsi") >= 0
-        hlt_name_match = hlt_name_match | (ak.str.find_substring(arrays["TrigNames"], "HLT_DoubleMu4_3_LowMass") >= 0)
+        hlt_name_match = ak.str.find_substring(arrays["TrigNames"], "HLT_Dimuon0_Jpsi3p5_Muon2_v") >= 0
+        hlt_name_match = hlt_name_match | (ak.str.find_substring(arrays["TrigNames"], "HLT_DoubleMu4_3_LowMass_v") >= 0)
         hlt_event_path_or = ak.values_astype(ak.any(hlt_name_match & (arrays["TrigRes"] != 0), axis=1), np.int8)
     else:
         hlt_event_path_or = ak.zeros_like(has_full_gen, dtype=np.int8)
@@ -923,6 +996,15 @@ def _process_efficiency_chunk_vectorized(
         event_data[step] = _to_numpy(cumulative[step], has_full_gen, 0).astype(np.int8)
     for key in ("fiducial_jpsi_lead", "fiducial_jpsi_sublead", "fiducial_phi"):
         event_data[key] = _to_numpy(raw[key], has_full_gen, 0).astype(np.int8)
+    # Reco best-candidate columns for response matrix classification
+    event_data["reco_best_phi_pt"] = _to_numpy(reco_best_phi_pt, has_full_gen, np.nan).astype(np.float64)
+    event_data["reco_best_jpsi1_pt"] = _to_numpy(reco_best_jpsi1_pt, has_full_gen, np.nan).astype(np.float64)
+    event_data["reco_best_jpsi2_pt"] = _to_numpy(reco_best_jpsi2_pt, has_full_gen, np.nan).astype(np.float64)
+    event_data["reco_best_score"] = _to_numpy(reco_best_score, has_full_gen, np.nan).astype(np.float64)
+    event_data["reco_best_phi_gen_idx"] = _to_numpy(reco_best_phi_gen_idx, has_full_gen, -1).astype(np.int64)
+    event_data["reco_best_phi_matches_gen"] = _to_numpy(reco_best_phi_matches_gen, has_full_gen, False).astype(bool)
+    event_data["reco_best_is_gen_matched"] = _to_numpy(reco_best_is_gen_matched, has_full_gen, False).astype(bool)
+    event_data["n_quality_candidates"] = _to_numpy(n_quality_candidates, has_full_gen, 0).astype(np.int64)
 
     gen_data: dict[str, Any] = {
         "sample": np.full(np.count_nonzero(full_mask), sample, dtype=object),

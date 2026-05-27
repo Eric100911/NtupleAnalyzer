@@ -8,7 +8,7 @@
 
 `JUP` 和 `JJU` 不作为 CLI channel 名称使用；外部 EOS/XRootD 目录里已有的 `JUP_*` 或 `JpsiUpsPhi` 字符串只是存储命名。
 
-主分析按 3 步运行：
+主分析分 4 条工作流：
 
 1. `merge_apply_cuts.py`
    合并全部 ntuple，做 assocPV 动力学 cut，事件内选最佳候选，输出带原始 branch 和统一 `sel_*` 标量分支的 ROOT 文件。
@@ -16,6 +16,8 @@
    对 cut 后样本做质量拟合和 `sPlot`，输出拟合图，并把 `signal_sw` 与各个 yield 的 sWeight 回写到 ROOT 文件。
 3. `plot_weighted_distributions.py`
    用 `signal_sw` 为权重绘制所有 `sel_*` 物理量分布，并合并原有关联图功能。
+4. Efficiency pipeline (`run_efficiency.py` → `merge_efficiency_shards.py` → `build_derived_efficiency.py`)
+   从 GEN 级 ntuple 直接计算 J/ψ+J/ψ+φ 的 acceptance 和逐步 conditional efficiency，输出 binned maps 和 CMS-style plots。
 
 所有默认输出都写到：
 
@@ -71,10 +73,13 @@ source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
 
 ## 核心脚本
 
-- [merge_apply_cuts.py](/afs/cern.ch/user/x/xcheng/condor/CMSSW_15_0_15/src/NtupleAnalyzer/merge_apply_cuts.py)
-- [fit_splot.py](/afs/cern.ch/user/x/xcheng/condor/CMSSW_15_0_15/src/NtupleAnalyzer/fit_splot.py)
-- [plot_weighted_distributions.py](/afs/cern.ch/user/x/xcheng/condor/CMSSW_15_0_15/src/NtupleAnalyzer/plot_weighted_distributions.py)
-- [ntuple_pipeline_common.py](/afs/cern.ch/user/x/xcheng/condor/CMSSW_15_0_15/src/NtupleAnalyzer/ntuple_pipeline_common.py)
+- [ntuple_pipeline_common.py](ntuple_pipeline_common.py) — shared channel config, input discovery, C++ RDataFrame helpers
+- [merge_apply_cuts.py](merge_apply_cuts.py) — merge + assocPV cuts + best-candidate selection
+- [fit_splot.py](fit_splot.py) — mass fit + sPlot sWeights
+- [plot_weighted_distributions.py](plot_weighted_distributions.py) — sWeight-weighted kinematic plots
+- [run_efficiency.py](run_efficiency.py) → [efficiency_workflow/](efficiency_workflow/) — JJP efficiency pipeline
+- [merge_efficiency_shards.py](merge_efficiency_shards.py) — merge sharded efficiency output
+- [build_derived_efficiency.py](build_derived_efficiency.py) — derived acceptance/conditional/per-object/stacked maps and plots
 
 ## 本地运行
 
@@ -116,38 +121,49 @@ JYP data 全流程：
 
 ## HTCondor
 
-HTCondor 只建议用于第 1 步 merge。
+HTCondor 用于第 1 步 merge 和第 4 步 efficiency。
 
-- MC merge:
-  - `condor/jjp_mc.sub`
-  - `condor/jyp_mc.sub`
-  - `condor/jjy_mc.sub`
-- DATA merge:
-  - `condor/jjp_data.sub`
-  - `condor/jyp_data.sub`
+**Merge:**
+- MC merge: `condor/jjp_mc.sub`, `condor/jyp_mc.sub`, `condor/jjy_mc.sub`
+- DATA merge: `condor/jjp_data.sub`, `condor/jyp_data.sub`
 
-提交辅助脚本仍然是：
+**Efficiency:**
+- `condor/jjp_efficiency.sub` — sharded efficiency jobs using runtime tarball
+
+提交辅助脚本：
 
 ```bash
 cd condor
 ./submit.sh jyp_mc --mode DPS_3
 ./submit.sh jjy_mc --mode all --jobs 1
 ./submit.sh jjp_data
+./submit.sh jjp_efficiency
 ```
 
 ## JJP efficiency
 
-JJP acceptance/efficiency uses full-GEN ntuples directly, not merged selected ROOT files. The first supported mode is `JpsiJpsiPhi`.
+The efficiency pipeline computes fiducial acceptance and per-step conditional efficiencies for J/ψ+J/ψ+φ events, binned in meson pT and rapidity. It works directly on GEN-level ntuples (not merged selected ROOT files). The first supported mode is `JpsiJpsiPhi`.
+
+### Pipeline stages
+
+1. **`run_efficiency.py`** — per-file efficiency shard: finds gen J/ψ+J/ψ+φ systems, matches reco candidates, computes cumulative step flags. Supports `--efficiency-backend vectorized|python-loop`, `--max-files N` for testing.
+2. **`merge_efficiency_shards.py`** — merges shard outputs into per-sample files.
+3. **`build_derived_efficiency.py`** — produces derived maps and plots from merged output.
+
+### Quick test
 
 ```bash
-./run_assoc_efficiency.sh \
-  --input-files root://cceos.ihep.ac.cn///eos/ihep/cms/store/user/xcheng/MC_Production_v3/output/JJP_DPS1/0/output_ntuple.root \
-  --sample-name JJP_DPS1_smoke \
-  --skip-plots \
-  --output-dir /tmp/chiw/jjp_eff_smoke
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+
+# One-file efficiency test
+python3 run_efficiency.py --analysis-mode JpsiJpsiPhi \
+  --output-dir /tmp/chiw/eff_test --max-files 1 --samples JJP_DPS2_CS --skip-plots
+
+# Build derived products
+python3 build_derived_efficiency.py --input-dir /tmp/chiw/eff_test
 ```
 
-Full discovery defaults to:
+### Full run
 
 ```bash
 ./run_assoc_efficiency.sh \
@@ -155,7 +171,54 @@ Full discovery defaults to:
   --output-dir /tmp/chiw/jjp_efficiency_v1
 ```
 
-Outputs include `gen_systems.parquet`, `event_step_flags.parquet`, `efficiency_counts.parquet`, `efficiency_maps.parquet`, `cutflow.csv`, per-sample manifests, and optional CMS-style efficiency plots.
+### Output products
+
+**Per-file** (`<sample>/`):
+- `efficiency_maps.parquet` — cumulative step counts by (pT, y) bin
+- `gen_systems.parquet` — gen-level kinematics per event + `n_gen_jpsi`, `n_gen_phi`
+- `event_step_flags.parquet` — per-event step flags, per-object fiducial flags, best-reco-candidate columns
+- `cutflow.csv` — step-by-step cutflow
+
+**Derived** (`<sample>/derived/`):
+- `acceptance_maps.parquet` / `.csv` — fiducial_acceptance / full_gen
+- `conditional_efficiency_maps.parquet` / `.csv` — per-step conditional (each step / previous)
+- `per_object_acceptance_maps.parquet` / `.csv` — per-object decomposed acceptance
+- `stacked_jpsi_acceptance_maps.parquet` / `.csv` — lead+sublead combined
+- `stacked_jpsi_efficiency_maps.parquet` / `.csv` — lead+sublead per-step
+- `plots/` — CMS-style heatmaps (see AGENTS.md for full directory structure)
+
+### Binning
+
+| Axis | Edges |
+|------|-------|
+| J/ψ pT | 6.0, 10.0, 15.0, 20.0, 30.0, 50.0, 100.0 GeV |
+| φ pT | 4.0, 6.0, 10.0, 20.0, 50.0 GeV |
+| \|y\| | 0.0, 0.6, 1.2, 1.8, 2.4 |
+
+### HLT triggers
+
+- `HLT_Dimuon0_Jpsi3p5_Muon2_v` — 3 muons (dimuon J/ψ + extra muon pT > 2)
+- `HLT_DoubleMu4_3_LowMass_v` — 2 muons (pT > 4 and 3 GeV)
+
+The `hlt_muon_matched` step requires either a J/ψ dimuon pair matched (2-muon case) or one J/ψ pair + ≥3 of 4 muons matched (3-muon case).
+
+### Candidate handling
+
+**Data:** single best candidate per event by `sqrt(pt1² + pt2² + pt3²)` score.  
+**MC efficiency:** "any matched candidate" OR logic — event passes if ≥1 reco candidate matches the gen system.  
+**Gen system:** 2 highest-pT J/ψ + 1 highest-pT φ (extra gen φ mesons present in ~1.8% of events).  
+**Response matrix:** best-by-quality-score candidate stored in `reco_best_*` columns for migration studies.
+
+### Condor
+
+HTCondor sharded efficiency jobs:
+```bash
+# Prepare shard lists
+python3 prepare_efficiency_shards.py --samples JJP_DPS2_CS --shards-per-sample 200
+
+# Submit
+cd condor && ./submit.sh jjp_efficiency
+```
 
 ## 技术实现
 
@@ -174,32 +237,32 @@ Outputs include `gen_systems.parquet`, `event_step_flags.parquet`, `efficiency_c
 
 ## 本地小规模测试
 
-已在本地完成以下链路测试：
+Merge / fit / plot 链路：
 
 ```bash
-python3 merge_apply_cuts.py --channel JYP --dataset mc --sample DPS_3 \
-  --input-dir /afs/cern.ch/user/x/xcheng/condor/JUP_DPS3_0_output_ntuple.root \
-  -n 200 -j 1 -o /tmp/xcheng/jyp_mc_test_selected.root
-
-python3 merge_apply_cuts.py --channel JJP --dataset mc --sample DPS_2 \
-  --input-dir /afs/cern.ch/user/x/xcheng/condor/JJP_DPS2_0_output_ntuple.root \
-  -n 200 -j 1 -o /tmp/xcheng/jjp_mc_test_selected.root
-
 python3 merge_apply_cuts.py --channel JYP --dataset data \
-  --input-dir /eos/user/x/xcheng/JpsiUpsPhi/merged_rootNtuple/ParkingDoubleMuonLowMass0_Run2022Cv1.root \
-  -n 10000 -j 1 -o /tmp/xcheng/jyp_data_test_selected.root
+  -i /eos/user/c/chiw/JpsiUpsPhi/merged_rootNtuple/ParkingDoubleMuonLowMass0_Run2022Cv1.root \
+  -n 10000 -j 1 -o /tmp/chiw/jyp_data_test_selected.root
 
 python3 fit_splot.py --channel JYP --dataset data \
-  -i /tmp/xcheng/jyp_data_test_selected.root \
-  -o /tmp/xcheng/jyp_data_test_weighted_v2.root \
-  --plot-dir /tmp/xcheng/jyp_fit_plots_v2 -j 1
+  -i /tmp/chiw/jyp_data_test_selected.root \
+  -o /tmp/chiw/jyp_data_test_weighted.root \
+  --plot-dir /tmp/chiw/jyp_fit_plots -j 1
 
 python3 plot_weighted_distributions.py --channel JYP --dataset data \
-  -i /tmp/xcheng/jyp_data_test_weighted.root \
-  -o /tmp/xcheng/jyp_weighted_plots -j 1
+  -i /tmp/chiw/jyp_data_test_weighted.root \
+  -o /tmp/chiw/jyp_weighted_plots -j 1
 ```
 
-说明：
+Efficiency 链路：
 
-- merge 阶段在 data/MC 小样本上都已跑通。
-- fit 和 plot 链路已经打通，但在小统计样本上 `RooFit` 仍会出现明显的数值 warning，正式跑大样本时需要再根据实际统计量调一轮初值和参数范围。
+```bash
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+
+# Run single-file efficiency test
+python3 run_efficiency.py --analysis-mode JpsiJpsiPhi \
+  --output-dir test_output --max-files 1 --samples JJP_DPS2_CS
+
+# Build derived products + plots
+python3 build_derived_efficiency.py --input-dir test_output
+```

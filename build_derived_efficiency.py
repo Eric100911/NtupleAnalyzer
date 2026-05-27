@@ -9,6 +9,8 @@ import pandas as pd
 from efficiency_workflow.config import CmsPlotStyleConfig
 from efficiency_workflow.efficiency import (
     EfficiencyBinning,
+    build_acceptance_maps,
+    build_conditional_maps,
     build_per_object_acceptance_maps,
     build_stacked_jpsi_acceptance_maps,
     build_stacked_jpsi_efficiency_maps,
@@ -42,6 +44,11 @@ def build_derived_for_sample(
     counts_df = pd.read_parquet(counts_path)
     print(f"[{sample}]   {len(counts_df)} rows across {counts_df['map_type'].nunique()} map types")
 
+    print(f"[{sample}] Building acceptance and conditional maps from efficiency_maps ...")
+    acc_df = build_acceptance_maps(counts_df)
+    cond_df = build_conditional_maps(counts_df)
+    print(f"[{sample}]   acceptance rows: {len(acc_df)}, conditional rows: {len(cond_df)}")
+
     derived_dir = ensure_dir(output_dir / sample / "derived")
     poa_df = pd.DataFrame()
     stacked_acc_df = pd.DataFrame()
@@ -74,12 +81,20 @@ def build_derived_for_sample(
         write_parquet(stacked_eff_df, derived_dir / "stacked_jpsi_efficiency_maps.parquet")
         stacked_eff_df.to_csv(derived_dir / "stacked_jpsi_efficiency_maps.csv", index=False)
         print(f"[{sample}]   stacked J/psi efficiency rows: {len(stacked_eff_df)}")
+    if not acc_df.empty:
+        write_parquet(acc_df, derived_dir / "acceptance_maps.parquet")
+        acc_df.to_csv(derived_dir / "acceptance_maps.csv", index=False)
+        print(f"[{sample}]   acceptance rows: {len(acc_df)}")
+    if not cond_df.empty:
+        write_parquet(cond_df, derived_dir / "conditional_efficiency_maps.parquet")
+        cond_df.to_csv(derived_dir / "conditional_efficiency_maps.csv", index=False)
+        print(f"[{sample}]   conditional efficiency rows: {len(cond_df)}")
 
     plots: dict[str, Path] = {}
     poa_plots: dict[str, Path] = {}
     qa_plots: dict[str, Path] = {}
     if not skip_plots:
-        from efficiency_workflow.plotting import write_per_object_acceptance_plots, write_stacked_jpsi_plots
+        from efficiency_workflow.plotting import write_derived_plots, write_per_object_acceptance_plots, write_stacked_jpsi_plots
 
         if not poa_df.empty:
             print(f"[{sample}] Generating per-object acceptance plots ...")
@@ -125,11 +140,28 @@ def build_derived_for_sample(
                 }
             )
             print(f"[{sample}]   {len(plots)} stacked J/psi plots written")
+        derived_plots: dict[str, Path] = {}
+        if not acc_df.empty or not cond_df.empty:
+            print(f"[{sample}] Generating derived acceptance/conditional plots ...")
+            derived_plots = write_derived_plots(
+                derived_dir / "plots",
+                acc_df,
+                cond_df,
+                plot_style_cfg=CmsPlotStyleConfig(is_data=False),
+                min_total=min_plot_total,
+            )
+            print(f"[{sample}]   {len(derived_plots)} derived plots written")
 
     manifest: dict[str, object] = {
         "source": str(sample_dir.resolve()),
         "outputs": {},
     }
+    if not acc_df.empty:
+        manifest["outputs"]["acceptance_parquet"] = "acceptance_maps.parquet"
+        manifest["outputs"]["acceptance_csv"] = "acceptance_maps.csv"
+    if not cond_df.empty:
+        manifest["outputs"]["conditional_efficiency_parquet"] = "conditional_efficiency_maps.parquet"
+        manifest["outputs"]["conditional_efficiency_csv"] = "conditional_efficiency_maps.csv"
     if not poa_df.empty:
         manifest["outputs"]["per_object_acceptance_parquet"] = "per_object_acceptance_maps.parquet"
         manifest["outputs"]["per_object_acceptance_csv"] = "per_object_acceptance_maps.csv"
@@ -143,6 +175,8 @@ def build_derived_for_sample(
     if not stacked_eff_df.empty:
         manifest["outputs"]["stacked_jpsi_efficiency_parquet"] = "stacked_jpsi_efficiency_maps.parquet"
         manifest["outputs"]["stacked_jpsi_efficiency_csv"] = "stacked_jpsi_efficiency_maps.csv"
+    if derived_plots:
+        manifest["outputs"]["derived_plots"] = {key: str(path.relative_to(derived_dir)) for key, path in derived_plots.items()}
     if plots:
         manifest["outputs"]["stacked_jpsi_plots"] = {key: str(path.relative_to(derived_dir)) for key, path in plots.items()}
     if qa_plots:
