@@ -49,6 +49,29 @@ def _require_mplhep():
     return hep
 
 
+_STEP_DISPLAY_NAMES = {
+    "full_gen": "Full GEN",
+    "fiducial_acceptance": "Fiducial acceptance",
+    "hlt_muon_matched": "HLT muon matching",
+    "single_jpsi_reco": r"Single $J/\psi$ reco.",
+    "double_jpsi_reco": r"Double $J/\psi$ reco.",
+    "single_phi_reco": r"$\phi$ reco.",
+    "triple_gen_matched_candidate": "Triple candidate matching",
+    "jpsi_quality": r"$J/\psi$ quality",
+    "phi_quality": r"$\phi$ quality",
+    "all6_same_recVtx": "Common vertex",
+    "Pri_fitValid": "Fit validity",
+    "Pri_fitPass": "Fit quality",
+    "Pri_assocPVPass": "PV association",
+    "Pri_trackPVPass": "Track PV",
+    "final_nominal": "Final nominal",
+}
+
+
+def _step_display_name(step: str) -> str:
+    return _STEP_DISPLAY_NAMES.get(step, step.replace("_", " "))
+
+
 def default_fit_plot_specs(
     fit_branches: tuple[str, ...] | list[str],
     backend: str,
@@ -458,6 +481,7 @@ def save_efficiency_heatmap_pair(
     ylabel: str,
     plot_style_cfg: CmsPlotStyleConfig,
     min_total: int = 1,
+    zlabel: str = "Efficiency",
 ) -> Path:
     return save_efficiency_heatmap(
         output_path,
@@ -469,6 +493,7 @@ def save_efficiency_heatmap_pair(
         min_total=min_total,
         include_uncertainty=True,
         show_title=True,
+        zlabel=zlabel,
     )
 
 
@@ -483,6 +508,7 @@ def save_efficiency_heatmap(
     include_uncertainty: bool = False,
     show_title: bool = False,
     annotate: bool = True,
+    zlabel: str = "Efficiency",
 ) -> Path:
     hep = _require_mplhep()
     hep.style.use("CMS")
@@ -494,7 +520,7 @@ def save_efficiency_heatmap(
     style = {
         "font.size": 12,
         "axes.titlesize": 15,
-        "axes.labelsize": 15,
+        "axes.labelsize": 12,
         "xtick.labelsize": 12,
         "ytick.labelsize": 12,
     }
@@ -502,7 +528,7 @@ def save_efficiency_heatmap(
         if include_uncertainty:
             fig, axes = plt.subplots(1, 2, figsize=(11.6, 5.3), constrained_layout=False)
             fig.subplots_adjust(left=0.08, right=0.95, bottom=0.15, top=0.78, wspace=0.42)
-            _draw_heatmap_panel(fig, axes[0], frame, "efficiency", "Efficiency", annotate, False)
+            _draw_heatmap_panel(fig, axes[0], frame, "efficiency", zlabel, annotate, False)
             _draw_heatmap_panel(fig, axes[1], frame, "err_sym", "Sym. CP uncertainty", False, False)
             for ax in axes:
                 ax.set_xlabel(xlabel)
@@ -513,7 +539,7 @@ def save_efficiency_heatmap(
         else:
             fig, ax = plt.subplots(figsize=(6.9, 5.4), constrained_layout=False)
             fig.subplots_adjust(left=0.14, right=0.84, bottom=0.14, top=0.82)
-            _draw_heatmap_panel(fig, ax, frame, "efficiency", "Efficiency", annotate, False)
+            _draw_heatmap_panel(fig, ax, frame, "efficiency", zlabel, annotate, False)
             ax.set_xlabel(xlabel)
             ax.set_ylabel(ylabel)
             if show_title and title:
@@ -539,28 +565,32 @@ def write_efficiency_plots(
     object_df = counts_df.loc[counts_df["map_type"] == "object_2d"].copy()
     for (obj, step), frame in object_df.groupby(["object", "step"], dropna=False):
         path = output_dir / f"object2d_{obj}_{step}.png"
+        step_label = _step_display_name(step)
         written[f"object2d.{obj}.{step}"] = save_efficiency_heatmap_pair(
             path,
             frame,
-            title=f"{obj} {step}",
+            title=f"{_object_label(obj)} {step_label}",
             xlabel=r"$p_{\mathrm{T}}$ [GeV]",
             ylabel=r"$|y|$",
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
+            zlabel=step_label if step in _STEP_DISPLAY_NAMES else "Efficiency",
         )
 
     corr_df = counts_df.loc[counts_df["map_type"] == "correlated_3d"].copy()
     for (step, z_bin), frame in corr_df.groupby(["step", "z_bin"], dropna=False):
         z_label = str(frame["z_label"].dropna().iloc[0]) if not frame["z_label"].dropna().empty else str(z_bin)
+        step_label = _step_display_name(step)
         path = output_dir / f"corr3d_{step}_phiPt_{z_bin}.png"
         written[f"corr3d.{step}.{z_bin}"] = save_efficiency_heatmap_pair(
             path,
             frame,
-            title=rf"{step}, $p_{{T}}(\phi)$ = {z_label} GeV",
+            title=rf"{step_label}, $p_{{T}}(\phi)$ = {z_label} GeV",
             xlabel=r"$p_{\mathrm{T}}(J/\psi_{\mathrm{lead}})$ [GeV]",
             ylabel=r"$p_{\mathrm{T}}(J/\psi_{\mathrm{sublead}})$ [GeV]",
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
+            zlabel=step_label if step in _STEP_DISPLAY_NAMES else "Efficiency",
         )
     return written
 
@@ -580,14 +610,16 @@ def write_derived_plots(
     obj_acc = acc_df.loc[acc_df["map_type"] == "object_2d"].copy()
     for obj, frame in obj_acc.groupby("object", dropna=False):
         path = acc_plot_dir / f"object2d_{obj}_fiducial_acceptance.png"
+        obj_label = _object_label(obj)
         written[f"object2d.{obj}.fiducial_acceptance"] = save_efficiency_heatmap_pair(
             path,
             frame,
-            title=f"{obj} fiducial_acceptance",
+            title=f"{obj_label} fiducial acceptance",
             xlabel=r"$p_{\mathrm{T}}$ [GeV]",
             ylabel=r"$|y|$",
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
+            zlabel="Acceptance",
         )
 
     cond_dir = output_dir / "conditional"
@@ -597,28 +629,33 @@ def write_derived_plots(
     ].copy()
     for (obj, step), frame in obj_df.groupby(["object", "step"], dropna=False):
         path = cond_dir / f"object2d_{obj}_{step}.png"
+        obj_label = _object_label(obj)
+        step_label = _step_display_name(step)
         written[f"object2d.{obj}.{step}"] = save_efficiency_heatmap_pair(
             path,
             frame,
-            title=f"{obj} {step}",
+            title=f"{obj_label} {step_label}",
             xlabel=r"$p_{\mathrm{T}}$ [GeV]",
             ylabel=r"$|y|$",
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
+            zlabel=step_label if step in _STEP_DISPLAY_NAMES else "Efficiency",
         )
 
     corr_df = cond_df.loc[cond_df["map_type"] == "correlated_3d"].copy()
     for (step, z_bin), frame in corr_df.groupby(["step", "z_bin"], dropna=False):
         z_label = str(frame["z_label"].dropna().iloc[0]) if not frame["z_label"].dropna().empty else str(z_bin)
+        step_label = _step_display_name(step)
         path = cond_dir / f"corr3d_{step}_phiPt_{z_bin}.png"
         written[f"corr3d.{step}.{z_bin}"] = save_efficiency_heatmap_pair(
             path,
             frame,
-            title=rf"{step}, $p_{{T}}(\phi)$ = {z_label} GeV",
+            title=rf"{step_label}, $p_{{T}}(\phi)$ = {z_label} GeV",
             xlabel=r"$p_{\mathrm{T}}(J/\psi_{\mathrm{lead}})$ [GeV]",
             ylabel=r"$p_{\mathrm{T}}(J/\psi_{\mathrm{sublead}})$ [GeV]",
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
+            zlabel=step_label if step in _STEP_DISPLAY_NAMES else "Efficiency",
         )
     return written
 
@@ -638,16 +675,18 @@ def write_per_object_acceptance_plots(
     obj_df = poa_df.loc[poa_df["map_type"].isin(["object_2d", "object_acceptance_2d"])].copy()
     for obj, frame in obj_df.groupby("object", dropna=False):
         path = output_dir / f"object2d_{obj}_fiducial_acceptance.png"
+        obj_label = _object_label(obj)
         written[f"object2d.{obj}.fiducial_acceptance"] = save_efficiency_heatmap(
             path,
             frame,
-            title=f"{obj} per-object fiducial acceptance",
+            title=f"{obj_label} per-object fiducial acceptance",
             xlabel=None,
             ylabel=None,
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
             include_uncertainty=include_uncertainty,
             show_title=include_uncertainty,
+            zlabel="Acceptance",
         )
     return written
 
@@ -667,28 +706,31 @@ def write_stacked_jpsi_plots(
         written["stacked_jpsi.fiducial_acceptance"] = save_efficiency_heatmap(
             path,
             stacked_acceptance_df,
-            title=r"stacked $J/\psi$ fiducial acceptance",
+            title=r"Stacked $J/\psi$ fiducial acceptance",
             xlabel=None,
             ylabel=None,
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
             include_uncertainty=include_uncertainty,
             show_title=include_uncertainty,
+            zlabel="Acceptance",
         )
     if not stacked_efficiency_df.empty:
         for step, frame in stacked_efficiency_df.groupby("step", dropna=False):
             if step in {"full_gen", "fiducial_acceptance"}:
                 continue
+            step_label = _step_display_name(step)
             path = output_dir / f"stacked_jpsi_{step}.png"
             written[f"stacked_jpsi.{step}"] = save_efficiency_heatmap(
                 path,
                 frame,
-                title=rf"stacked $J/\psi$ {step}",
+                title=rf"Stacked $J/\psi$ {step_label}",
                 xlabel=None,
                 ylabel=None,
                 plot_style_cfg=plot_style_cfg,
                 min_total=min_total,
                 include_uncertainty=include_uncertainty,
                 show_title=include_uncertainty,
+                zlabel=step_label if step in _STEP_DISPLAY_NAMES else "Efficiency",
             )
     return written
