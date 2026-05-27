@@ -17,6 +17,24 @@ from .config import OfflineSelectionConfig
 from .truth import first_ancestor_idx, to_int_idx
 
 
+# ── Per-object efficiency step schema (Efficiency_scheme.md) ──
+
+PER_JPSI_STEPS = ("fiducial", "muonRECO", "muonID", "dimuon")
+PER_PHI_STEPS = ("fiducial", "kaonRECO", "kaonID", "dikaon")
+
+EVENT_STEPS = (
+    "hlt_event",
+    "four_muon_vtx",
+    "Pri_fitValid",
+    "Pri_fitPass",
+    "Pri_assocPVPass",
+    "Pri_trackPVPass",
+)
+
+# Derived / convenience flags
+DERIVED_FLAGS = ("full_gen", "s_cand")
+
+# Keep old names as aliases during transition; removed once all callers are updated.
 EFFICIENCY_STEPS = (
     "full_gen",
     "fiducial_acceptance",
@@ -42,6 +60,17 @@ CORRELATED_MAP_STEPS = (
     "Pri_fitPass",
     "final_nominal",
 )
+
+
+def per_object_step_columns() -> list[str]:
+    """Return the 12 per-object step flag column names."""
+    cols: list[str] = []
+    for prefix in ("jpsi_lead", "jpsi_sublead"):
+        for suffix in PER_JPSI_STEPS:
+            cols.append(f"{prefix}_{suffix}")
+    for suffix in PER_PHI_STEPS:
+        cols.append(f"phi_{suffix}")
+    return cols
 
 EFFICIENCY_BRANCHES = sorted(
     {
@@ -586,6 +615,53 @@ def _phi_quality(event: dict[str, Any], cand_idx: int, cfg: OfflineSelectionConf
     )
 
 
+def _phi_kaonID(event: dict[str, Any], cand_idx: int, cfg: OfflineSelectionConfig) -> bool:
+    """Kaon track-level cuts only (no phi mass/pt/vtxProb)."""
+    return bool(
+        float(_event_value(event, "Phi_K_1_pt", cand_idx, -1.0)) > cfg.track_pt_min
+        and float(_event_value(event, "Phi_K_2_pt", cand_idx, -1.0)) > cfg.track_pt_min
+        and abs(float(_event_value(event, "Phi_K_1_eta", cand_idx, math.nan))) < cfg.track_abs_eta_max
+        and abs(float(_event_value(event, "Phi_K_2_eta", cand_idx, math.nan))) < cfg.track_abs_eta_max
+    )
+
+
+def _candidate_four_muon_vtx(event: dict[str, Any], cand_idx: int) -> bool:
+    """All 4 muons share the same vertex ID (>=0)."""
+    v1 = to_int_idx(_event_value(event, "muVertexId", to_int_idx(_event_value(event, "Jpsi_1_mu_1_Idx", cand_idx, -1), -1), -1), -1)
+    v2 = to_int_idx(_event_value(event, "muVertexId", to_int_idx(_event_value(event, "Jpsi_1_mu_2_Idx", cand_idx, -1), -1), -1), -1)
+    v3 = to_int_idx(_event_value(event, "muVertexId", to_int_idx(_event_value(event, "Jpsi_2_mu_1_Idx", cand_idx, -1), -1), -1), -1)
+    v4 = to_int_idx(_event_value(event, "muVertexId", to_int_idx(_event_value(event, "Jpsi_2_mu_2_Idx", cand_idx, -1), -1), -1), -1)
+    return v1 >= 0 and v1 == v2 == v3 == v4
+
+
+def _candidate_muonID_jpsi(event: dict[str, Any], cand_idx: int, prefix: str) -> bool:
+    """Both muons of J/psi candidate pass soft-muon ID."""
+    mu1_idx = to_int_idx(_event_value(event, f"{prefix}_mu_1_Idx", cand_idx, -1), -1)
+    mu2_idx = to_int_idx(_event_value(event, f"{prefix}_mu_2_Idx", cand_idx, -1), -1)
+    if mu1_idx < 0 or mu2_idx < 0:
+        return False
+    id1 = to_int_idx(_event_value(event, "muIsPatSoftMuon", mu1_idx, 0), 0)
+    id2 = to_int_idx(_event_value(event, "muIsPatSoftMuon", mu2_idx, 0), 0)
+    return bool(id1 != 0 and id2 != 0)
+
+
+def _jpsi_quality_single(event: dict[str, Any], cand_idx: int, prefix: str, cfg: OfflineSelectionConfig) -> bool:
+    """Quality cuts for a single J/psi candidate."""
+    mass = float(_event_value(event, f"{prefix}_mass", cand_idx, math.nan))
+    pt = float(_event_value(event, f"{prefix}_pt", cand_idx, -1.0))
+    vtxprob = float(_event_value(event, f"{prefix}_VtxProb", cand_idx, -1.0))
+    px = float(_event_value(event, f"{prefix}_px", cand_idx, 0.0))
+    py = float(_event_value(event, f"{prefix}_py", cand_idx, 0.0))
+    pz = float(_event_value(event, f"{prefix}_pz", cand_idx, 0.0))
+    y = _scalar_rapidity(px, py, pz, mass)
+    return bool(
+        cfg.jpsi_mass_window[0] <= mass <= cfg.jpsi_mass_window[1]
+        and pt > cfg.jpsi_pt_min
+        and abs(y) < cfg.jpsi_abs_y_max
+        and vtxprob > cfg.jpsi_vtxprob_min
+    )
+
+
 def _event_path_or(event: dict[str, Any], patterns: tuple[str, ...] = ("HLT_Dimuon0_Jpsi3p5_Muon2_v", "HLT_DoubleMu4_3_LowMass_v")) -> bool:
     names = event.get("TrigNames", [])
     results = event.get("TrigRes", [])
@@ -607,46 +683,111 @@ def build_event_efficiency_row(
         return None, None
 
     n_candidates = len(event.get("Jpsi_1_mass", []))
-    raw = {step: False for step in EFFICIENCY_STEPS}
-    raw["full_gen"] = True
-    raw["fiducial_acceptance"] = gen_system_fiducial(event, system, cfg)
-    raw["fiducial_jpsi_lead"] = _daughter_fiducial(event, system.jpsi_lead, cfg, "muon")
-    raw["fiducial_jpsi_sublead"] = _daughter_fiducial(event, system.jpsi_sublead, cfg, "muon")
-    raw["fiducial_phi"] = _daughter_fiducial(event, system.phi, cfg, "kaon")
-    raw["hlt_event_path_or"] = _event_path_or(event)
 
-    matched_candidates = [cand_idx for cand_idx in range(n_candidates) if _candidate_matches_system(event, cand_idx, system)]
-    jpsi_reco_indices: set[int] = set()
-    phi_reco = False
+    # ── Gen-level fiducial flags ──
+    fiducial_jpsi_lead = _daughter_fiducial(event, system.jpsi_lead, cfg, "muon")
+    fiducial_jpsi_sublead = _daughter_fiducial(event, system.jpsi_sublead, cfg, "muon")
+    fiducial_phi = _daughter_fiducial(event, system.phi, cfg, "kaon")
+
+    # ── Per-object matching: check ALL candidates ──
+    matched_candidates: list[int] = []
+    lead_muonRECO = False
+    sublead_muonRECO = False
+    lead_muonID = False
+    sublead_muonID = False
+    lead_dimuon = False
+    sublead_dimuon = False
+    phi_kaonRECO_flag = False
+    phi_kaonID_flag = False
+    phi_dikaon_flag = False
+
     for cand_idx in range(n_candidates):
         legs = _candidate_leg_indices(event, cand_idx)
-        if legs["jpsi1"] in {system.jpsi_lead.idx, system.jpsi_sublead.idx}:
-            jpsi_reco_indices.add(legs["jpsi1"])
-        if legs["jpsi2"] in {system.jpsi_lead.idx, system.jpsi_sublead.idx}:
-            jpsi_reco_indices.add(legs["jpsi2"])
-        phi_reco = phi_reco or legs["phi"] == system.phi.idx
 
-    raw["single_jpsi_reco"] = bool(jpsi_reco_indices)
-    raw["double_jpsi_reco"] = len(jpsi_reco_indices) >= 2
-    raw["single_phi_reco"] = phi_reco
-    raw["triple_gen_matched_candidate"] = bool(matched_candidates)
-    raw["hlt_muon_matched"] = any(_candidate_hlt_muon_matched(event, cand_idx) for cand_idx in matched_candidates)
-    raw["jpsi_quality"] = any(_jpsi_quality(event, cand_idx, cfg) for cand_idx in matched_candidates)
-    raw["phi_quality"] = any(_phi_quality(event, cand_idx, cfg) for cand_idx in matched_candidates)
-    raw["all6_same_recVtx"] = any(_candidate_all6_same_rec_vtx(event, cand_idx) for cand_idx in matched_candidates)
-    for step in ("Pri_fitValid", "Pri_fitPass", "Pri_assocPVPass", "Pri_trackPVPass"):
-        raw[step] = any(to_int_idx(_event_value(event, step, cand_idx, 0), 0) == 1 for cand_idx in matched_candidates)
+        # Per-J/psi muonRECO (any candidate with matching leg)
+        if legs["jpsi1"] == system.jpsi_lead.idx or legs["jpsi2"] == system.jpsi_lead.idx:
+            if not lead_muonRECO:
+                lead_muonRECO = True
+            if not lead_muonID:
+                lead_muonID = (
+                    (legs["jpsi1"] == system.jpsi_lead.idx and _candidate_muonID_jpsi(event, cand_idx, "Jpsi_1"))
+                    or (legs["jpsi2"] == system.jpsi_lead.idx and _candidate_muonID_jpsi(event, cand_idx, "Jpsi_2"))
+                )
+            if not lead_dimuon:
+                lead_dimuon = (
+                    (legs["jpsi1"] == system.jpsi_lead.idx
+                     and _candidate_muonID_jpsi(event, cand_idx, "Jpsi_1")
+                     and _jpsi_quality_single(event, cand_idx, "Jpsi_1", cfg))
+                    or (legs["jpsi2"] == system.jpsi_lead.idx
+                        and _candidate_muonID_jpsi(event, cand_idx, "Jpsi_2")
+                        and _jpsi_quality_single(event, cand_idx, "Jpsi_2", cfg))
+                )
+        if legs["jpsi1"] == system.jpsi_sublead.idx or legs["jpsi2"] == system.jpsi_sublead.idx:
+            if not sublead_muonRECO:
+                sublead_muonRECO = True
+            if not sublead_muonID:
+                sublead_muonID = (
+                    (legs["jpsi1"] == system.jpsi_sublead.idx and _candidate_muonID_jpsi(event, cand_idx, "Jpsi_1"))
+                    or (legs["jpsi2"] == system.jpsi_sublead.idx and _candidate_muonID_jpsi(event, cand_idx, "Jpsi_2"))
+                )
+            if not sublead_dimuon:
+                sublead_dimuon = (
+                    (legs["jpsi1"] == system.jpsi_sublead.idx
+                     and _candidate_muonID_jpsi(event, cand_idx, "Jpsi_1")
+                     and _jpsi_quality_single(event, cand_idx, "Jpsi_1", cfg))
+                    or (legs["jpsi2"] == system.jpsi_sublead.idx
+                        and _candidate_muonID_jpsi(event, cand_idx, "Jpsi_2")
+                        and _jpsi_quality_single(event, cand_idx, "Jpsi_2", cfg))
+                )
+        # Per-phi (any candidate with matching phi leg)
+        if legs["phi"] == system.phi.idx:
+            if not phi_kaonRECO_flag:
+                phi_kaonRECO_flag = True
+            if not phi_kaonID_flag:
+                phi_kaonID_flag = _phi_kaonID(event, cand_idx, cfg)
+            if not phi_dikaon_flag:
+                phi_dikaon_flag = _phi_quality(event, cand_idx, cfg)
 
-    cumulative: dict[str, int] = {}
-    keep = True
-    for step in EFFICIENCY_STEPS[:-1]:
-        keep = keep and bool(raw[step])
-        cumulative[step] = int(keep)
-    cumulative["final_nominal"] = int(
-        cumulative["Pri_fitPass"] == 1
-        and cumulative["Pri_assocPVPass"] == 1
-        and cumulative["Pri_trackPVPass"] == 1
+    # ── Event-level: only for gen-matched candidates ──
+    hlt_raw = False
+    four_muon_raw = False
+    pri_valid_raw = False
+    pri_pass_raw = False
+    pri_assoc_raw = False
+    pri_track_raw = False
+
+    for cand_idx in range(n_candidates):
+        if not _candidate_matches_system(event, cand_idx, system):
+            continue
+        matched_candidates.append(cand_idx)
+
+        if not hlt_raw:
+            hlt_raw = _candidate_hlt_muon_matched(event, cand_idx)
+        if not four_muon_raw:
+            four_muon_raw = _candidate_four_muon_vtx(event, cand_idx)
+        if not pri_valid_raw:
+            pri_valid_raw = to_int_idx(_event_value(event, "Pri_fitValid", cand_idx, 0), 0) == 1
+        if not pri_pass_raw:
+            pri_pass_raw = to_int_idx(_event_value(event, "Pri_fitPass", cand_idx, 0), 0) == 1
+        if not pri_assoc_raw:
+            pri_assoc_raw = to_int_idx(_event_value(event, "Pri_assocPVPass", cand_idx, 0), 0) == 1
+        if not pri_track_raw:
+            pri_track_raw = to_int_idx(_event_value(event, "Pri_trackPVPass", cand_idx, 0), 0) == 1
+
+    s_cand = (
+        fiducial_jpsi_lead and lead_muonRECO and lead_muonID and lead_dimuon
+        and fiducial_jpsi_sublead and sublead_muonRECO and sublead_muonID and sublead_dimuon
+        and fiducial_phi and phi_kaonRECO_flag and phi_kaonID_flag and phi_dikaon_flag
     )
+    # Sequential through four_muon_vtx, then Pri_* are parallel branches
+    hlt_event = s_cand and hlt_raw
+    four_muon_vtx = hlt_event and four_muon_raw
+    Pri_fitValid = four_muon_vtx and pri_valid_raw
+    Pri_fitPass = four_muon_vtx and pri_pass_raw
+    Pri_assocPVPass = four_muon_vtx and pri_assoc_raw
+    Pri_trackPVPass = four_muon_vtx and pri_track_raw
+
+    gen_score = system.jpsi_lead.pt ** 2 + system.jpsi_sublead.pt ** 2 + system.phi.pt ** 2
 
     event_row: dict[str, Any] = {
         "sample": sample,
@@ -659,11 +800,29 @@ def build_event_efficiency_row(
         "n_gen_jpsi": int(system.n_jpsi),
         "n_gen_phi": int(system.n_phi),
         "n_triple_gen_matched_candidates": int(len(matched_candidates)),
-        "hlt_event_path_or": int(raw["hlt_event_path_or"]),
-        "fiducial_jpsi_lead": int(raw["fiducial_jpsi_lead"]),
-        "fiducial_jpsi_sublead": int(raw["fiducial_jpsi_sublead"]),
-        "fiducial_phi": int(raw["fiducial_phi"]),
-        **cumulative,
+        "hlt_event_path_or": int(_event_path_or(event)),
+        # Per-object step flags
+        "jpsi_lead_fiducial": int(fiducial_jpsi_lead),
+        "jpsi_lead_muonRECO": int(lead_muonRECO),
+        "jpsi_lead_muonID": int(lead_muonID),
+        "jpsi_lead_dimuon": int(lead_dimuon),
+        "jpsi_sublead_fiducial": int(fiducial_jpsi_sublead),
+        "jpsi_sublead_muonRECO": int(sublead_muonRECO),
+        "jpsi_sublead_muonID": int(sublead_muonID),
+        "jpsi_sublead_dimuon": int(sublead_dimuon),
+        "phi_fiducial": int(fiducial_phi),
+        "phi_kaonRECO": int(phi_kaonRECO_flag),
+        "phi_kaonID": int(phi_kaonID_flag),
+        "phi_dikaon": int(phi_dikaon_flag),
+        # Event-level flags
+        "full_gen": 1,
+        "s_cand": int(s_cand),
+        "hlt_event": int(hlt_event),
+        "four_muon_vtx": int(four_muon_vtx),
+        "Pri_fitValid": int(Pri_fitValid),
+        "Pri_fitPass": int(Pri_fitPass),
+        "Pri_assocPVPass": int(Pri_assocPVPass),
+        "Pri_trackPVPass": int(Pri_trackPVPass),
     }
     jpsi_lead_y = _rapidity_from_pt_eta_mass(system.jpsi_lead.pt, system.jpsi_lead.eta, system.jpsi_lead.mass)
     jpsi_sublead_y = _rapidity_from_pt_eta_mass(system.jpsi_sublead.pt, system.jpsi_sublead.eta, system.jpsi_sublead.mass)
@@ -690,6 +849,7 @@ def build_event_efficiency_row(
         "triple_pt": system.triple_pt,
         "triple_abs_y": system.triple_abs_y,
         "triple_mass": system.triple_mass,
+        "gen_score": gen_score,
     }
     return gen_row, event_row
 
@@ -876,28 +1036,49 @@ def _process_efficiency_chunk_vectorized(
 
     jpsi1_y = abs(_scalar_rapidity_array(arrays["Jpsi_1_px"], arrays["Jpsi_1_py"], arrays["Jpsi_1_pz"], arrays["Jpsi_1_mass"]))
     jpsi2_y = abs(_scalar_rapidity_array(arrays["Jpsi_2_px"], arrays["Jpsi_2_py"], arrays["Jpsi_2_pz"], arrays["Jpsi_2_mass"]))
-    jpsi_quality = (
+
+    # Per-J/psi quality (split from old combined jpsi_quality)
+    psi1_quality = (
         (arrays["Jpsi_1_mass"] >= cfg.jpsi_mass_window[0])
         & (arrays["Jpsi_1_mass"] <= cfg.jpsi_mass_window[1])
         & (arrays["Jpsi_1_pt"] > cfg.jpsi_pt_min)
         & (jpsi1_y < cfg.jpsi_abs_y_max)
         & (arrays["Jpsi_1_VtxProb"] > cfg.jpsi_vtxprob_min)
-        & (arrays["Jpsi_2_mass"] >= cfg.jpsi_mass_window[0])
+    )
+    psi2_quality = (
+        (arrays["Jpsi_2_mass"] >= cfg.jpsi_mass_window[0])
         & (arrays["Jpsi_2_mass"] <= cfg.jpsi_mass_window[1])
         & (arrays["Jpsi_2_pt"] > cfg.jpsi_pt_min)
         & (jpsi2_y < cfg.jpsi_abs_y_max)
         & (arrays["Jpsi_2_VtxProb"] > cfg.jpsi_vtxprob_min)
     )
-    phi_quality = (
-        (arrays["Phi_mass"] >= cfg.phi_mass_window[0])
-        & (arrays["Phi_mass"] <= cfg.phi_mass_window[1])
-        & (arrays["Phi_pt"] > cfg.phi_pt_min)
-        & (arrays["Phi_VtxProb"] > cfg.phi_vtxprob_min)
-        & (arrays["Phi_K_1_pt"] > cfg.track_pt_min)
+    # Old combined flag (used by reco_best_* and candidate_quality)
+    jpsi_quality = psi1_quality & psi2_quality
+
+    # Per-phi kaon ID (track pT/eta) and dikaon (+ phi mass/pt/VtxProb)
+    phi_kaonID_raw = (
+        (arrays["Phi_K_1_pt"] > cfg.track_pt_min)
         & (arrays["Phi_K_2_pt"] > cfg.track_pt_min)
         & (abs(arrays["Phi_K_1_eta"]) < cfg.track_abs_eta_max)
         & (abs(arrays["Phi_K_2_eta"]) < cfg.track_abs_eta_max)
     )
+    phi_dikaon_raw = phi_kaonID_raw & (
+        (arrays["Phi_mass"] >= cfg.phi_mass_window[0])
+        & (arrays["Phi_mass"] <= cfg.phi_mass_window[1])
+        & (arrays["Phi_pt"] > cfg.phi_pt_min)
+        & (arrays["Phi_VtxProb"] > cfg.phi_vtxprob_min)
+    )
+    # Old combined flag
+    phi_quality = phi_dikaon_raw
+
+    # muonID: both muons in a J/psi pair pass soft-muon ID
+    mu_id = ak.values_astype(arrays["muIsPatSoftMuon"], bool)
+    j1_mu1_id = _safe_take_jagged(mu_id, j1_mu1_idx, False)
+    j1_mu2_id = _safe_take_jagged(mu_id, j1_mu2_idx, False)
+    j2_mu1_id = _safe_take_jagged(mu_id, j2_mu1_idx, False)
+    j2_mu2_id = _safe_take_jagged(mu_id, j2_mu2_idx, False)
+    psi1_muonID = j1_mu1_id & j1_mu2_id
+    psi2_muonID = j2_mu1_id & j2_mu2_id
 
     # ── Best-by-score RECO candidate (quality only, no gen-match requirement) ──
     candidate_quality = jpsi_quality & phi_quality
@@ -936,7 +1117,10 @@ def _process_efficiency_chunk_vectorized(
     mu_v4 = _safe_take_jagged(arrays["muVertexId"], j2_mu2_idx, -1)
     kv1 = _as_index_array(arrays["Phi_K_1_vertexId"])
     kv2 = _as_index_array(arrays["Phi_K_2_vertexId"])
-    same_vtx = (mu_v1 >= 0) & (mu_v1 == mu_v2) & (mu_v1 == mu_v3) & (mu_v1 == mu_v4) & (mu_v1 == kv1) & (mu_v1 == kv2)
+    four_muon_same = (mu_v1 >= 0) & (mu_v1 == mu_v2) & (mu_v1 == mu_v3) & (mu_v1 == mu_v4)
+    tri_onia_same = four_muon_same & (mu_v1 == kv1) & (mu_v1 == kv2)
+    # Old alias
+    same_vtx = tri_onia_same
 
     if "TrigNames" in arrays.fields and "TrigRes" in arrays.fields:
         hlt_name_match = ak.str.find_substring(arrays["TrigNames"], "HLT_Dimuon0_Jpsi3p5_Muon2_v") >= 0
@@ -945,37 +1129,86 @@ def _process_efficiency_chunk_vectorized(
     else:
         hlt_event_path_or = ak.zeros_like(has_full_gen, dtype=np.int8)
 
-    raw = {
-        "full_gen": has_full_gen,
-        "fiducial_acceptance": fiducial_acceptance,
-        "fiducial_jpsi_lead": fiducial_jpsi_lead,
-        "fiducial_jpsi_sublead": fiducial_jpsi_sublead,
-        "fiducial_phi": fiducial_phi,
-        "hlt_muon_matched": ak.any(matched_candidate & candidate_hlt, axis=1),
-        "single_jpsi_reco": single_jpsi_reco,
-        "double_jpsi_reco": double_jpsi_reco,
-        "single_phi_reco": single_phi_reco,
-        "triple_gen_matched_candidate": n_matched > 0,
-        "jpsi_quality": ak.any(matched_candidate & jpsi_quality, axis=1),
-        "phi_quality": ak.any(matched_candidate & phi_quality, axis=1),
-        "all6_same_recVtx": ak.any(matched_candidate & same_vtx, axis=1),
-        "Pri_fitValid": ak.any(matched_candidate & (_as_index_array(arrays["Pri_fitValid"]) == 1), axis=1),
-        "Pri_fitPass": ak.any(matched_candidate & (_as_index_array(arrays["Pri_fitPass"]) == 1), axis=1),
-        "Pri_assocPVPass": ak.any(matched_candidate & (_as_index_array(arrays["Pri_assocPVPass"]) == 1), axis=1),
-        "Pri_trackPVPass": ak.any(matched_candidate & (_as_index_array(arrays["Pri_trackPVPass"]) == 1), axis=1),
-    }
-
-    cumulative: dict[str, ak.Array] = {}
-    keep = ak.ones_like(has_full_gen, dtype=bool)
-    for step in EFFICIENCY_STEPS[:-1]:
-        keep = keep & raw[step]
-        cumulative[step] = ak.values_astype(keep, np.int8)
-    cumulative["final_nominal"] = ak.values_astype(
-        (cumulative["Pri_fitPass"] == 1)
-        & (cumulative["Pri_assocPVPass"] == 1)
-        & (cumulative["Pri_trackPVPass"] == 1),
-        np.int8,
+    # ── Per-object step flags (Efficiency_scheme.md) ──
+    # J/psi lead
+    jpsi_lead_muonRECO = has_jpsi1_reco
+    jpsi_lead_muonID = ak.any(
+        ((jpsi1_leg == jpsi1_idx) & psi1_muonID)
+        | ((jpsi2_leg == jpsi1_idx) & psi2_muonID),
+        axis=1,
     )
+    jpsi_lead_dimuon = ak.any(
+        ((jpsi1_leg == jpsi1_idx) & psi1_muonID & psi1_quality)
+        | ((jpsi2_leg == jpsi1_idx) & psi2_muonID & psi2_quality),
+        axis=1,
+    )
+    # J/psi sublead
+    jpsi_sublead_muonRECO = has_jpsi2_reco
+    jpsi_sublead_muonID = ak.any(
+        ((jpsi1_leg == jpsi2_idx) & psi1_muonID)
+        | ((jpsi2_leg == jpsi2_idx) & psi2_muonID),
+        axis=1,
+    )
+    jpsi_sublead_dimuon = ak.any(
+        ((jpsi1_leg == jpsi2_idx) & psi1_muonID & psi1_quality)
+        | ((jpsi2_leg == jpsi2_idx) & psi2_muonID & psi2_quality),
+        axis=1,
+    )
+    # Phi
+    phi_kaonRECO = ak.any(phi_leg == phi_idx, axis=1)
+    phi_kaonID = ak.any((phi_leg == phi_idx) & phi_kaonID_raw, axis=1)
+    phi_dikaon = ak.any((phi_leg == phi_idx) & phi_dikaon_raw, axis=1)
+
+    # Derived flags
+    s_cand = (
+        fiducial_jpsi_lead & jpsi_lead_muonRECO & jpsi_lead_muonID & jpsi_lead_dimuon
+        & fiducial_jpsi_sublead & jpsi_sublead_muonRECO & jpsi_sublead_muonID & jpsi_sublead_dimuon
+        & fiducial_phi & phi_kaonRECO & phi_kaonID & phi_dikaon
+    )
+
+    # Event-level flags: sequential through four_muon_vtx, then Pri_* are parallel
+    _hlt_raw = ak.any(matched_candidate & candidate_hlt, axis=1)
+    _four_muon_raw = ak.any(matched_candidate & four_muon_same, axis=1)
+    _pri_valid_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_fitValid"]) == 1), axis=1)
+    _pri_pass_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_fitPass"]) == 1), axis=1)
+    _pri_assoc_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_assocPVPass"]) == 1), axis=1)
+    _pri_track_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_trackPVPass"]) == 1), axis=1)
+
+    hlt_event = s_cand & _hlt_raw
+    four_muon_vtx = hlt_event & _four_muon_raw
+    # Pri_* flags are parallel: all conditioned on four_muon_vtx, not on each other
+    Pri_fitValid = four_muon_vtx & _pri_valid_raw
+    Pri_fitPass = four_muon_vtx & _pri_pass_raw
+    Pri_assocPVPass = four_muon_vtx & _pri_assoc_raw
+    Pri_trackPVPass = four_muon_vtx & _pri_track_raw
+    # GEN score (unified with RECO: summed pT²)
+    gen_score = jpsi1_pt ** 2 + jpsi2_pt ** 2 + phi_pt ** 2
+
+    # Per-object columns for parquet output
+    per_obj_raw: dict[str, ak.Array] = {
+        "jpsi_lead_fiducial": fiducial_jpsi_lead,
+        "jpsi_lead_muonRECO": jpsi_lead_muonRECO,
+        "jpsi_lead_muonID": jpsi_lead_muonID,
+        "jpsi_lead_dimuon": jpsi_lead_dimuon,
+        "jpsi_sublead_fiducial": fiducial_jpsi_sublead,
+        "jpsi_sublead_muonRECO": jpsi_sublead_muonRECO,
+        "jpsi_sublead_muonID": jpsi_sublead_muonID,
+        "jpsi_sublead_dimuon": jpsi_sublead_dimuon,
+        "phi_fiducial": fiducial_phi,
+        "phi_kaonRECO": phi_kaonRECO,
+        "phi_kaonID": phi_kaonID,
+        "phi_dikaon": phi_dikaon,
+    }
+    event_raw: dict[str, ak.Array] = {
+        "full_gen": has_full_gen,
+        "s_cand": s_cand,
+        "hlt_event": hlt_event,
+        "four_muon_vtx": four_muon_vtx,
+        "Pri_fitValid": Pri_fitValid,
+        "Pri_fitPass": Pri_fitPass,
+        "Pri_assocPVPass": Pri_assocPVPass,
+        "Pri_trackPVPass": Pri_trackPVPass,
+    }
 
     full_mask = ak.to_numpy(has_full_gen)
     entries = np.arange(entry_start, entry_start + n_events, dtype=np.int64)
@@ -992,10 +1225,12 @@ def _process_efficiency_chunk_vectorized(
         "n_triple_gen_matched_candidates": _to_numpy(n_matched, has_full_gen, 0).astype(np.int64),
         "hlt_event_path_or": _to_numpy(hlt_event_path_or, has_full_gen, 0).astype(np.int8),
     }
-    for step in EFFICIENCY_STEPS:
-        event_data[step] = _to_numpy(cumulative[step], has_full_gen, 0).astype(np.int8)
-    for key in ("fiducial_jpsi_lead", "fiducial_jpsi_sublead", "fiducial_phi"):
-        event_data[key] = _to_numpy(raw[key], has_full_gen, 0).astype(np.int8)
+    # Per-object step flags
+    for key in per_object_step_columns():
+        event_data[key] = _to_numpy(per_obj_raw[key], has_full_gen, 0).astype(np.int8)
+    # Event-level flags
+    for key, val in event_raw.items():
+        event_data[key] = _to_numpy(val, has_full_gen, 0).astype(np.int8)
     # Reco best-candidate columns for response matrix classification
     event_data["reco_best_phi_pt"] = _to_numpy(reco_best_phi_pt, has_full_gen, np.nan).astype(np.float64)
     event_data["reco_best_jpsi1_pt"] = _to_numpy(reco_best_jpsi1_pt, has_full_gen, np.nan).astype(np.float64)
@@ -1028,6 +1263,7 @@ def _process_efficiency_chunk_vectorized(
         "triple_pt": _to_numpy(triple_pt, has_full_gen, np.nan).astype(float),
         "triple_abs_y": _to_numpy(triple_abs_y, has_full_gen, np.nan).astype(float),
         "triple_mass": _to_numpy(triple_mass, has_full_gen, np.nan).astype(float),
+        "gen_score": _to_numpy(gen_score, has_full_gen, np.nan).astype(float),
     }
     return {
         "gen_systems": pd.DataFrame(gen_data),
@@ -1142,19 +1378,48 @@ def _merged_gen_events(gen_df: pd.DataFrame, event_df: pd.DataFrame) -> pd.DataF
 
 
 def build_cutflow(event_df: pd.DataFrame) -> pd.DataFrame:
+    """Build per-object + event-level cutflow with conditional efficiencies."""
     if event_df.empty:
-        return pd.DataFrame(columns=["step", "total", "passed", "efficiency", "err_low", "err_high", "err_sym", "conditional_efficiency"])
-    total = int(event_df["full_gen"].sum())
+        return pd.DataFrame(columns=["step", "total", "passed", "efficiency",
+                                      "err_low", "err_high", "err_sym",
+                                      "conditional_efficiency"])
     rows: list[dict[str, Any]] = []
-    previous = total
-    for step in EFFICIENCY_STEPS:
+
+    def _cutflow_chain(frame: pd.DataFrame, step_list: tuple[str, ...],
+                       base_total: int, object_name: str = "") -> None:
+        previous = base_total
+        for step in step_list:
+            col = step if not object_name else f"{object_name}_{step}"
+            passed = int(frame[col].sum()) if col in frame.columns else 0
+            row = _efficiency_row(
+                {"step": step, "object": object_name}, base_total, passed)
+            row["conditional_total"] = int(previous)
+            row["conditional_passed"] = int(passed)
+            row["conditional_efficiency"] = float(passed / previous) if previous > 0 else math.nan
+            rows.append(row)
+            previous = passed
+
+    total_full_gen = int(event_df["full_gen"].sum())
+
+    # Per-object chains
+    for obj_prefix in ("jpsi_lead", "jpsi_sublead"):
+        _cutflow_chain(event_df, PER_JPSI_STEPS, total_full_gen, obj_prefix)
+    _cutflow_chain(event_df, PER_PHI_STEPS, total_full_gen, "phi")
+
+    # Event-level chain (denominator = s_cand for hlt_event)
+    s_cand_total = int(event_df["s_cand"].sum())
+    for step in EVENT_STEPS:
+        base = s_cand_total if step == "hlt_event" else None  # dynamic below
+    previous = s_cand_total
+    for step in EVENT_STEPS:
         passed = int(event_df[step].sum()) if step in event_df.columns else 0
-        row = _efficiency_row({"step": step}, total, passed)
+        row = _efficiency_row({"step": step, "object": ""}, s_cand_total, passed)
         row["conditional_total"] = int(previous)
         row["conditional_passed"] = int(passed)
         row["conditional_efficiency"] = float(passed / previous) if previous > 0 else math.nan
         rows.append(row)
         previous = passed
+
     return pd.DataFrame(rows)
 
 
@@ -1164,27 +1429,49 @@ def build_efficiency_counts(gen_df: pd.DataFrame, event_df: pd.DataFrame, binnin
         return pd.DataFrame()
     rows: list[dict[str, Any]] = []
     rows.extend(_inclusive_counts(merged))
-    rows.extend(_object_2d_counts(merged, binning))
+    rows.extend(_per_object_counts(merged, binning))
     rows.extend(_correlated_3d_counts(merged, binning))
     rows.extend(_triple_sidecheck_counts(merged, binning))
     return pd.DataFrame(rows)
 
 
 def _inclusive_counts(frame: pd.DataFrame) -> list[dict[str, Any]]:
-    rows = []
-    for step in EFFICIENCY_STEPS:
-        rows.append(_efficiency_row({"map_type": "inclusive", "step": step}, int(frame["full_gen"].sum()), int(frame[step].sum())))
+    """One-row-per-step inclusive counts (no binning)."""
+    rows: list[dict[str, Any]] = []
+    total = int(frame["full_gen"].sum())
+
+    # Per-object step columns
+    for col in per_object_step_columns():
+        if col in frame.columns:
+            obj, step = col.rsplit("_", 1)
+            rows.append(_efficiency_row(
+                {"map_type": "inclusive", "step": step, "object": obj},
+                total, int(frame[col].sum())))
+
+    # Event-level columns
+    for col in ("s_cand", "hlt_event", "four_muon_vtx",
+                 "Pri_fitValid", "Pri_fitPass", "Pri_assocPVPass",
+                 "Pri_trackPVPass", "full_gen"):
+        if col in frame.columns:
+            rows.append(_efficiency_row(
+                {"map_type": "inclusive", "step": col, "object": ""},
+                total, int(frame[col].sum())))
+
     return rows
 
 
-def _object_2d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[dict[str, Any]]:
+def _per_object_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[dict[str, Any]]:
+    """Per-object 2D (pT, y) bins with conditional denominators."""
     rows: list[dict[str, Any]] = []
     specs = (
-        ("jpsi_lead", "jpsi_lead_pt", "jpsi_lead_abs_y", binning.jpsi_pt_edges, binning.object_abs_y_edges),
-        ("jpsi_sublead", "jpsi_sublead_pt", "jpsi_sublead_abs_y", binning.jpsi_pt_edges, binning.object_abs_y_edges),
-        ("phi", "phi_pt", "phi_abs_y", binning.phi_pt_edges, binning.object_abs_y_edges),
+        ("jpsi_lead", "jpsi_lead_pt", "jpsi_lead_y",
+         binning.jpsi_pt_edges, binning.object_y_edges, PER_JPSI_STEPS),
+        ("jpsi_sublead", "jpsi_sublead_pt", "jpsi_sublead_y",
+         binning.jpsi_pt_edges, binning.object_y_edges, PER_JPSI_STEPS),
+        ("phi", "phi_pt", "phi_y",
+         binning.phi_pt_edges, binning.object_y_edges, PER_PHI_STEPS),
     )
-    for obj, pt_col, y_col, pt_edges, y_edges in specs:
+    for obj, pt_col, y_col, pt_edges, y_edges, steps in specs:
         for ix in range(len(pt_edges) - 1):
             for iy in range(len(y_edges) - 1):
                 subset = frame[
@@ -1193,8 +1480,9 @@ def _object_2d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[d
                     & (frame[y_col] >= y_edges[iy])
                     & (frame[y_col] < y_edges[iy + 1])
                 ]
-                total = int(subset["full_gen"].sum())
-                for step in EFFICIENCY_STEPS:
+                full_gen_total = int(subset["full_gen"].sum())
+                for step in steps:
+                    col = f"{obj}_{step}"
                     rows.append(
                         _efficiency_row(
                             {
@@ -1202,7 +1490,7 @@ def _object_2d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[d
                                 "object": obj,
                                 "step": step,
                                 "x_axis": "pt",
-                                "y_axis": "abs_y",
+                                "y_axis": "y",
                                 "x_bin": ix,
                                 "y_bin": iy,
                                 "x_min": pt_edges[ix],
@@ -1212,17 +1500,20 @@ def _object_2d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[d
                                 "x_label": _bin_label(pt_edges, ix),
                                 "y_label": _bin_label(y_edges, iy),
                             },
-                            total,
-                            int(subset[step].sum()) if total else 0,
+                            full_gen_total,
+                            int(subset[col].sum()) if full_gen_total else 0,
                         )
                     )
     return rows
 
 
 def _correlated_3d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[dict[str, Any]]:
+    """Event-level 3D (jpsi_lead_pt, jpsi_sublead_pt, phi_pt) bins."""
     rows: list[dict[str, Any]] = []
     jpsi_edges = binning.jpsi_pt_edges
     phi_edges = binning.phi_pt_edges
+    correlated_steps = ("hlt_event", "four_muon_vtx",
+                         "Pri_fitValid", "Pri_fitPass")
     for ix in range(len(jpsi_edges) - 1):
         for iy in range(len(jpsi_edges) - 1):
             for iz in range(len(phi_edges) - 1):
@@ -1235,7 +1526,7 @@ def _correlated_3d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> li
                     & (frame["phi_pt"] < phi_edges[iz + 1])
                 ]
                 total = int(subset["full_gen"].sum())
-                for step in CORRELATED_MAP_STEPS:
+                for step in correlated_steps:
                     rows.append(
                         _efficiency_row(
                             {
@@ -1265,32 +1556,35 @@ def _correlated_3d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> li
 
 
 def _triple_sidecheck_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[dict[str, Any]]:
+    """1D triple-system side-check counts."""
     rows: list[dict[str, Any]] = []
     specs = (
         ("triple_pt", binning.triple_pt_edges),
         ("triple_abs_y", binning.triple_abs_y_edges),
         ("triple_mass", binning.triple_mass_edges),
     )
+    all_steps = ("full_gen", "s_cand") + EVENT_STEPS
     for axis, edges in specs:
         for idx in range(len(edges) - 1):
             subset = frame[(frame[axis] >= edges[idx]) & (frame[axis] < edges[idx + 1])]
             total = int(subset["full_gen"].sum())
-            for step in EFFICIENCY_STEPS:
-                rows.append(
-                    _efficiency_row(
-                        {
-                            "map_type": "triple_1d",
-                            "step": step,
-                            "x_axis": axis,
-                            "x_bin": idx,
-                            "x_min": edges[idx],
-                            "x_max": edges[idx + 1],
-                            "x_label": _bin_label(edges, idx),
-                        },
-                        total,
-                        int(subset[step].sum()) if total else 0,
+            for step in all_steps:
+                if step in subset.columns:
+                    rows.append(
+                        _efficiency_row(
+                            {
+                                "map_type": "triple_1d",
+                                "step": step,
+                                "x_axis": axis,
+                                "x_bin": idx,
+                                "x_min": edges[idx],
+                                "x_max": edges[idx + 1],
+                                "x_label": _bin_label(edges, idx),
+                            },
+                            total,
+                            int(subset[step].sum()) if total else 0,
+                        )
                     )
-                )
     return rows
 
 
@@ -1342,10 +1636,18 @@ def build_subprocess_envelope(sample_count_tables: dict[str, pd.DataFrame]) -> p
 
 
 def build_acceptance_maps(counts_df: pd.DataFrame) -> pd.DataFrame:
+    """Extract per-object fiducial acceptance rows.
+
+    Filters for step == 'fiducial' in per-object rows (object_2d or object_acceptance_2d).
+    """
     if counts_df.empty:
         return pd.DataFrame()
-    acc = counts_df.loc[counts_df["step"] == "fiducial_acceptance"].copy()
-    acc["quantity"] = "acceptance_vs_full_gen"
+    acc = counts_df.loc[
+        (counts_df["step"] == "fiducial")
+        & (counts_df["map_type"].isin(["object_2d", "object_acceptance_2d"]))
+    ].copy()
+    if not acc.empty:
+        acc["quantity"] = "acceptance_vs_full_gen"
     return acc.reset_index(drop=True)
 
 
@@ -1355,7 +1657,7 @@ def build_per_object_acceptance_maps(
     merged = _merged_gen_events(gen_df, event_df)
     if merged.empty:
         return pd.DataFrame()
-    required = ["fiducial_jpsi_lead", "fiducial_jpsi_sublead", "fiducial_phi"]
+    required = ["jpsi_lead_fiducial", "jpsi_sublead_fiducial", "phi_fiducial"]
     if not all(c in merged.columns for c in required):
         return pd.DataFrame()
     y_required = ["jpsi_lead_y", "jpsi_sublead_y", "phi_y"]
@@ -1364,9 +1666,9 @@ def build_per_object_acceptance_maps(
 
     rows: list[dict[str, Any]] = []
     specs = (
-        ("jpsi_lead", "jpsi_lead_pt", "jpsi_lead_y", "fiducial_jpsi_lead", binning.jpsi_pt_edges, binning.object_y_edges),
-        ("jpsi_sublead", "jpsi_sublead_pt", "jpsi_sublead_y", "fiducial_jpsi_sublead", binning.jpsi_pt_edges, binning.object_y_edges),
-        ("phi", "phi_pt", "phi_y", "fiducial_phi", binning.phi_pt_edges, binning.object_y_edges),
+        ("jpsi_lead", "jpsi_lead_pt", "jpsi_lead_y", "jpsi_lead_fiducial", binning.jpsi_pt_edges, binning.object_y_edges),
+        ("jpsi_sublead", "jpsi_sublead_pt", "jpsi_sublead_y", "jpsi_sublead_fiducial", binning.jpsi_pt_edges, binning.object_y_edges),
+        ("phi", "phi_pt", "phi_y", "phi_fiducial", binning.phi_pt_edges, binning.object_y_edges),
     )
     for obj, pt_col, y_col, flag_col, pt_edges, y_edges in specs:
         for ix in range(len(pt_edges) - 1):
@@ -1383,7 +1685,7 @@ def build_per_object_acceptance_maps(
                         {
                             "map_type": "object_acceptance_2d",
                             "object": obj,
-                            "step": "fiducial_acceptance",
+                            "step": "fiducial",
                             "x_axis": "pt",
                             "y_axis": "y",
                             "x_bin": ix,
@@ -1407,17 +1709,23 @@ def build_per_object_acceptance_maps(
 
 def _stacked_jpsi_frame(gen_df: pd.DataFrame, event_df: pd.DataFrame) -> pd.DataFrame:
     merged = _merged_gen_events(gen_df, event_df)
-    required = ["jpsi_lead_pt", "jpsi_lead_y", "jpsi_sublead_pt", "jpsi_sublead_y", "fiducial_jpsi_lead", "fiducial_jpsi_sublead"]
+    required = ["jpsi_lead_pt", "jpsi_lead_y", "jpsi_sublead_pt", "jpsi_sublead_y",
+                 "jpsi_lead_fiducial", "jpsi_sublead_fiducial"]
     if merged.empty or not all(c in merged.columns for c in required):
         return pd.DataFrame()
     parts: list[pd.DataFrame] = []
-    for role, flag_col in (("lead", "fiducial_jpsi_lead"), ("sublead", "fiducial_jpsi_sublead")):
+    for role, flag_col in (("lead", "jpsi_lead_fiducial"), ("sublead", "jpsi_sublead_fiducial")):
         part = merged.copy()
         part["object"] = "jpsi"
         part["jpsi_role"] = role
         part["jpsi_pt"] = part[f"jpsi_{role}_pt"]
         part["jpsi_y"] = part[f"jpsi_{role}_y"]
         part["jpsi_fiducial_acceptance"] = part[flag_col].astype(int)
+        # Copy per-J/psi step flags for this role
+        for suffix in PER_JPSI_STEPS:
+            col = f"jpsi_{role}_{suffix}"
+            if col in part.columns:
+                part[f"jpsi_{suffix}"] = part[col].astype(int)
         parts.append(part)
     return pd.concat(parts, ignore_index=True)
 
@@ -1445,7 +1753,7 @@ def build_stacked_jpsi_acceptance_maps(
                     {
                         "map_type": "stacked_jpsi_acceptance_2d",
                         "object": "jpsi",
-                        "step": "fiducial_acceptance",
+                        "step": "fiducial",
                         "x_axis": "pt",
                         "y_axis": "y",
                         "x_bin": ix,
@@ -1483,13 +1791,14 @@ def build_stacked_jpsi_efficiency_maps(
                 & (stacked["jpsi_y"] < y_edges[iy + 1])
             ]
             total = int(len(subset))
-            for step in EFFICIENCY_STEPS[1:]:
+            for suffix in PER_JPSI_STEPS[1:]:  # skip fiducial (already in acceptance)
+                col = f"jpsi_{suffix}"
                 rows.append(
                     _efficiency_row(
                         {
                             "map_type": "stacked_jpsi_efficiency_2d",
                             "object": "jpsi",
-                            "step": step,
+                            "step": suffix,
                             "x_axis": "pt",
                             "y_axis": "y",
                             "x_bin": ix,
@@ -1500,10 +1809,10 @@ def build_stacked_jpsi_efficiency_maps(
                             "y_max": y_edges[iy + 1],
                             "x_label": _bin_label(pt_edges, ix),
                             "y_label": _bin_label(y_edges, iy),
-                            "quantity": "stacked_jpsi_event_efficiency",
+                            "quantity": "stacked_jpsi_efficiency",
                         },
                         total,
-                        int(subset[step].sum()) if total and step in subset.columns else 0,
+                        int(subset[col].sum()) if total and col in subset.columns else 0,
                     )
                 )
     return pd.DataFrame(rows)
@@ -1533,67 +1842,182 @@ def _recompute_efficiency(frame: pd.DataFrame, total_col: str, passed_col: str) 
 _MAP_TYPE_KEYS: dict[str, list[str]] = {
     "inclusive": [],
     "object_2d": ["object", "x_bin", "y_bin"],
+    "object_acceptance_2d": ["object", "x_bin", "y_bin"],
     "correlated_3d": ["x_bin", "y_bin", "z_bin"],
     "triple_1d": ["x_axis", "x_bin"],
 }
+
+# Per-map-type step ordering for conditional chain
+_OBJECT_CHAIN = {
+    "jpsi_lead": PER_JPSI_STEPS,
+    "jpsi_sublead": PER_JPSI_STEPS,
+    "phi": PER_PHI_STEPS,
+}
+_EVENT_CHAIN = EVENT_STEPS
 
 
 def build_conditional_maps(counts_df: pd.DataFrame) -> pd.DataFrame:
     if counts_df.empty:
         return pd.DataFrame()
     parts: list[pd.DataFrame] = []
+
     for map_type, keys in _MAP_TYPE_KEYS.items():
         subset = counts_df.loc[counts_df["map_type"] == map_type].copy()
         if subset.empty:
             continue
 
-        # Order steps present in this map_type by EFFICIENCY_STEPS index
-        present_steps = sorted(
-            subset["step"].drop_duplicates().tolist(),
-            key=lambda s: EFFICIENCY_STEPS.index(s) if s in EFFICIENCY_STEPS else -1,
-        )
-        if not present_steps:
-            continue
-
-        # First step in this map_type: baseline with previous_step = "total"
-        first = subset.loc[subset["step"] == present_steps[0]].copy()
-        first["previous_step"] = "total"
-        first["conditional_total"] = first["total"].astype(int)
-        first["conditional_passed"] = first["passed"].astype(int)
-        first["absolute_total"] = first["total"].astype(int)
-        first["absolute_passed"] = first["passed"].astype(int)
-        first["absolute_efficiency"] = first["efficiency"].astype(float)
-        _recompute_efficiency(first, "conditional_total", "conditional_passed")
-        first["quantity"] = "conditional_efficiency_vs_previous_step"
-        parts.append(first)
-
-        # Subsequent steps: merge with previous step within this map_type
-        for prev_step, this_step in zip(present_steps, present_steps[1:]):
-            this = subset.loc[subset["step"] == this_step].copy()
-            prev = subset.loc[subset["step"] == prev_step].copy()
-            if this.empty or prev.empty:
-                continue
-            if keys:
-                merged = this.merge(
-                    prev[keys + ["passed"]],
-                    on=keys,
-                    how="left",
-                    suffixes=("", "_prev"),
-                )
+        # For object_2d and object_acceptance_2d, chain per-object steps
+        if map_type in ("object_2d", "object_acceptance_2d"):
+            for obj_name in subset["object"].drop_duplicates():
+                obj_subset = subset[subset["object"] == obj_name]
+                chain = _OBJECT_CHAIN.get(obj_name, ())
+                _chain_conditional_rows(obj_subset, chain, keys, parts)
+        elif map_type == "correlated_3d":
+            correlated_steps = ("hlt_event", "four_muon_vtx",
+                                 "Pri_fitValid", "Pri_fitPass")
+            _chain_conditional_rows(subset, correlated_steps, keys, parts)
+        elif map_type == "triple_1d":
+            # Full analysis chain at the triple-system level
+            chain = ("full_gen", "s_cand", "hlt_event", "four_muon_vtx",
+                      "Pri_fitValid", "Pri_fitPass")
+            _chain_conditional_rows(subset, chain, keys, parts)
+        elif map_type == "inclusive":
+            # Group by object for proper per-object vs event-level chaining
+            if "object" in subset.columns:
+                for obj_name in subset["object"].drop_duplicates():
+                    obj_subset = subset[subset["object"] == obj_name]
+                    if obj_name and obj_name != "":
+                        chain = _OBJECT_CHAIN.get(obj_name, ())
+                        _chain_conditional_rows(obj_subset, chain, keys, parts)
+                    else:
+                        # Event-level: s_cand -> EVENT_STEPS
+                        chain = ("full_gen", "s_cand", "hlt_event", "four_muon_vtx",
+                                  "Pri_fitValid", "Pri_fitPass")
+                        _chain_conditional_rows(obj_subset, chain, keys, parts)
             else:
-                merged = this.copy()
-                merged["passed_prev"] = prev["passed"].iloc[0] if len(prev) > 0 else 0
-            merged["previous_step"] = prev_step
-            merged["conditional_total"] = merged["passed_prev"].fillna(0).astype(int)
-            merged["conditional_passed"] = merged["passed"].astype(int)
-            merged["absolute_total"] = merged["total"].astype(int)
-            merged["absolute_passed"] = merged["passed"].astype(int)
-            merged["absolute_efficiency"] = merged["efficiency"].astype(float)
-            _recompute_efficiency(merged, "conditional_total", "conditional_passed")
-            merged["quantity"] = "conditional_efficiency_vs_previous_step"
-            parts.append(merged)
+                _chain_conditional_rows(subset, (), keys, parts)
+
     if not parts:
         return pd.DataFrame()
     result = pd.concat(parts, ignore_index=True)
     result.drop(columns=["passed_prev"], errors="ignore", inplace=True)
     return result
+
+
+def _chain_conditional_rows(subset: pd.DataFrame, chain: tuple[str, ...],
+                            keys: list[str], parts: list[pd.DataFrame]) -> None:
+    """Build conditional efficiency rows for a single (map_type, object) group."""
+    if chain:
+        present_steps = [s for s in chain if s in subset["step"].values]
+    else:
+        present_steps = sorted(subset["step"].drop_duplicates().tolist())
+    if not present_steps:
+        return
+
+    # First step: baseline with previous_step = "total"
+    first = subset.loc[subset["step"] == present_steps[0]].copy()
+    first["previous_step"] = "total"
+    first["conditional_total"] = first["total"].astype(int)
+    first["conditional_passed"] = first["passed"].astype(int)
+    first["absolute_total"] = first["total"].astype(int)
+    first["absolute_passed"] = first["passed"].astype(int)
+    first["absolute_efficiency"] = first["efficiency"].astype(float)
+    _recompute_efficiency(first, "conditional_total", "conditional_passed")
+    first["quantity"] = "conditional_efficiency_vs_previous_step"
+    parts.append(first)
+
+    # Subsequent steps
+    for prev_step, this_step in zip(present_steps, present_steps[1:]):
+        this = subset.loc[subset["step"] == this_step].copy()
+        prev = subset.loc[subset["step"] == prev_step].copy()
+        if this.empty or prev.empty:
+            continue
+        if keys:
+            merged = this.merge(
+                prev[keys + ["passed"]],
+                on=keys,
+                how="left",
+                suffixes=("", "_prev"),
+            )
+        else:
+            merged = this.copy()
+            merged["passed_prev"] = prev["passed"].iloc[0] if len(prev) > 0 else 0
+        merged["previous_step"] = prev_step
+        merged["conditional_total"] = merged["passed_prev"].fillna(0).astype(int)
+        merged["conditional_passed"] = merged["passed"].astype(int)
+        merged["absolute_total"] = merged["total"].astype(int)
+        merged["absolute_passed"] = merged["passed"].astype(int)
+        merged["absolute_efficiency"] = merged["efficiency"].astype(float)
+        _recompute_efficiency(merged, "conditional_total", "conditional_passed")
+        merged["quantity"] = "conditional_efficiency_vs_previous_step"
+        parts.append(merged)
+
+
+def _build_pair_level_maps(
+    gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning,
+    step: str, denominator_col: str, quantity: str,
+) -> pd.DataFrame:
+    """Pair-level efficiency binned in (jpsi_lead_pt, jpsi_sublead_pt)."""
+    merged = _merged_gen_events(gen_df, event_df)
+    if merged.empty or step not in merged.columns or denominator_col not in merged.columns:
+        return pd.DataFrame()
+    rows: list[dict[str, Any]] = []
+    jpsi_edges = binning.jpsi_pt_edges
+    for ix in range(len(jpsi_edges) - 1):
+        for iy in range(len(jpsi_edges) - 1):
+            subset = merged[
+                (merged["jpsi_lead_pt"] >= jpsi_edges[ix])
+                & (merged["jpsi_lead_pt"] < jpsi_edges[ix + 1])
+                & (merged["jpsi_sublead_pt"] >= jpsi_edges[iy])
+                & (merged["jpsi_sublead_pt"] < jpsi_edges[iy + 1])
+            ]
+            total = int(subset[denominator_col].sum())
+            passed = int((subset[denominator_col] & subset[step]).sum())
+            rows.append(
+                _efficiency_row(
+                    {
+                        "map_type": "pair_vertex_2d",
+                        "step": step,
+                        "x_axis": "jpsi_lead_pt",
+                        "y_axis": "jpsi_sublead_pt",
+                        "x_bin": ix,
+                        "y_bin": iy,
+                        "x_min": jpsi_edges[ix],
+                        "x_max": jpsi_edges[ix + 1],
+                        "y_min": jpsi_edges[iy],
+                        "y_max": jpsi_edges[iy + 1],
+                        "x_label": _bin_label(jpsi_edges, ix),
+                        "y_label": _bin_label(jpsi_edges, iy),
+                        "quantity": quantity,
+                    },
+                    total,
+                    passed,
+                )
+            )
+    return pd.DataFrame(rows)
+
+
+def build_four_muon_vertex_maps(
+    gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning
+) -> pd.DataFrame:
+    return _build_pair_level_maps(gen_df, event_df, binning,
+                                   "four_muon_vtx", "hlt_event",
+                                   "four_muon_vertex_efficiency")
+
+
+def build_pri_assocpv_maps(
+    gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning
+) -> pd.DataFrame:
+    return _build_pair_level_maps(gen_df, event_df, binning,
+                                   "Pri_assocPVPass", "four_muon_vtx",
+                                   "pri_assocpv_efficiency")
+
+
+def build_pri_trackpv_maps(
+    gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning
+) -> pd.DataFrame:
+    return _build_pair_level_maps(gen_df, event_df, binning,
+                                   "Pri_trackPVPass", "four_muon_vtx",
+                                   "pri_trackpv_efficiency")
+
+

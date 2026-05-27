@@ -10,3 +10,6 @@ __pycache__/
 .codex
 notebook_outputs/
 efficiency_map_products/
+AGENTS.md
+CLAUDE.md
+

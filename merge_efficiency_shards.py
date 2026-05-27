@@ -86,14 +86,14 @@ def main() -> None:
     input_files = collect_sample_files(sample_dirs)
     write_sample_bundle(output_dir, args.sample, input_files, gen_df, event_df, counts_df, cutflow_df, args.skip_plots, args.min_plot_total)
 
-    inclusive_final = cutflow_df.loc[cutflow_df["step"] == "final_nominal"]
+    inclusive_final = cutflow_df.loc[cutflow_df["step"] == "Pri_trackPVPass"]
     summary_df = pd.DataFrame(
         [
             {
                 "sample": args.sample,
                 "n_input_files": len(input_files),
                 "n_full_gen": int(event_df["full_gen"].sum()) if not event_df.empty else 0,
-                "n_final_nominal": int(event_df["final_nominal"].sum()) if not event_df.empty else 0,
+                "n_Pri_trackPVPass": int(event_df["Pri_trackPVPass"].sum()) if not event_df.empty else 0,
                 "final_efficiency": float(inclusive_final["efficiency"].iloc[0]) if not inclusive_final.empty else float("nan"),
                 "final_err_sym": float(inclusive_final["err_sym"].iloc[0]) if not inclusive_final.empty else float("nan"),
             }
@@ -102,16 +102,23 @@ def main() -> None:
     write_parquet(summary_df, output_dir / "subprocess_summary.parquet")
     summary_df.to_csv(output_dir / "subprocess_summary.csv", index=False)
     write_parquet(build_subprocess_envelope({args.sample: counts_df}), output_dir / "subprocess_envelope.parquet")
+
+    manifest_path = output_dir / "manifest.json"
+    existing_samples: dict[str, str] = {}
+    if manifest_path.exists():
+        existing = read_json(manifest_path)
+        existing_samples = existing.get("artifacts", {}).get("samples", {})
+    existing_samples[args.sample] = f"{args.sample}/manifest.json"
     write_json(
         {
             "stage": "efficiency_summary",
             "artifacts": {
                 "subprocess_summary": "subprocess_summary.parquet",
                 "subprocess_envelope": "subprocess_envelope.parquet",
-                "samples": {args.sample: f"{args.sample}/manifest.json"},
+                "samples": existing_samples,
             },
         },
-        output_dir / "manifest.json",
+        manifest_path,
     )
     print(f"Wrote merged efficiency outputs to {output_dir}")
 

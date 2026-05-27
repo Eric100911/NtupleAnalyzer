@@ -50,7 +50,24 @@ def _require_mplhep():
 
 
 _STEP_DISPLAY_NAMES = {
+    # Per-object steps
+    "fiducial": "Fiducial acceptance",
+    "muonRECO": "Muon reco.",
+    "muonID": "Muon ID",
+    "dimuon": "Dimuon",
+    "kaonRECO": "Kaon reco.",
+    "kaonID": "Kaon ID",
+    "dikaon": "Dikaon",
+    # Event-level steps
     "full_gen": "Full GEN",
+    "s_cand": r"$S_{\mathrm{cand}}$",
+    "hlt_event": "HLT",
+    "four_muon_vtx": r"$4\mu$ vertex",
+    "Pri_fitValid": "Fit validity",
+    "Pri_fitPass": "Fit quality",
+    "Pri_assocPVPass": "PV association",
+    "Pri_trackPVPass": "Track PV",
+    # Old names (kept for backward compat during transition)
     "fiducial_acceptance": "Fiducial acceptance",
     "hlt_muon_matched": "HLT muon matching",
     "single_jpsi_reco": r"Single $J/\psi$ reco.",
@@ -60,11 +77,6 @@ _STEP_DISPLAY_NAMES = {
     "jpsi_quality": r"$J/\psi$ quality",
     "phi_quality": r"$\phi$ quality",
     "all6_same_recVtx": "Common vertex",
-    "Pri_fitValid": "Fit validity",
-    "Pri_fitPass": "Fit quality",
-    "Pri_assocPVPass": "PV association",
-    "Pri_trackPVPass": "Track PV",
-    "final_nominal": "Final nominal",
 }
 
 
@@ -450,6 +462,11 @@ def _object_label(raw: object) -> str:
     return labels.get(str(raw), str(raw).replace("_", " "))
 
 
+def _object_math_label(raw: object) -> str:
+    """Return _object_label output wrapped in $...$ for use in titles."""
+    return f"${_object_label(raw)}$"
+
+
 def _axis_labels_for_frame(frame: pd.DataFrame, xlabel: str | None, ylabel: str | None) -> tuple[str, str]:
     if xlabel is not None and ylabel is not None:
         return xlabel, ylabel
@@ -571,7 +588,7 @@ def write_efficiency_plots(
             frame,
             title=f"{_object_label(obj)} {step_label}",
             xlabel=r"$p_{\mathrm{T}}$ [GeV]",
-            ylabel=r"$|y|$",
+            ylabel=None,
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
             zlabel=step_label if step in _STEP_DISPLAY_NAMES else "Efficiency",
@@ -610,13 +627,13 @@ def write_derived_plots(
     obj_acc = acc_df.loc[acc_df["map_type"] == "object_2d"].copy()
     for obj, frame in obj_acc.groupby("object", dropna=False):
         path = acc_plot_dir / f"object2d_{obj}_fiducial_acceptance.png"
-        obj_label = _object_label(obj)
+        obj_label = _object_math_label(obj)
         written[f"object2d.{obj}.fiducial_acceptance"] = save_efficiency_heatmap_pair(
             path,
             frame,
             title=f"{obj_label} fiducial acceptance",
             xlabel=r"$p_{\mathrm{T}}$ [GeV]",
-            ylabel=r"$|y|$",
+            ylabel=None,
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
             zlabel="Acceptance",
@@ -629,14 +646,14 @@ def write_derived_plots(
     ].copy()
     for (obj, step), frame in obj_df.groupby(["object", "step"], dropna=False):
         path = cond_dir / f"object2d_{obj}_{step}.png"
-        obj_label = _object_label(obj)
+        obj_label = _object_math_label(obj)
         step_label = _step_display_name(step)
         written[f"object2d.{obj}.{step}"] = save_efficiency_heatmap_pair(
             path,
             frame,
             title=f"{obj_label} {step_label}",
             xlabel=r"$p_{\mathrm{T}}$ [GeV]",
-            ylabel=r"$|y|$",
+            ylabel=None,
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
             zlabel=step_label if step in _STEP_DISPLAY_NAMES else "Efficiency",
@@ -675,7 +692,7 @@ def write_per_object_acceptance_plots(
     obj_df = poa_df.loc[poa_df["map_type"].isin(["object_2d", "object_acceptance_2d"])].copy()
     for obj, frame in obj_df.groupby("object", dropna=False):
         path = output_dir / f"object2d_{obj}_fiducial_acceptance.png"
-        obj_label = _object_label(obj)
+        obj_label = _object_math_label(obj)
         written[f"object2d.{obj}.fiducial_acceptance"] = save_efficiency_heatmap(
             path,
             frame,
@@ -717,7 +734,7 @@ def write_stacked_jpsi_plots(
         )
     if not stacked_efficiency_df.empty:
         for step, frame in stacked_efficiency_df.groupby("step", dropna=False):
-            if step in {"full_gen", "fiducial_acceptance"}:
+            if step in {"full_gen", "fiducial", "fiducial_acceptance"}:
                 continue
             step_label = _step_display_name(step)
             path = output_dir / f"stacked_jpsi_{step}.png"
@@ -734,3 +751,51 @@ def write_stacked_jpsi_plots(
                 zlabel=step_label if step in _STEP_DISPLAY_NAMES else "Efficiency",
             )
     return written
+
+
+def _write_pair_level_plot(
+    output_dir: Path, df: pd.DataFrame, step: str,
+    plot_style_cfg: CmsPlotStyleConfig, min_total: int,
+) -> dict[str, Path]:
+    """Single pair-level heatmap for a given step."""
+    if df.empty:
+        return {}
+    output_dir.mkdir(parents=True, exist_ok=True)
+    step_label = _step_display_name(step)
+    path = output_dir / f"pair2d_{step}.png"
+    written: dict[str, Path] = {f"pair2d.{step}": save_efficiency_heatmap_pair(
+        path, df,
+        title=f"{step_label} efficiency",
+        xlabel=r"$p_{\mathrm{T}}(J/\psi_{\mathrm{lead}})$ [GeV]",
+        ylabel=r"$p_{\mathrm{T}}(J/\psi_{\mathrm{sublead}})$ [GeV]",
+        plot_style_cfg=plot_style_cfg,
+        min_total=min_total,
+        zlabel=step_label,
+    )}
+    return written
+
+
+def write_four_muon_vertex_plots(
+    output_dir: Path, vtx4m_df: pd.DataFrame,
+    plot_style_cfg: CmsPlotStyleConfig, min_total: int = 1,
+) -> dict[str, Path]:
+    return _write_pair_level_plot(output_dir, vtx4m_df, "four_muon_vtx",
+                                   plot_style_cfg, min_total)
+
+
+def write_pri_assocpv_plots(
+    output_dir: Path, df: pd.DataFrame,
+    plot_style_cfg: CmsPlotStyleConfig, min_total: int = 1,
+) -> dict[str, Path]:
+    return _write_pair_level_plot(output_dir, df, "Pri_assocPVPass",
+                                   plot_style_cfg, min_total)
+
+
+def write_pri_trackpv_plots(
+    output_dir: Path, df: pd.DataFrame,
+    plot_style_cfg: CmsPlotStyleConfig, min_total: int = 1,
+) -> dict[str, Path]:
+    return _write_pair_level_plot(output_dir, df, "Pri_trackPVPass",
+                                   plot_style_cfg, min_total)
+
+

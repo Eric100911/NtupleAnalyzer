@@ -43,7 +43,7 @@ def render_smoke_plots(derived_dir: Path, output_dir: Path, min_plot_total: int,
             )
 
     if not stacked_acc_df.empty or not stacked_eff_df.empty:
-        eff_subset = stacked_eff_df.loc[stacked_eff_df["step"].isin(["hlt_muon_matched", "final_nominal"])].copy()
+        eff_subset = stacked_eff_df.loc[stacked_eff_df["step"].isin(["hlt_event", "Pri_fitPass"])].copy()
         written.update(
             {
                 f"stacked_jpsi.{key}": path

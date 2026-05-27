@@ -14,6 +14,9 @@ from efficiency_workflow.efficiency import (
     build_per_object_acceptance_maps,
     build_stacked_jpsi_acceptance_maps,
     build_stacked_jpsi_efficiency_maps,
+    build_four_muon_vertex_maps,
+    build_pri_assocpv_maps,
+    build_pri_trackpv_maps,
 )
 from efficiency_workflow.io import ensure_dir, read_json, write_json, write_parquet
 
@@ -53,6 +56,9 @@ def build_derived_for_sample(
     poa_df = pd.DataFrame()
     stacked_acc_df = pd.DataFrame()
     stacked_eff_df = pd.DataFrame()
+    vtx4m_df = pd.DataFrame()
+    pri_assocpv_df = pd.DataFrame()
+    pri_trackpv_df = pd.DataFrame()
     gen_path = sample_dir / "gen_systems.parquet"
     event_path = sample_dir / "event_step_flags.parquet"
     if gen_path.exists() and event_path.exists():
@@ -63,6 +69,9 @@ def build_derived_for_sample(
         poa_df = build_per_object_acceptance_maps(gen_df, event_df, binning)
         stacked_acc_df = build_stacked_jpsi_acceptance_maps(gen_df, event_df, binning)
         stacked_eff_df = build_stacked_jpsi_efficiency_maps(gen_df, event_df, binning)
+        vtx4m_df = build_four_muon_vertex_maps(gen_df, event_df, binning)
+        pri_assocpv_df = build_pri_assocpv_maps(gen_df, event_df, binning)
+        pri_trackpv_df = build_pri_trackpv_maps(gen_df, event_df, binning)
     else:
         print(f"[{sample}] Missing gen_systems.parquet or event_step_flags.parquet; derived object maps skipped")
 
@@ -81,6 +90,18 @@ def build_derived_for_sample(
         write_parquet(stacked_eff_df, derived_dir / "stacked_jpsi_efficiency_maps.parquet")
         stacked_eff_df.to_csv(derived_dir / "stacked_jpsi_efficiency_maps.csv", index=False)
         print(f"[{sample}]   stacked J/psi efficiency rows: {len(stacked_eff_df)}")
+    if not vtx4m_df.empty:
+        write_parquet(vtx4m_df, derived_dir / "four_muon_vertex_maps.parquet")
+        vtx4m_df.to_csv(derived_dir / "four_muon_vertex_maps.csv", index=False)
+        print(f"[{sample}]   4-muon vertex rows: {len(vtx4m_df)}")
+    if not pri_assocpv_df.empty:
+        write_parquet(pri_assocpv_df, derived_dir / "pri_assocpv_maps.parquet")
+        pri_assocpv_df.to_csv(derived_dir / "pri_assocpv_maps.csv", index=False)
+        print(f"[{sample}]   Pri_assocPVPass rows: {len(pri_assocpv_df)}")
+    if not pri_trackpv_df.empty:
+        write_parquet(pri_trackpv_df, derived_dir / "pri_trackpv_maps.parquet")
+        pri_trackpv_df.to_csv(derived_dir / "pri_trackpv_maps.csv", index=False)
+        print(f"[{sample}]   Pri_trackPVPass rows: {len(pri_trackpv_df)}")
     if not acc_df.empty:
         write_parquet(acc_df, derived_dir / "acceptance_maps.parquet")
         acc_df.to_csv(derived_dir / "acceptance_maps.csv", index=False)
@@ -93,8 +114,12 @@ def build_derived_for_sample(
     plots: dict[str, Path] = {}
     poa_plots: dict[str, Path] = {}
     qa_plots: dict[str, Path] = {}
+    derived_plots: dict[str, Path] = {}
+    vtx4m_plots: dict[str, Path] = {}
+    pri_assocpv_plots: dict[str, Path] = {}
+    pri_trackpv_plots: dict[str, Path] = {}
     if not skip_plots:
-        from efficiency_workflow.plotting import write_derived_plots, write_per_object_acceptance_plots, write_stacked_jpsi_plots
+        from efficiency_workflow.plotting import write_derived_plots, write_per_object_acceptance_plots, write_stacked_jpsi_plots, write_four_muon_vertex_plots, write_pri_assocpv_plots, write_pri_trackpv_plots
 
         if not poa_df.empty:
             print(f"[{sample}] Generating per-object acceptance plots ...")
@@ -140,7 +165,33 @@ def build_derived_for_sample(
                 }
             )
             print(f"[{sample}]   {len(plots)} stacked J/psi plots written")
-        derived_plots: dict[str, Path] = {}
+            vtx4m_plots = {}
+            if not vtx4m_df.empty:
+                print(f"[{sample}] Generating 4-muon vertex plots ...")
+                vtx4m_plots = write_four_muon_vertex_plots(
+                    derived_dir / "plots" / "pair_vertex",
+                    vtx4m_df,
+                    plot_style_cfg=CmsPlotStyleConfig(is_data=False),
+                    min_total=min_plot_total,
+                )
+                print(f"[{sample}]   {len(vtx4m_plots)} 4-muon vertex plots written")
+            if not pri_assocpv_df.empty:
+                print(f"[{sample}] Generating Pri_assocPVPass plots ...")
+                pri_assocpv_plots = write_pri_assocpv_plots(
+                    derived_dir / "plots" / "pair_vertex",
+                    pri_assocpv_df,
+                    plot_style_cfg=CmsPlotStyleConfig(is_data=False),
+                    min_total=min_plot_total,
+                )
+            if not pri_trackpv_df.empty:
+                print(f"[{sample}] Generating Pri_trackPVPass plots ...")
+                pri_trackpv_plots = write_pri_trackpv_plots(
+                    derived_dir / "plots" / "pair_vertex",
+                    pri_trackpv_df,
+                    plot_style_cfg=CmsPlotStyleConfig(is_data=False),
+                    min_total=min_plot_total,
+                )
+        derived_plots = {}
         if not acc_df.empty or not cond_df.empty:
             print(f"[{sample}] Generating derived acceptance/conditional plots ...")
             derived_plots = write_derived_plots(
@@ -181,6 +232,21 @@ def build_derived_for_sample(
         manifest["outputs"]["stacked_jpsi_plots"] = {key: str(path.relative_to(derived_dir)) for key, path in plots.items()}
     if qa_plots:
         manifest["outputs"]["plots_with_uncertainty"] = {key: str(path.relative_to(derived_dir)) for key, path in qa_plots.items()}
+    if not vtx4m_df.empty:
+        manifest["outputs"]["four_muon_vertex_parquet"] = "four_muon_vertex_maps.parquet"
+        manifest["outputs"]["four_muon_vertex_csv"] = "four_muon_vertex_maps.csv"
+        if vtx4m_plots:
+            manifest["outputs"]["four_muon_vertex_plots"] = {key: str(path.relative_to(derived_dir)) for key, path in vtx4m_plots.items()}
+    if not pri_assocpv_df.empty:
+        manifest["outputs"]["pri_assocpv_parquet"] = "pri_assocpv_maps.parquet"
+        manifest["outputs"]["pri_assocpv_csv"] = "pri_assocpv_maps.csv"
+        if pri_assocpv_plots:
+            manifest["outputs"]["pri_assocpv_plots"] = {key: str(path.relative_to(derived_dir)) for key, path in pri_assocpv_plots.items()}
+    if not pri_trackpv_df.empty:
+        manifest["outputs"]["pri_trackpv_parquet"] = "pri_trackpv_maps.parquet"
+        manifest["outputs"]["pri_trackpv_csv"] = "pri_trackpv_maps.csv"
+        if pri_trackpv_plots:
+            manifest["outputs"]["pri_trackpv_plots"] = {key: str(path.relative_to(derived_dir)) for key, path in pri_trackpv_plots.items()}
     write_json(manifest, derived_dir / "manifest.json")
     print(f"[{sample}] Done.")
     return manifest

@@ -539,13 +539,13 @@ def main() -> None:
             min_plot_total=run_cfg.min_plot_total,
             skip_plots=args.skip_plots,
         )
-        inclusive_final = tables["cutflow"].loc[tables["cutflow"]["step"] == "final_nominal"]
+        inclusive_final = tables["cutflow"].loc[tables["cutflow"]["step"] == "Pri_trackPVPass"]
         summary_rows.append(
             {
                 "sample": sample,
                 "n_input_files": len(files),
                 "n_full_gen": int(tables["event_step_flags"]["full_gen"].sum()) if not tables["event_step_flags"].empty else 0,
-                "n_final_nominal": int(tables["event_step_flags"]["final_nominal"].sum()) if not tables["event_step_flags"].empty else 0,
+                "n_Pri_trackPVPass": int(tables["event_step_flags"]["Pri_trackPVPass"].sum()) if not tables["event_step_flags"].empty else 0,
                 "final_efficiency": float(inclusive_final["efficiency"].iloc[0]) if not inclusive_final.empty else float("nan"),
                 "final_err_sym": float(inclusive_final["err_sym"].iloc[0]) if not inclusive_final.empty else float("nan"),
                 "access_methods": ",".join(f"{key}:{value}" for key, value in sorted(method_counts.items())),
