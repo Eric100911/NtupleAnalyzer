@@ -31,6 +31,18 @@ EVENT_STEPS = (
     "Pri_trackPVPass",
 )
 
+EVENT_STEP_PREVIOUS = {
+    "s_cand": "full_gen",
+    "hlt_event": "s_cand",
+    "four_muon_vtx": "hlt_event",
+    "Pri_fitValid": "four_muon_vtx",
+    "Pri_fitPass": "four_muon_vtx",
+    "Pri_assocPVPass": "four_muon_vtx",
+    "Pri_trackPVPass": "four_muon_vtx",
+}
+
+EVENT_CONDITIONAL_STEPS = ("full_gen", "s_cand") + EVENT_STEPS
+
 # Derived / convenience flags
 DERIVED_FLAGS = ("full_gen", "s_cand")
 
@@ -54,11 +66,10 @@ EFFICIENCY_STEPS = (
 )
 
 CORRELATED_MAP_STEPS = (
-    "hlt_muon_matched",
-    "all6_same_recVtx",
+    "hlt_event",
+    "four_muon_vtx",
     "Pri_fitValid",
     "Pri_fitPass",
-    "final_nominal",
 )
 
 
@@ -155,6 +166,24 @@ class EfficiencyRunConfig:
     samples: tuple[str, ...] = ("JJP_DPS1", "JJP_DPS2_CS", "JJP_DPS2_G", "JJP_SPS_CS", "JJP_SPS_G")
     max_files: int | None = None
     min_plot_total: int = 1
+
+
+@dataclass(frozen=True)
+class PairLevelMapSpec:
+    step: str
+    denominator_col: str
+    quantity: str
+
+
+PAIR_LEVEL_MAP_SPECS = (
+    PairLevelMapSpec("four_muon_vtx", "hlt_event", "four_muon_vertex_efficiency"),
+    PairLevelMapSpec("Pri_fitValid", "four_muon_vtx", "pri_fitvalid_efficiency"),
+    PairLevelMapSpec("Pri_fitPass", "four_muon_vtx", "pri_fitpass_efficiency"),
+    PairLevelMapSpec("Pri_assocPVPass", "four_muon_vtx", "pri_assocpv_efficiency"),
+    PairLevelMapSpec("Pri_trackPVPass", "four_muon_vtx", "pri_trackpv_efficiency"),
+)
+
+PAIR_LEVEL_MAP_SPEC_BY_STEP = {spec.step: spec for spec in PAIR_LEVEL_MAP_SPECS}
 
 
 @dataclass(frozen=True)
@@ -1425,19 +1454,21 @@ def build_cutflow(event_df: pd.DataFrame) -> pd.DataFrame:
         _cutflow_chain(event_df, PER_JPSI_STEPS, total_full_gen, obj_prefix)
     _cutflow_chain(event_df, PER_PHI_STEPS, total_full_gen, "phi")
 
-    # Event-level chain (denominator = s_cand for hlt_event)
+    # Event-level criteria after four_muon_vtx are parallel diagnostics.
     s_cand_total = int(event_df["s_cand"].sum())
-    for step in EVENT_STEPS:
-        base = s_cand_total if step == "hlt_event" else None  # dynamic below
-    previous = s_cand_total
     for step in EVENT_STEPS:
         passed = int(event_df[step].sum()) if step in event_df.columns else 0
         row = _efficiency_row({"step": step, "object": ""}, s_cand_total, passed)
+        previous_step = EVENT_STEP_PREVIOUS[step]
+        if previous_step == "s_cand":
+            previous = s_cand_total
+        else:
+            previous = int(event_df[previous_step].sum()) if previous_step in event_df.columns else 0
+        row["previous_step"] = previous_step
         row["conditional_total"] = int(previous)
         row["conditional_passed"] = int(passed)
         row["conditional_efficiency"] = float(passed / previous) if previous > 0 else math.nan
         rows.append(row)
-        previous = passed
 
     return pd.DataFrame(rows)
 
@@ -1531,8 +1562,6 @@ def _correlated_3d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> li
     rows: list[dict[str, Any]] = []
     jpsi_edges = binning.jpsi_pt_edges
     phi_edges = binning.phi_pt_edges
-    correlated_steps = ("hlt_event", "four_muon_vtx",
-                         "Pri_fitValid", "Pri_fitPass")
     for ix in range(len(jpsi_edges) - 1):
         for iy in range(len(jpsi_edges) - 1):
             for iz in range(len(phi_edges) - 1):
@@ -1545,7 +1574,7 @@ def _correlated_3d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> li
                     & (frame["phi_pt"] < phi_edges[iz + 1])
                 ]
                 total = int(subset["full_gen"].sum())
-                for step in correlated_steps:
+                for step in CORRELATED_MAP_STEPS:
                     rows.append(
                         _efficiency_row(
                             {
@@ -1582,12 +1611,11 @@ def _triple_sidecheck_counts(frame: pd.DataFrame, binning: EfficiencyBinning) ->
         ("triple_abs_y", binning.triple_abs_y_edges),
         ("triple_mass", binning.triple_mass_edges),
     )
-    all_steps = ("full_gen", "s_cand") + EVENT_STEPS
     for axis, edges in specs:
         for idx in range(len(edges) - 1):
             subset = frame[(frame[axis] >= edges[idx]) & (frame[axis] < edges[idx + 1])]
             total = int(subset["full_gen"].sum())
-            for step in all_steps:
+            for step in EVENT_CONDITIONAL_STEPS:
                 if step in subset.columns:
                     rows.append(
                         _efficiency_row(
@@ -1872,7 +1900,6 @@ _OBJECT_CHAIN = {
     "jpsi_sublead": PER_JPSI_STEPS,
     "phi": PER_PHI_STEPS,
 }
-_EVENT_CHAIN = EVENT_STEPS
 
 
 def build_conditional_maps(counts_df: pd.DataFrame) -> pd.DataFrame:
@@ -1892,14 +1919,21 @@ def build_conditional_maps(counts_df: pd.DataFrame) -> pd.DataFrame:
                 chain = _OBJECT_CHAIN.get(obj_name, ())
                 _chain_conditional_rows(obj_subset, chain, keys, parts)
         elif map_type == "correlated_3d":
-            correlated_steps = ("hlt_event", "four_muon_vtx",
-                                 "Pri_fitValid", "Pri_fitPass")
-            _chain_conditional_rows(subset, correlated_steps, keys, parts)
+            _conditional_rows_with_denominators(
+                subset,
+                CORRELATED_MAP_STEPS,
+                EVENT_STEP_PREVIOUS,
+                keys,
+                parts,
+            )
         elif map_type == "triple_1d":
-            # Full analysis chain at the triple-system level
-            chain = ("full_gen", "s_cand", "hlt_event", "four_muon_vtx",
-                      "Pri_fitValid", "Pri_fitPass")
-            _chain_conditional_rows(subset, chain, keys, parts)
+            _conditional_rows_with_denominators(
+                subset,
+                EVENT_CONDITIONAL_STEPS,
+                EVENT_STEP_PREVIOUS,
+                keys,
+                parts,
+            )
         elif map_type == "inclusive":
             # Group by object for proper per-object vs event-level chaining
             if "object" in subset.columns:
@@ -1909,10 +1943,13 @@ def build_conditional_maps(counts_df: pd.DataFrame) -> pd.DataFrame:
                         chain = _OBJECT_CHAIN.get(obj_name, ())
                         _chain_conditional_rows(obj_subset, chain, keys, parts)
                     else:
-                        # Event-level: s_cand -> EVENT_STEPS
-                        chain = ("full_gen", "s_cand", "hlt_event", "four_muon_vtx",
-                                  "Pri_fitValid", "Pri_fitPass")
-                        _chain_conditional_rows(obj_subset, chain, keys, parts)
+                        _conditional_rows_with_denominators(
+                            obj_subset,
+                            EVENT_CONDITIONAL_STEPS,
+                            EVENT_STEP_PREVIOUS,
+                            keys,
+                            parts,
+                        )
             else:
                 _chain_conditional_rows(subset, (), keys, parts)
 
@@ -1972,13 +2009,58 @@ def _chain_conditional_rows(subset: pd.DataFrame, chain: tuple[str, ...],
         parts.append(merged)
 
 
+def _conditional_rows_with_denominators(
+    subset: pd.DataFrame,
+    steps: tuple[str, ...],
+    previous_by_step: dict[str, str],
+    keys: list[str],
+    parts: list[pd.DataFrame],
+) -> None:
+    """Build conditional rows when later criteria are parallel, not chained."""
+    present_steps = [step for step in steps if step in subset["step"].values]
+    if not present_steps:
+        return
+
+    for step in present_steps:
+        this = subset.loc[subset["step"] == step].copy()
+        previous_step = previous_by_step.get(step)
+        if not previous_step:
+            this["previous_step"] = "total"
+            this["conditional_total"] = this["total"].astype(int)
+        else:
+            prev = subset.loc[subset["step"] == previous_step].copy()
+            if prev.empty:
+                this["previous_step"] = "total"
+                this["conditional_total"] = this["total"].astype(int)
+            elif keys:
+                this = this.merge(
+                    prev[keys + ["passed"]],
+                    on=keys,
+                    how="left",
+                    suffixes=("", "_prev"),
+                )
+                this["previous_step"] = previous_step
+                this["conditional_total"] = this["passed_prev"].fillna(0).astype(int)
+            else:
+                this["previous_step"] = previous_step
+                this["conditional_total"] = int(prev["passed"].iloc[0])
+
+        this["conditional_passed"] = this["passed"].astype(int)
+        this["absolute_total"] = this["total"].astype(int)
+        this["absolute_passed"] = this["passed"].astype(int)
+        this["absolute_efficiency"] = this["efficiency"].astype(float)
+        _recompute_efficiency(this, "conditional_total", "conditional_passed")
+        this["quantity"] = "conditional_efficiency_vs_previous_step"
+        parts.append(this)
+
+
 def _build_pair_level_maps(
     gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning,
-    step: str, denominator_col: str, quantity: str,
+    spec: PairLevelMapSpec,
 ) -> pd.DataFrame:
     """Pair-level efficiency binned in (jpsi_lead_pt, jpsi_sublead_pt)."""
     merged = _merged_gen_events(gen_df, event_df)
-    if merged.empty or step not in merged.columns or denominator_col not in merged.columns:
+    if merged.empty or spec.step not in merged.columns or spec.denominator_col not in merged.columns:
         return pd.DataFrame()
     rows: list[dict[str, Any]] = []
     jpsi_edges = binning.jpsi_pt_edges
@@ -1990,13 +2072,15 @@ def _build_pair_level_maps(
                 & (merged["jpsi_sublead_pt"] >= jpsi_edges[iy])
                 & (merged["jpsi_sublead_pt"] < jpsi_edges[iy + 1])
             ]
-            total = int(subset[denominator_col].sum())
-            passed = int((subset[denominator_col] & subset[step]).sum())
+            denominator = subset[spec.denominator_col].astype(bool)
+            passed_step = subset[spec.step].astype(bool)
+            total = int(denominator.sum())
+            passed = int((denominator & passed_step).sum())
             rows.append(
                 _efficiency_row(
                     {
                         "map_type": "pair_vertex_2d",
-                        "step": step,
+                        "step": spec.step,
                         "x_axis": "jpsi_lead_pt",
                         "y_axis": "jpsi_sublead_pt",
                         "x_bin": ix,
@@ -2007,7 +2091,7 @@ def _build_pair_level_maps(
                         "y_max": jpsi_edges[iy + 1],
                         "x_label": _bin_label(jpsi_edges, ix),
                         "y_label": _bin_label(jpsi_edges, iy),
-                        "quantity": quantity,
+                        "quantity": spec.quantity,
                     },
                     total,
                     passed,
@@ -2016,27 +2100,54 @@ def _build_pair_level_maps(
     return pd.DataFrame(rows)
 
 
+def build_pair_level_maps(
+    gen_df: pd.DataFrame,
+    event_df: pd.DataFrame,
+    binning: EfficiencyBinning,
+    specs: tuple[PairLevelMapSpec, ...] = PAIR_LEVEL_MAP_SPECS,
+) -> dict[str, pd.DataFrame]:
+    """Build all configured pair-level maps keyed by step name."""
+    return {
+        spec.step: _build_pair_level_maps(gen_df, event_df, binning, spec)
+        for spec in specs
+    }
+
+
 def build_four_muon_vertex_maps(
     gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning
 ) -> pd.DataFrame:
-    return _build_pair_level_maps(gen_df, event_df, binning,
-                                   "four_muon_vtx", "hlt_event",
-                                   "four_muon_vertex_efficiency")
+    return _build_pair_level_maps(
+        gen_df, event_df, binning, PAIR_LEVEL_MAP_SPEC_BY_STEP["four_muon_vtx"]
+    )
+
+
+def build_pri_fitvalid_maps(
+    gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning
+) -> pd.DataFrame:
+    return _build_pair_level_maps(
+        gen_df, event_df, binning, PAIR_LEVEL_MAP_SPEC_BY_STEP["Pri_fitValid"]
+    )
+
+
+def build_pri_fitpass_maps(
+    gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning
+) -> pd.DataFrame:
+    return _build_pair_level_maps(
+        gen_df, event_df, binning, PAIR_LEVEL_MAP_SPEC_BY_STEP["Pri_fitPass"]
+    )
 
 
 def build_pri_assocpv_maps(
     gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning
 ) -> pd.DataFrame:
-    return _build_pair_level_maps(gen_df, event_df, binning,
-                                   "Pri_assocPVPass", "four_muon_vtx",
-                                   "pri_assocpv_efficiency")
+    return _build_pair_level_maps(
+        gen_df, event_df, binning, PAIR_LEVEL_MAP_SPEC_BY_STEP["Pri_assocPVPass"]
+    )
 
 
 def build_pri_trackpv_maps(
     gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning
 ) -> pd.DataFrame:
-    return _build_pair_level_maps(gen_df, event_df, binning,
-                                   "Pri_trackPVPass", "four_muon_vtx",
-                                   "pri_trackpv_efficiency")
-
-
+    return _build_pair_level_maps(
+        gen_df, event_df, binning, PAIR_LEVEL_MAP_SPEC_BY_STEP["Pri_trackPVPass"]
+    )

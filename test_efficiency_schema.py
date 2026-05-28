@@ -7,6 +7,8 @@ Usage:
 """
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -17,6 +19,8 @@ from efficiency_workflow.efficiency import (
     PER_JPSI_STEPS,
     PER_PHI_STEPS,
     DERIVED_FLAGS,
+    EVENT_STEP_PREVIOUS,
+    PAIR_LEVEL_MAP_SPECS,
     per_object_step_columns,
     _process_efficiency_chunk_vectorized,
     process_efficiency_file,
@@ -49,6 +53,18 @@ class TestStepDefinitions:
 
     def test_event_steps_no_duplicates(self):
         assert len(EVENT_STEPS) == len(set(EVENT_STEPS))
+
+    def test_event_level_parallel_denominators(self):
+        assert EVENT_STEP_PREVIOUS["hlt_event"] == "s_cand"
+        assert EVENT_STEP_PREVIOUS["four_muon_vtx"] == "hlt_event"
+        for step in ("Pri_fitValid", "Pri_fitPass", "Pri_assocPVPass", "Pri_trackPVPass"):
+            assert EVENT_STEP_PREVIOUS[step] == "four_muon_vtx"
+
+    def test_pair_level_map_specs(self):
+        by_step = {spec.step: spec for spec in PAIR_LEVEL_MAP_SPECS}
+        assert by_step["four_muon_vtx"].denominator_col == "hlt_event"
+        for step in ("Pri_fitValid", "Pri_fitPass", "Pri_assocPVPass", "Pri_trackPVPass"):
+            assert by_step[step].denominator_col == "four_muon_vtx"
 
     def test_per_jpsi_steps_no_duplicates(self):
         assert len(PER_JPSI_STEPS) == len(set(PER_JPSI_STEPS))
@@ -87,6 +103,8 @@ NTUPLE = (
 
 def _load_chunk():
     """Load one chunk from the test ntuple. Returns empty dict on failure."""
+    if os.environ.get("RUN_REMOTE_EFFICIENCY_TESTS") != "1":
+        return {}
     import uproot
     try:
         arrays = uproot.iterate(NTUPLE, filter_name=list(EFFICIENCY_BRANCHES),
@@ -112,6 +130,8 @@ def efficiency_result():
 @pytest.fixture(scope="module")
 def python_loop_result():
     """Process one chunk with python-loop backend."""
+    if os.environ.get("RUN_REMOTE_EFFICIENCY_TESTS") != "1":
+        return {}
     try:
         import uproot
         arrays = uproot.iterate(NTUPLE, filter_name=list(EFFICIENCY_BRANCHES),

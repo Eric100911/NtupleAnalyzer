@@ -612,6 +612,26 @@ def write_efficiency_plots(
     return written
 
 
+def write_efficiency_plot_bundle(
+    sample_dir: Path,
+    counts_df: pd.DataFrame,
+    plot_style_cfg: CmsPlotStyleConfig,
+    min_total: int = 1,
+) -> dict[str, dict[str, str]]:
+    plot_paths = write_efficiency_plots(
+        sample_dir / "plots",
+        counts_df,
+        plot_style_cfg=plot_style_cfg,
+        min_total=min_total,
+    )
+    return {
+        "plots": {
+            key: str(path.relative_to(sample_dir))
+            for key, path in plot_paths.items()
+        }
+    }
+
+
 def write_derived_plots(
     output_dir: Path,
     acc_df: pd.DataFrame,
@@ -775,27 +795,166 @@ def _write_pair_level_plot(
     return written
 
 
+def write_pair_level_plot(
+    output_dir: Path,
+    df: pd.DataFrame,
+    step: str,
+    plot_style_cfg: CmsPlotStyleConfig,
+    min_total: int = 1,
+) -> dict[str, Path]:
+    return _write_pair_level_plot(output_dir, df, step, plot_style_cfg, min_total)
+
+
+def write_pair_level_plots(
+    output_dir: Path,
+    pair_maps: dict[str, pd.DataFrame],
+    plot_style_cfg: CmsPlotStyleConfig,
+    min_total: int = 1,
+) -> dict[str, Path]:
+    written: dict[str, Path] = {}
+    for step, frame in pair_maps.items():
+        written.update(
+            write_pair_level_plot(
+                output_dir,
+                frame,
+                step,
+                plot_style_cfg=plot_style_cfg,
+                min_total=min_total,
+            )
+        )
+    return written
+
+
+def write_derived_plot_bundle(
+    derived_dir: Path,
+    *,
+    acceptance_df: pd.DataFrame,
+    conditional_df: pd.DataFrame,
+    per_object_acceptance_df: pd.DataFrame,
+    stacked_jpsi_acceptance_df: pd.DataFrame,
+    stacked_jpsi_efficiency_df: pd.DataFrame,
+    pair_level_dfs: dict[str, pd.DataFrame],
+    plot_style_cfg: CmsPlotStyleConfig,
+    min_total: int = 1,
+) -> dict[str, object]:
+    from .products import PAIR_LEVEL_OUTPUT_NAMES
+
+    outputs: dict[str, object] = {}
+
+    if not per_object_acceptance_df.empty:
+        poa_plots = write_per_object_acceptance_plots(
+            derived_dir / "plots" / "per_object_acceptance",
+            per_object_acceptance_df,
+            plot_style_cfg=plot_style_cfg,
+            min_total=min_total,
+        )
+        outputs["per_object_acceptance_plots"] = {
+            key: str(path.relative_to(derived_dir)) for key, path in poa_plots.items()
+        }
+        poa_qa = write_per_object_acceptance_plots(
+            derived_dir / "plots_with_uncertainty" / "per_object_acceptance",
+            per_object_acceptance_df,
+            plot_style_cfg=plot_style_cfg,
+            min_total=min_total,
+            include_uncertainty=True,
+        )
+        outputs.setdefault("plots_with_uncertainty", {}).update(
+            {
+                f"per_object_acceptance_qa.{key}": str(path.relative_to(derived_dir))
+                for key, path in poa_qa.items()
+            }
+        )
+
+    if not stacked_jpsi_acceptance_df.empty or not stacked_jpsi_efficiency_df.empty:
+        stacked_plots = write_stacked_jpsi_plots(
+            derived_dir / "plots" / "stacked_jpsi",
+            stacked_jpsi_acceptance_df,
+            stacked_jpsi_efficiency_df,
+            plot_style_cfg=plot_style_cfg,
+            min_total=min_total,
+        )
+        outputs["stacked_jpsi_plots"] = {
+            key: str(path.relative_to(derived_dir)) for key, path in stacked_plots.items()
+        }
+        stacked_qa = write_stacked_jpsi_plots(
+            derived_dir / "plots_with_uncertainty" / "stacked_jpsi",
+            stacked_jpsi_acceptance_df,
+            stacked_jpsi_efficiency_df,
+            plot_style_cfg=plot_style_cfg,
+            min_total=min_total,
+            include_uncertainty=True,
+        )
+        outputs.setdefault("plots_with_uncertainty", {}).update(
+            {
+                f"stacked_jpsi_qa.{key}": str(path.relative_to(derived_dir))
+                for key, path in stacked_qa.items()
+            }
+        )
+
+    for step, frame in pair_level_dfs.items():
+        if frame.empty:
+            continue
+        pair_plots = write_pair_level_plot(
+            derived_dir / "plots" / "pair_vertex",
+            frame,
+            step,
+            plot_style_cfg=plot_style_cfg,
+            min_total=min_total,
+        )
+        outputs[f"{PAIR_LEVEL_OUTPUT_NAMES[step]}_plots"] = {
+            key: str(path.relative_to(derived_dir)) for key, path in pair_plots.items()
+        }
+
+    if not acceptance_df.empty or not conditional_df.empty:
+        derived_plots = write_derived_plots(
+            derived_dir / "plots",
+            acceptance_df,
+            conditional_df,
+            plot_style_cfg=plot_style_cfg,
+            min_total=min_total,
+        )
+        outputs["derived_plots"] = {
+            key: str(path.relative_to(derived_dir)) for key, path in derived_plots.items()
+        }
+
+    return outputs
+
+
 def write_four_muon_vertex_plots(
     output_dir: Path, vtx4m_df: pd.DataFrame,
     plot_style_cfg: CmsPlotStyleConfig, min_total: int = 1,
 ) -> dict[str, Path]:
-    return _write_pair_level_plot(output_dir, vtx4m_df, "four_muon_vtx",
-                                   plot_style_cfg, min_total)
+    return write_pair_level_plot(output_dir, vtx4m_df, "four_muon_vtx",
+                                  plot_style_cfg, min_total)
+
+
+def write_pri_fitvalid_plots(
+    output_dir: Path, df: pd.DataFrame,
+    plot_style_cfg: CmsPlotStyleConfig, min_total: int = 1,
+) -> dict[str, Path]:
+    return write_pair_level_plot(output_dir, df, "Pri_fitValid",
+                                  plot_style_cfg, min_total)
+
+
+def write_pri_fitpass_plots(
+    output_dir: Path, df: pd.DataFrame,
+    plot_style_cfg: CmsPlotStyleConfig, min_total: int = 1,
+) -> dict[str, Path]:
+    return write_pair_level_plot(output_dir, df, "Pri_fitPass",
+                                  plot_style_cfg, min_total)
 
 
 def write_pri_assocpv_plots(
     output_dir: Path, df: pd.DataFrame,
     plot_style_cfg: CmsPlotStyleConfig, min_total: int = 1,
 ) -> dict[str, Path]:
-    return _write_pair_level_plot(output_dir, df, "Pri_assocPVPass",
-                                   plot_style_cfg, min_total)
+    return write_pair_level_plot(output_dir, df, "Pri_assocPVPass",
+                                  plot_style_cfg, min_total)
 
 
 def write_pri_trackpv_plots(
     output_dir: Path, df: pd.DataFrame,
     plot_style_cfg: CmsPlotStyleConfig, min_total: int = 1,
 ) -> dict[str, Path]:
-    return _write_pair_level_plot(output_dir, df, "Pri_trackPVPass",
-                                   plot_style_cfg, min_total)
-
-
+    return write_pair_level_plot(output_dir, df, "Pri_trackPVPass",
+                                  plot_style_cfg, min_total)
