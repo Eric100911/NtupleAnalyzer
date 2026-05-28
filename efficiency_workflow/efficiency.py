@@ -418,7 +418,7 @@ def _daughter_indices(gen_mother_idx: list[int], mother_idx: int, abs_pdgs: set[
     )
 
 
-def find_jpsijpsiphi_gen_system(event: dict[str, Any]) -> GenSystem | None:
+def find_jpsijpsiphi_gen_system(event: dict[str, Any], cfg: OfflineSelectionConfig) -> GenSystem | None:
     gen_pdg = [int(value) for value in event.get("MC_GenPart_pdgId", [])]
     gen_mother_idx = [to_int_idx(value, -1) for value in event.get("MC_GenPart_motherGenIdx", [])]
     gen_pt = event.get("MC_GenPart_pt", [])
@@ -430,16 +430,28 @@ def find_jpsijpsiphi_gen_system(event: dict[str, Any]) -> GenSystem | None:
     for idx, pdg_id in enumerate(gen_pdg):
         abs_pdg = abs(int(pdg_id))
         if abs_pdg == 443:
+            particle_pt = float(gen_pt[idx])
+            if particle_pt <= cfg.jpsi_pt_min:
+                continue
+            particle_y = _rapidity_from_pt_eta_mass(particle_pt, float(gen_eta[idx]), float(gen_mass[idx]))
+            if abs(particle_y) >= cfg.jpsi_abs_y_max:
+                continue
             daughters = _daughter_indices(gen_mother_idx, idx, {13}, gen_pdg)
             if len(daughters) >= 2:
                 particles.append(
-                    GenParticle(idx, pdg_id, float(gen_pt[idx]), float(gen_eta[idx]), float(gen_phi[idx]), float(gen_mass[idx]), daughters[:2])
+                    GenParticle(idx, pdg_id, particle_pt, float(gen_eta[idx]), float(gen_phi[idx]), float(gen_mass[idx]), daughters[:2])
                 )
         elif abs_pdg == 333:
+            particle_pt = float(gen_pt[idx])
+            if particle_pt <= cfg.phi_pt_min:
+                continue
+            particle_y = _rapidity_from_pt_eta_mass(particle_pt, float(gen_eta[idx]), float(gen_mass[idx]))
+            if abs(particle_y) >= cfg.phi_abs_y_max:
+                continue
             daughters = _daughter_indices(gen_mother_idx, idx, {321}, gen_pdg)
             if len(daughters) >= 2:
                 particles.append(
-                    GenParticle(idx, pdg_id, float(gen_pt[idx]), float(gen_eta[idx]), float(gen_phi[idx]), float(gen_mass[idx]), daughters[:2])
+                    GenParticle(idx, pdg_id, particle_pt, float(gen_eta[idx]), float(gen_phi[idx]), float(gen_mass[idx]), daughters[:2])
                 )
 
     jpsis = sorted([particle for particle in particles if abs(particle.pdg_id) == 443], key=lambda item: item.pt, reverse=True)
@@ -678,7 +690,7 @@ def build_event_efficiency_row(
     entry: int,
     cfg: OfflineSelectionConfig,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    system = find_jpsijpsiphi_gen_system(event)
+    system = find_jpsijpsiphi_gen_system(event, cfg)
     if system is None:
         return None, None
 
@@ -902,8 +914,15 @@ def _process_efficiency_chunk_vectorized(
     n_mu_daughters = ak.sum(mu_mother[:, :, None] == gen_idx[:, None, :], axis=1)
     n_kaon_daughters = ak.sum(kaon_mother[:, :, None] == gen_idx[:, None, :], axis=1)
 
-    valid_jpsi = (abs(pdg) == 443) & (n_mu_daughters >= 2)
-    valid_phi = (abs(pdg) == 333) & (n_kaon_daughters >= 2)
+    gen_y = _rapidity_from_pt_eta_mass_array(gen_pt, gen_eta, gen_mass)
+    valid_jpsi = (
+        (abs(pdg) == 443) & (n_mu_daughters >= 2)
+        & (gen_pt > cfg.jpsi_pt_min) & (abs(gen_y) < cfg.jpsi_abs_y_max)
+    )
+    valid_phi = (
+        (abs(pdg) == 333) & (n_kaon_daughters >= 2)
+        & (gen_pt > cfg.phi_pt_min) & (abs(gen_y) < cfg.phi_abs_y_max)
+    )
 
     jpsi_order = ak.argsort(gen_pt[valid_jpsi], ascending=False)
     jpsi_idx_sorted = gen_idx[valid_jpsi][jpsi_order]

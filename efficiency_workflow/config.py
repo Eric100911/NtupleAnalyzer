@@ -50,6 +50,7 @@ class OfflineSelectionConfig:
     ups_vtxprob_min: float | None = None
     phi_mass_window: tuple[float, float] = (0.99, 1.07)
     phi_pt_min: float = 4.0
+    phi_abs_y_max: float = 2.4
     phi_vtxprob_min: float = 0.01
 
 
