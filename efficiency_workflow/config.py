@@ -69,7 +69,8 @@ class CmsPlotStyleConfig:
     caption: str | None = None
     energy_tev: float = 13.6
     lumi_fb: float | None = None
-    era: str | None = None
+    era: str | None = "Run 3"
+    subprocess_label: str | None = None
     is_data: bool = True
 
 

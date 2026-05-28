@@ -10,9 +10,26 @@ from efficiency_workflow.config import CmsPlotStyleConfig
 from efficiency_workflow.io import ensure_dir
 from efficiency_workflow.plotting import (
     save_efficiency_heatmap_pair,
+    subprocess_label_for_sample,
+    with_subprocess_label,
     write_per_object_acceptance_plots,
     write_stacked_jpsi_plots,
 )
+
+
+def test_default_plot_style_uses_run3() -> None:
+    assert CmsPlotStyleConfig().era == "Run 3"
+
+
+def test_subprocess_labels_are_known_for_current_samples() -> None:
+    assert subprocess_label_for_sample("JJP_DPS1") == r"DPS $J/\psi+(J/\psi+\phi)$"
+    assert subprocess_label_for_sample("JJP_SPS_G") == r"SPS $J/\psi+J/\psi+\phi$ @ CSM NLO$^{*}$"
+    assert subprocess_label_for_sample("unknown") is None
+
+
+def test_with_subprocess_label_preserves_explicit_label() -> None:
+    style = CmsPlotStyleConfig(subprocess_label="custom")
+    assert with_subprocess_label(style, "JJP_DPS1").subprocess_label == "custom"
 
 
 def render_smoke_plots(derived_dir: Path, output_dir: Path, min_plot_total: int, with_uncertainty: bool) -> dict[str, Path]:

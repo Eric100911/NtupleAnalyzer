@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -38,6 +39,15 @@ FIT_PROJECTION_TITLES = {
         "Ups_mass": r"iminuit projection on $\Upsilon$",
         "Phi_mass": r"iminuit projection on $\phi$",
     },
+}
+
+SUBPROCESS_LABELS = {
+    "JJP_DPS1": r"DPS $J/\psi+(J/\psi+\phi)$",
+    "JJP_DPS2_CS": r"DPS $(J/\psi+J/\psi)+\phi$ @ CSM LO",
+    "JJP_DPS2_G": r"DPS $(J/\psi+J/\psi)+\phi$ @ CSM NLO$^{*}$",
+    "JJP_SPS_CS": r"SPS $J/\psi+J/\psi+\phi$ @ CSM LO",
+    "JJP_SPS_G": r"SPS $J/\psi+J/\psi+\phi$ @ CSM NLO$^{*}$",
+    "JJP_TPS": r"TPS $J/\psi+J/\psi+\phi$",
 }
 
 
@@ -82,6 +92,29 @@ _STEP_DISPLAY_NAMES = {
 
 def _step_display_name(step: str) -> str:
     return _STEP_DISPLAY_NAMES.get(step, step.replace("_", " "))
+
+
+def _efficiency_zlabel(step: str) -> str:
+    label = _step_display_name(step)
+    lowered = label.lower()
+    if "efficiency" in lowered or "acceptance" in lowered:
+        return label
+    return f"{label} Efficiency"
+
+
+def subprocess_label_for_sample(sample: str | None) -> str | None:
+    if sample is None:
+        return None
+    return SUBPROCESS_LABELS.get(sample)
+
+
+def with_subprocess_label(plot_style_cfg: CmsPlotStyleConfig, sample: str | None) -> CmsPlotStyleConfig:
+    if plot_style_cfg.subprocess_label is not None:
+        return plot_style_cfg
+    label = subprocess_label_for_sample(sample)
+    if label is None:
+        return plot_style_cfg
+    return replace(plot_style_cfg, subprocess_label=label)
 
 
 def default_fit_plot_specs(
@@ -129,6 +162,17 @@ def apply_cms_label(ax, plot_style_cfg: CmsPlotStyleConfig) -> None:
 
     if plot_style_cfg.era and not plot_style_cfg.era.isdigit():
         ax.text(0.03, 0.88, plot_style_cfg.era, transform=ax.transAxes, ha="left", va="top")
+    if plot_style_cfg.subprocess_label:
+        y = 0.80 if plot_style_cfg.era and not plot_style_cfg.era.isdigit() else 0.88
+        ax.text(
+            0.03,
+            y,
+            plot_style_cfg.subprocess_label,
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            fontsize=11,
+        )
 
 
 def evaluate_roofit_pdf_counts(root_module, var, pdf, yield_value: float, n_bins: int, x_range: tuple[float, float]):
@@ -573,6 +617,7 @@ def write_efficiency_plots(
     counts_df: pd.DataFrame,
     plot_style_cfg: CmsPlotStyleConfig,
     min_total: int = 1,
+    include_uncertainty: bool = False,
 ) -> dict[str, Path]:
     if counts_df.empty:
         return {}
@@ -583,7 +628,7 @@ def write_efficiency_plots(
     for (obj, step), frame in object_df.groupby(["object", "step"], dropna=False):
         path = output_dir / f"object2d_{obj}_{step}.png"
         step_label = _step_display_name(step)
-        written[f"object2d.{obj}.{step}"] = save_efficiency_heatmap_pair(
+        written[f"object2d.{obj}.{step}"] = save_efficiency_heatmap(
             path,
             frame,
             title=f"{_object_label(obj)} {step_label}",
@@ -591,7 +636,9 @@ def write_efficiency_plots(
             ylabel=None,
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
-            zlabel=step_label if step in _STEP_DISPLAY_NAMES else "Efficiency",
+            include_uncertainty=include_uncertainty,
+            show_title=include_uncertainty,
+            zlabel=_efficiency_zlabel(step),
         )
 
     corr_df = counts_df.loc[counts_df["map_type"] == "correlated_3d"].copy()
@@ -599,7 +646,7 @@ def write_efficiency_plots(
         z_label = str(frame["z_label"].dropna().iloc[0]) if not frame["z_label"].dropna().empty else str(z_bin)
         step_label = _step_display_name(step)
         path = output_dir / f"corr3d_{step}_phiPt_{z_bin}.png"
-        written[f"corr3d.{step}.{z_bin}"] = save_efficiency_heatmap_pair(
+        written[f"corr3d.{step}.{z_bin}"] = save_efficiency_heatmap(
             path,
             frame,
             title=rf"{step_label}, $p_{{T}}(\phi)$ = {z_label} GeV",
@@ -607,7 +654,9 @@ def write_efficiency_plots(
             ylabel=r"$p_{\mathrm{T}}(J/\psi_{\mathrm{sublead}})$ [GeV]",
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
-            zlabel=step_label if step in _STEP_DISPLAY_NAMES else "Efficiency",
+            include_uncertainty=include_uncertainty,
+            show_title=include_uncertainty,
+            zlabel=_efficiency_zlabel(step),
         )
     return written
 
@@ -618,18 +667,32 @@ def write_efficiency_plot_bundle(
     plot_style_cfg: CmsPlotStyleConfig,
     min_total: int = 1,
 ) -> dict[str, dict[str, str]]:
+    plot_style_cfg = with_subprocess_label(plot_style_cfg, sample_dir.name)
     plot_paths = write_efficiency_plots(
         sample_dir / "plots",
         counts_df,
         plot_style_cfg=plot_style_cfg,
         min_total=min_total,
     )
-    return {
+    qa_paths = write_efficiency_plots(
+        sample_dir / "plots_with_uncertainty",
+        counts_df,
+        plot_style_cfg=plot_style_cfg,
+        min_total=min_total,
+        include_uncertainty=True,
+    )
+    outputs = {
         "plots": {
             key: str(path.relative_to(sample_dir))
             for key, path in plot_paths.items()
         }
     }
+    if qa_paths:
+        outputs["plots_with_uncertainty"] = {
+            key: str(path.relative_to(sample_dir))
+            for key, path in qa_paths.items()
+        }
+    return outputs
 
 
 def write_derived_plots(
@@ -638,6 +701,7 @@ def write_derived_plots(
     cond_df: pd.DataFrame,
     plot_style_cfg: CmsPlotStyleConfig,
     min_total: int = 1,
+    include_uncertainty: bool = False,
 ) -> dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     written: dict[str, Path] = {}
@@ -648,7 +712,7 @@ def write_derived_plots(
     for obj, frame in obj_acc.groupby("object", dropna=False):
         path = acc_plot_dir / f"object2d_{obj}_fiducial_acceptance.png"
         obj_label = _object_math_label(obj)
-        written[f"object2d.{obj}.fiducial_acceptance"] = save_efficiency_heatmap_pair(
+        written[f"object2d.{obj}.fiducial_acceptance"] = save_efficiency_heatmap(
             path,
             frame,
             title=f"{obj_label} fiducial acceptance",
@@ -656,6 +720,8 @@ def write_derived_plots(
             ylabel=None,
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
+            include_uncertainty=include_uncertainty,
+            show_title=include_uncertainty,
             zlabel="Acceptance",
         )
 
@@ -668,7 +734,7 @@ def write_derived_plots(
         path = cond_dir / f"object2d_{obj}_{step}.png"
         obj_label = _object_math_label(obj)
         step_label = _step_display_name(step)
-        written[f"object2d.{obj}.{step}"] = save_efficiency_heatmap_pair(
+        written[f"object2d.{obj}.{step}"] = save_efficiency_heatmap(
             path,
             frame,
             title=f"{obj_label} {step_label}",
@@ -676,7 +742,9 @@ def write_derived_plots(
             ylabel=None,
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
-            zlabel=step_label if step in _STEP_DISPLAY_NAMES else "Efficiency",
+            include_uncertainty=include_uncertainty,
+            show_title=include_uncertainty,
+            zlabel=_efficiency_zlabel(step),
         )
 
     corr_df = cond_df.loc[cond_df["map_type"] == "correlated_3d"].copy()
@@ -684,7 +752,7 @@ def write_derived_plots(
         z_label = str(frame["z_label"].dropna().iloc[0]) if not frame["z_label"].dropna().empty else str(z_bin)
         step_label = _step_display_name(step)
         path = cond_dir / f"corr3d_{step}_phiPt_{z_bin}.png"
-        written[f"corr3d.{step}.{z_bin}"] = save_efficiency_heatmap_pair(
+        written[f"corr3d.{step}.{z_bin}"] = save_efficiency_heatmap(
             path,
             frame,
             title=rf"{step_label}, $p_{{T}}(\phi)$ = {z_label} GeV",
@@ -692,7 +760,9 @@ def write_derived_plots(
             ylabel=r"$p_{\mathrm{T}}(J/\psi_{\mathrm{sublead}})$ [GeV]",
             plot_style_cfg=plot_style_cfg,
             min_total=min_total,
-            zlabel=step_label if step in _STEP_DISPLAY_NAMES else "Efficiency",
+            include_uncertainty=include_uncertainty,
+            show_title=include_uncertainty,
+            zlabel=_efficiency_zlabel(step),
         )
     return written
 
@@ -768,7 +838,7 @@ def write_stacked_jpsi_plots(
                 min_total=min_total,
                 include_uncertainty=include_uncertainty,
                 show_title=include_uncertainty,
-                zlabel=step_label if step in _STEP_DISPLAY_NAMES else "Efficiency",
+                zlabel=_efficiency_zlabel(step),
             )
     return written
 
@@ -776,6 +846,7 @@ def write_stacked_jpsi_plots(
 def _write_pair_level_plot(
     output_dir: Path, df: pd.DataFrame, step: str,
     plot_style_cfg: CmsPlotStyleConfig, min_total: int,
+    include_uncertainty: bool = False,
 ) -> dict[str, Path]:
     """Single pair-level heatmap for a given step."""
     if df.empty:
@@ -783,14 +854,16 @@ def _write_pair_level_plot(
     output_dir.mkdir(parents=True, exist_ok=True)
     step_label = _step_display_name(step)
     path = output_dir / f"pair2d_{step}.png"
-    written: dict[str, Path] = {f"pair2d.{step}": save_efficiency_heatmap_pair(
+    written: dict[str, Path] = {f"pair2d.{step}": save_efficiency_heatmap(
         path, df,
         title=f"{step_label} efficiency",
         xlabel=r"$p_{\mathrm{T}}(J/\psi_{\mathrm{lead}})$ [GeV]",
         ylabel=r"$p_{\mathrm{T}}(J/\psi_{\mathrm{sublead}})$ [GeV]",
         plot_style_cfg=plot_style_cfg,
         min_total=min_total,
-        zlabel=step_label,
+        include_uncertainty=include_uncertainty,
+        show_title=include_uncertainty,
+        zlabel=_efficiency_zlabel(step),
     )}
     return written
 
@@ -801,8 +874,16 @@ def write_pair_level_plot(
     step: str,
     plot_style_cfg: CmsPlotStyleConfig,
     min_total: int = 1,
+    include_uncertainty: bool = False,
 ) -> dict[str, Path]:
-    return _write_pair_level_plot(output_dir, df, step, plot_style_cfg, min_total)
+    return _write_pair_level_plot(
+        output_dir,
+        df,
+        step,
+        plot_style_cfg,
+        min_total,
+        include_uncertainty=include_uncertainty,
+    )
 
 
 def write_pair_level_plots(
@@ -810,6 +891,7 @@ def write_pair_level_plots(
     pair_maps: dict[str, pd.DataFrame],
     plot_style_cfg: CmsPlotStyleConfig,
     min_total: int = 1,
+    include_uncertainty: bool = False,
 ) -> dict[str, Path]:
     written: dict[str, Path] = {}
     for step, frame in pair_maps.items():
@@ -820,6 +902,7 @@ def write_pair_level_plots(
                 step,
                 plot_style_cfg=plot_style_cfg,
                 min_total=min_total,
+                include_uncertainty=include_uncertainty,
             )
         )
     return written
@@ -839,6 +922,7 @@ def write_derived_plot_bundle(
 ) -> dict[str, object]:
     from .products import PAIR_LEVEL_OUTPUT_NAMES
 
+    plot_style_cfg = with_subprocess_label(plot_style_cfg, derived_dir.parent.name)
     outputs: dict[str, object] = {}
 
     if not per_object_acceptance_df.empty:
@@ -904,6 +988,20 @@ def write_derived_plot_bundle(
         outputs[f"{PAIR_LEVEL_OUTPUT_NAMES[step]}_plots"] = {
             key: str(path.relative_to(derived_dir)) for key, path in pair_plots.items()
         }
+        pair_qa = write_pair_level_plot(
+            derived_dir / "plots_with_uncertainty" / "pair_vertex",
+            frame,
+            step,
+            plot_style_cfg=plot_style_cfg,
+            min_total=min_total,
+            include_uncertainty=True,
+        )
+        outputs.setdefault("plots_with_uncertainty", {}).update(
+            {
+                f"{PAIR_LEVEL_OUTPUT_NAMES[step]}_qa.{key}": str(path.relative_to(derived_dir))
+                for key, path in pair_qa.items()
+            }
+        )
 
     if not acceptance_df.empty or not conditional_df.empty:
         derived_plots = write_derived_plots(
@@ -916,6 +1014,20 @@ def write_derived_plot_bundle(
         outputs["derived_plots"] = {
             key: str(path.relative_to(derived_dir)) for key, path in derived_plots.items()
         }
+        derived_qa = write_derived_plots(
+            derived_dir / "plots_with_uncertainty",
+            acceptance_df,
+            conditional_df,
+            plot_style_cfg=plot_style_cfg,
+            min_total=min_total,
+            include_uncertainty=True,
+        )
+        outputs.setdefault("plots_with_uncertainty", {}).update(
+            {
+                f"derived_qa.{key}": str(path.relative_to(derived_dir))
+                for key, path in derived_qa.items()
+            }
+        )
 
     return outputs
 
