@@ -13,7 +13,7 @@ universe = vanilla
 executable = ./run_wrapper.sh
 
 # Default parameters (can be overridden)
-JOBS = 16
+JOBS = 8
 MAX_EVENTS = -1
 MUON_ID = soft
 
