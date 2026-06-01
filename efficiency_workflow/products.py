@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 from .efficiency import (
+    PAIR_LEVEL_MAP_SPECS,
+    PAIR_LEVEL_MAP_SPECS_NO_TRIG_MATCH,
     EfficiencyBinning,
     build_acceptance_maps,
     build_conditional_maps,
@@ -23,10 +25,15 @@ from .io import ensure_dir, read_json, write_json, write_parquet
 
 PAIR_LEVEL_OUTPUT_NAMES = {
     "four_muon_vtx": "four_muon_vertex",
+    "four_muon_vtx_noTrigMatch": "four_muon_vertex_no_trig_match",
     "Pri_fitValid": "pri_fitvalid",
+    "Pri_fitValid_noTrigMatch": "pri_fitvalid_no_trig_match",
     "Pri_fitPass": "pri_fitpass",
+    "Pri_fitPass_noTrigMatch": "pri_fitpass_no_trig_match",
     "Pri_assocPVPass": "pri_assocpv",
+    "Pri_assocPVPass_noTrigMatch": "pri_assocpv_no_trig_match",
     "Pri_trackPVPass": "pri_trackpv",
+    "Pri_trackPVPass_noTrigMatch": "pri_trackpv_no_trig_match",
 }
 
 
@@ -47,6 +54,7 @@ class DerivedSampleProducts:
     sample_dir: Path
     derived_dir: Path
     manifest: dict[str, Any]
+    counts_df: pd.DataFrame
     acceptance_df: pd.DataFrame
     conditional_df: pd.DataFrame
     per_object_acceptance_df: pd.DataFrame
@@ -206,8 +214,9 @@ def build_derived_sample_products(
 
     sample = sample_dir.name
     counts_df = pd.read_parquet(counts_path)
+    active_binning = binning or EfficiencyBinning()
     acc_df = build_acceptance_maps(counts_df)
-    cond_df = build_conditional_maps(counts_df)
+    cond_df = build_conditional_maps(counts_df, active_binning)
     derived_dir = ensure_dir(output_dir / sample / "derived")
 
     poa_df = pd.DataFrame()
@@ -219,11 +228,11 @@ def build_derived_sample_products(
     if gen_path.exists() and event_path.exists():
         gen_df = pd.read_parquet(gen_path)
         event_df = pd.read_parquet(event_path)
-        active_binning = binning or EfficiencyBinning()
         poa_df = build_per_object_acceptance_maps(gen_df, event_df, active_binning)
         stacked_acc_df = build_stacked_jpsi_acceptance_maps(gen_df, event_df, active_binning)
         stacked_eff_df = build_stacked_jpsi_efficiency_maps(gen_df, event_df, active_binning)
-        pair_level_dfs = build_pair_level_maps(gen_df, event_df, active_binning)
+        pair_specs = PAIR_LEVEL_MAP_SPECS if active_binning.include_trigger_matching else PAIR_LEVEL_MAP_SPECS_NO_TRIG_MATCH
+        pair_level_dfs = build_pair_level_maps(gen_df, event_df, active_binning, specs=pair_specs)
 
     manifest: dict[str, Any] = {"source": str(sample_dir.resolve()), "outputs": {}}
     _write_frame_pair(poa_df, derived_dir, "per_object_acceptance_maps", "per_object_acceptance", manifest)
@@ -241,6 +250,7 @@ def build_derived_sample_products(
         sample_dir=sample_dir,
         derived_dir=derived_dir,
         manifest=manifest,
+        counts_df=counts_df,
         acceptance_df=acc_df,
         conditional_df=cond_df,
         per_object_acceptance_df=poa_df,
@@ -266,6 +276,72 @@ def build_derived_efficiency_products(
         )
     write_derived_products_manifest(input_dir, output_dir, products)
     return products
+
+
+def build_systematic_uncertainty(
+    input_dir: Path,
+    output_dir: Path | None = None,
+    *,
+    binning: EfficiencyBinning | None = None,
+    nominal_sample: str = "DPS_1",
+    min_total: int = 1,
+    min_n_samples: int = 2,
+):
+    from .systematics import (
+        build_subprocess_systematics_summary,
+        load_derived_products_for_systematics,
+    )
+
+    output_dir = output_dir or input_dir
+    systematics_dir = ensure_dir(output_dir / "systematics")
+    products_by_sample = load_derived_products_for_systematics(input_dir, binning=binning)
+    if len(products_by_sample) < 2:
+        raise RuntimeError(
+            f"Need at least 2 samples to build subprocess systematics, got {len(products_by_sample)}"
+        )
+
+    results = build_subprocess_systematics_summary(
+        products_by_sample,
+        nominal_sample=nominal_sample,
+        min_total=min_total,
+        min_n_samples=min_n_samples,
+    )
+    results = replace(results, output_dir=systematics_dir)
+
+    write_parquet(results.systematic_summary_df, systematics_dir / "systematic_summary.parquet")
+    results.systematic_summary_df.to_csv(systematics_dir / "systematic_summary.csv", index=False)
+
+    product_outputs: dict[str, dict[str, Any]] = {}
+    for product_type, product in results.products.items():
+        if product.systematics_df.empty:
+            continue
+        stem = f"{product_type}_systematics"
+        write_parquet(product.systematics_df, systematics_dir / f"{stem}.parquet")
+        product.systematics_df.to_csv(systematics_dir / f"{stem}.csv", index=False)
+        product_outputs[product_type] = {
+            "parquet": f"{stem}.parquet",
+            "csv": f"{stem}.csv",
+            "n_rows": int(len(product.systematics_df)),
+        }
+
+    write_json(
+        {
+            "stage": "subprocess_systematic_uncertainty",
+            "input_dir": str(input_dir.resolve()),
+            "output_dir": str(systematics_dir.resolve()),
+            "nominal_sample": results.nominal_sample,
+            "min_total": int(min_total),
+            "min_n_samples": int(min_n_samples),
+            "products": product_outputs,
+            "summary": {
+                "parquet": "systematic_summary.parquet",
+                "csv": "systematic_summary.csv",
+                "n_rows": int(len(results.systematic_summary_df)),
+            },
+        },
+        systematics_dir / "systematic_manifest.json",
+    )
+    return results
 
 
 def write_derived_products_manifest(

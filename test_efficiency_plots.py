@@ -9,7 +9,7 @@ import pandas as pd
 from efficiency_workflow.config import CmsPlotStyleConfig
 from efficiency_workflow.io import ensure_dir
 from efficiency_workflow.plotting import (
-    save_efficiency_heatmap_pair,
+    save_efficiency_heatmap,
     subprocess_label_for_sample,
     with_subprocess_label,
     write_per_object_acceptance_plots,
@@ -75,7 +75,7 @@ def render_smoke_plots(derived_dir: Path, output_dir: Path, min_plot_total: int,
         )
 
     if with_uncertainty and not stacked_acc_df.empty:
-        written["stacked_jpsi_acceptance_pair"] = save_efficiency_heatmap_pair(
+        written["stacked_jpsi_acceptance_pair"] = save_efficiency_heatmap(
             output_dir / "qa_stacked_jpsi_acceptance_pair.png",
             stacked_acc_df,
             title=r"Stacked $J/\psi$ fiducial acceptance",
@@ -84,6 +84,8 @@ def render_smoke_plots(derived_dir: Path, output_dir: Path, min_plot_total: int,
             plot_style_cfg=style,
             min_total=min_plot_total,
             zlabel="Acceptance",
+            include_uncertainty=True,
+            show_title=True,
         )
     return written
 

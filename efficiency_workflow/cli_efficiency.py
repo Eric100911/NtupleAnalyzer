@@ -235,6 +235,7 @@ def run_efficiency_with_fallback(
     step_size: str,
     worker_timeout: int,
     copy_timeout: int,
+    include_trigger_matching: bool = True,
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str], dict[str, int]]:
     gen_parts: list[pd.DataFrame] = []
     event_parts: list[pd.DataFrame] = []
@@ -264,11 +265,12 @@ def run_efficiency_with_fallback(
             event_parts.append(tables["event_step_flags"])
     gen_df = pd.concat(gen_parts, ignore_index=True) if gen_parts else pd.DataFrame()
     event_df = pd.concat(event_parts, ignore_index=True) if event_parts else pd.DataFrame()
+    binning = EfficiencyBinning(include_trigger_matching=include_trigger_matching)
     tables = {
         "gen_systems": gen_df,
         "event_step_flags": event_df,
-        "efficiency_counts": build_efficiency_counts(gen_df, event_df, EfficiencyBinning()),
-        "cutflow": build_cutflow(event_df),
+        "efficiency_counts": build_efficiency_counts(gen_df, event_df, binning),
+        "cutflow": build_cutflow(event_df, binning),
     }
     return tables, source_by_staged, method_counts
 
@@ -332,6 +334,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--cms-energy", type=float, default=13.6)
     parser.add_argument("--cms-lumi", type=float, default=None)
     parser.add_argument("--cms-era", default="Run 3")
+    parser.add_argument("--skip-trigger-matching", action="store_true",
+                        help="Skip the hlt_muon_matched step; condition four_muon_vtx on hlt_event directly")
     return parser.parse_args(argv)
 
 
@@ -387,6 +391,7 @@ def _write_sample_bundle(
 
 def main() -> None:
     args = parse_args()
+    include_trig_match = not args.skip_trigger_matching
     if args.worker_efficiency_json:
         run_efficiency_worker(Path(args.worker_efficiency_json))
         return
@@ -489,6 +494,7 @@ def main() -> None:
                     step_size=args.step_size,
                     worker_timeout=args.worker_timeout,
                     copy_timeout=args.copy_timeout,
+                    include_trigger_matching=include_trig_match,
                 )
             finally:
                 if sample_stage_dir is not None and not args.keep_staged_files:
@@ -513,6 +519,7 @@ def main() -> None:
                     tree_path=run_cfg.tree_path,
                     backend=args.efficiency_backend,
                     step_size=args.step_size,
+                    include_trigger_matching=include_trig_match,
                 )
             finally:
                 if sample_stage_dir is not None and not args.keep_staged_files:
@@ -526,6 +533,7 @@ def main() -> None:
                 tree_path=run_cfg.tree_path,
                 backend=args.efficiency_backend,
                 step_size=args.step_size,
+                include_trigger_matching=include_trig_match,
             )
         restore_source_file_labels(tables, source_by_staged)
         sample_count_tables[sample] = tables["efficiency_counts"]

@@ -45,7 +45,7 @@ class TestStepDefinitions:
 
     def test_event_steps_order(self):
         expected = (
-            "hlt_event", "four_muon_vtx",
+            "hlt_event", "hlt_muon_matched", "four_muon_vtx",
             "Pri_fitValid", "Pri_fitPass", "Pri_assocPVPass",
             "Pri_trackPVPass",
         )
@@ -56,13 +56,14 @@ class TestStepDefinitions:
 
     def test_event_level_parallel_denominators(self):
         assert EVENT_STEP_PREVIOUS["hlt_event"] == "s_cand"
-        assert EVENT_STEP_PREVIOUS["four_muon_vtx"] == "hlt_event"
+        assert EVENT_STEP_PREVIOUS["hlt_muon_matched"] == "hlt_event"
+        assert EVENT_STEP_PREVIOUS["four_muon_vtx"] == "hlt_muon_matched"
         for step in ("Pri_fitValid", "Pri_fitPass", "Pri_assocPVPass", "Pri_trackPVPass"):
             assert EVENT_STEP_PREVIOUS[step] == "four_muon_vtx"
 
     def test_pair_level_map_specs(self):
         by_step = {spec.step: spec for spec in PAIR_LEVEL_MAP_SPECS}
-        assert by_step["four_muon_vtx"].denominator_col == "hlt_event"
+        assert by_step["four_muon_vtx"].denominator_col == "hlt_muon_matched"
         for step in ("Pri_fitValid", "Pri_fitPass", "Pri_assocPVPass", "Pri_trackPVPass"):
             assert by_step[step].denominator_col == "four_muon_vtx"
 
@@ -218,8 +219,12 @@ class TestPerObjectData:
             pytest.skip("No events")
         for col in per_object_step_columns():
             assert not event_df[col].isna().any(), f"{col} has NaN"
-        for col in ("s_cand", "full_gen", "hlt_event", "four_muon_vtx",
-                     "Pri_fitValid", "Pri_fitPass", "Pri_assocPVPass", "Pri_trackPVPass"):
+        for col in ("s_cand", "full_gen", "hlt_event", "hlt_muon_matched",
+                     "four_muon_vtx", "four_muon_vtx_noTrigMatch",
+                     "Pri_fitValid", "Pri_fitValid_noTrigMatch",
+                     "Pri_fitPass", "Pri_fitPass_noTrigMatch",
+                     "Pri_assocPVPass", "Pri_assocPVPass_noTrigMatch",
+                     "Pri_trackPVPass", "Pri_trackPVPass_noTrigMatch"):
             assert col in event_df.columns
             assert not event_df[col].isna().any(), f"{col} has NaN"
 
@@ -229,7 +234,7 @@ class TestPerObjectData:
             pytest.skip("No events")
         removed = {"single_jpsi_reco", "double_jpsi_reco", "single_phi_reco",
                     "jpsi_quality", "phi_quality", "all6_same_recVtx",
-                    "hlt_muon_matched", "fiducial_acceptance",
+                    "fiducial_acceptance",
                     "triple_gen_matched_candidate"}
         for col in removed:
             assert col not in event_df.columns, f"Old column {col} should not be present"
@@ -238,7 +243,8 @@ class TestPerObjectData:
         event_df = efficiency_result["event_step_flags"]
         if event_df.empty:
             pytest.skip("No events")
-        for col in ("full_gen", "s_cand", "hlt_event", "four_muon_vtx",
+        for col in ("full_gen", "s_cand", "hlt_event", "hlt_muon_matched",
+                     "four_muon_vtx", "four_muon_vtx_noTrigMatch",
                      "Pri_fitValid", "Pri_fitPass",
                      "Pri_assocPVPass", "Pri_trackPVPass"):
             assert col in event_df.columns, f"Missing event column: {col}"

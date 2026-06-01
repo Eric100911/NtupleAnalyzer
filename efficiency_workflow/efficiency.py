@@ -24,6 +24,7 @@ PER_PHI_STEPS = ("fiducial", "kaonRECO", "kaonID", "dikaon")
 
 EVENT_STEPS = (
     "hlt_event",
+    "hlt_muon_matched",
     "four_muon_vtx",
     "Pri_fitValid",
     "Pri_fitPass",
@@ -34,7 +35,8 @@ EVENT_STEPS = (
 EVENT_STEP_PREVIOUS = {
     "s_cand": "full_gen",
     "hlt_event": "s_cand",
-    "four_muon_vtx": "hlt_event",
+    "hlt_muon_matched": "hlt_event",
+    "four_muon_vtx": "hlt_muon_matched",
     "Pri_fitValid": "four_muon_vtx",
     "Pri_fitPass": "four_muon_vtx",
     "Pri_assocPVPass": "four_muon_vtx",
@@ -67,9 +69,12 @@ EFFICIENCY_STEPS = (
 
 CORRELATED_MAP_STEPS = (
     "hlt_event",
+    "hlt_muon_matched",
     "four_muon_vtx",
     "Pri_fitValid",
     "Pri_fitPass",
+    "Pri_assocPVPass",
+    "Pri_trackPVPass",
 )
 
 
@@ -148,6 +153,7 @@ EFFICIENCY_BRANCHES = sorted(
 
 @dataclass(frozen=True)
 class EfficiencyBinning:
+    include_trigger_matching: bool = True
     jpsi_pt_edges: tuple[float, ...] = (6.0, 10.0, 15.0, 20.0, 30.0, 50.0, 100.0)
     phi_pt_edges: tuple[float, ...] = (4.0, 6.0, 10.0, 20.0, 50.0)
     object_abs_y_edges: tuple[float, ...] = (0.0, 0.6, 1.2, 1.8, 2.4)
@@ -176,7 +182,7 @@ class PairLevelMapSpec:
 
 
 PAIR_LEVEL_MAP_SPECS = (
-    PairLevelMapSpec("four_muon_vtx", "hlt_event", "four_muon_vertex_efficiency"),
+    PairLevelMapSpec("four_muon_vtx", "hlt_muon_matched", "four_muon_vertex_efficiency"),
     PairLevelMapSpec("Pri_fitValid", "four_muon_vtx", "pri_fitvalid_efficiency"),
     PairLevelMapSpec("Pri_fitPass", "four_muon_vtx", "pri_fitpass_efficiency"),
     PairLevelMapSpec("Pri_assocPVPass", "four_muon_vtx", "pri_assocpv_efficiency"),
@@ -184,6 +190,47 @@ PAIR_LEVEL_MAP_SPECS = (
 )
 
 PAIR_LEVEL_MAP_SPEC_BY_STEP = {spec.step: spec for spec in PAIR_LEVEL_MAP_SPECS}
+
+# No-trigger-matching chain: skips hlt_muon_matched, conditions four_muon_vtx on hlt_event
+EVENT_STEPS_NO_TRIG_MATCH = (
+    "hlt_event",
+    "four_muon_vtx_noTrigMatch",
+    "Pri_fitValid_noTrigMatch",
+    "Pri_fitPass_noTrigMatch",
+    "Pri_assocPVPass_noTrigMatch",
+    "Pri_trackPVPass_noTrigMatch",
+)
+
+EVENT_STEP_PREVIOUS_NO_TRIG_MATCH = {
+    "s_cand": "full_gen",
+    "hlt_event": "s_cand",
+    "four_muon_vtx_noTrigMatch": "hlt_event",
+    "Pri_fitValid_noTrigMatch": "four_muon_vtx_noTrigMatch",
+    "Pri_fitPass_noTrigMatch": "four_muon_vtx_noTrigMatch",
+    "Pri_assocPVPass_noTrigMatch": "four_muon_vtx_noTrigMatch",
+    "Pri_trackPVPass_noTrigMatch": "four_muon_vtx_noTrigMatch",
+}
+
+EVENT_CONDITIONAL_STEPS_NO_TRIG_MATCH = ("full_gen", "s_cand") + EVENT_STEPS_NO_TRIG_MATCH
+
+CORRELATED_MAP_STEPS_NO_TRIG_MATCH = (
+    "hlt_event",
+    "four_muon_vtx_noTrigMatch",
+    "Pri_fitValid_noTrigMatch",
+    "Pri_fitPass_noTrigMatch",
+    "Pri_assocPVPass_noTrigMatch",
+    "Pri_trackPVPass_noTrigMatch",
+)
+
+PAIR_LEVEL_MAP_SPECS_NO_TRIG_MATCH = (
+    PairLevelMapSpec("four_muon_vtx_noTrigMatch", "hlt_event", "four_muon_vertex_efficiency"),
+    PairLevelMapSpec("Pri_fitValid_noTrigMatch", "four_muon_vtx_noTrigMatch", "pri_fitvalid_efficiency"),
+    PairLevelMapSpec("Pri_fitPass_noTrigMatch", "four_muon_vtx_noTrigMatch", "pri_fitpass_efficiency"),
+    PairLevelMapSpec("Pri_assocPVPass_noTrigMatch", "four_muon_vtx_noTrigMatch", "pri_assocpv_efficiency"),
+    PairLevelMapSpec("Pri_trackPVPass_noTrigMatch", "four_muon_vtx_noTrigMatch", "pri_trackpv_efficiency"),
+)
+
+PAIR_LEVEL_MAP_SPEC_BY_STEP_NO_TRIG_MATCH = {spec.step: spec for spec in PAIR_LEVEL_MAP_SPECS_NO_TRIG_MATCH}
 
 
 @dataclass(frozen=True)
@@ -820,13 +867,23 @@ def build_event_efficiency_row(
         and fiducial_jpsi_sublead and sublead_muonRECO and sublead_muonID and sublead_dimuon
         and fiducial_phi and phi_kaonRECO_flag and phi_kaonID_flag and phi_dikaon_flag
     )
-    # Sequential through four_muon_vtx, then Pri_* are parallel branches
-    hlt_event = s_cand and hlt_raw
-    four_muon_vtx = hlt_event and four_muon_raw
+    # hlt_event = trigger OR (event-level TrigNames/TrigRes)
+    # hlt_muon_matched = trigger-object matching (per-muon muIsJpsi*Match flags)
+    trigger_or = _event_path_or(event)
+    # Chain B: with trigger matching (default column names)
+    hlt_event = s_cand and trigger_or
+    hlt_muon_matched = hlt_event and hlt_raw
+    four_muon_vtx = hlt_muon_matched and four_muon_raw
     Pri_fitValid = four_muon_vtx and pri_valid_raw
     Pri_fitPass = four_muon_vtx and pri_pass_raw
     Pri_assocPVPass = four_muon_vtx and pri_assoc_raw
     Pri_trackPVPass = four_muon_vtx and pri_track_raw
+    # Chain A: without trigger matching
+    four_muon_vtx_noTrigMatch = hlt_event and four_muon_raw
+    Pri_fitValid_noTrigMatch = four_muon_vtx_noTrigMatch and pri_valid_raw
+    Pri_fitPass_noTrigMatch = four_muon_vtx_noTrigMatch and pri_pass_raw
+    Pri_assocPVPass_noTrigMatch = four_muon_vtx_noTrigMatch and pri_assoc_raw
+    Pri_trackPVPass_noTrigMatch = four_muon_vtx_noTrigMatch and pri_track_raw
 
     gen_score = system.jpsi_lead.pt ** 2 + system.jpsi_sublead.pt ** 2 + system.phi.pt ** 2
 
@@ -841,7 +898,7 @@ def build_event_efficiency_row(
         "n_gen_jpsi": int(system.n_jpsi),
         "n_gen_phi": int(system.n_phi),
         "n_triple_gen_matched_candidates": int(len(matched_candidates)),
-        "hlt_event_path_or": int(_event_path_or(event)),
+        "hlt_event_path_or": int(trigger_or),
         # Per-object step flags
         "jpsi_lead_fiducial": int(fiducial_jpsi_lead),
         "jpsi_lead_muonRECO": int(lead_muonRECO),
@@ -859,11 +916,17 @@ def build_event_efficiency_row(
         "full_gen": 1,
         "s_cand": int(s_cand),
         "hlt_event": int(hlt_event),
+        "hlt_muon_matched": int(hlt_muon_matched),
         "four_muon_vtx": int(four_muon_vtx),
+        "four_muon_vtx_noTrigMatch": int(four_muon_vtx_noTrigMatch),
         "Pri_fitValid": int(Pri_fitValid),
+        "Pri_fitValid_noTrigMatch": int(Pri_fitValid_noTrigMatch),
         "Pri_fitPass": int(Pri_fitPass),
+        "Pri_fitPass_noTrigMatch": int(Pri_fitPass_noTrigMatch),
         "Pri_assocPVPass": int(Pri_assocPVPass),
+        "Pri_assocPVPass_noTrigMatch": int(Pri_assocPVPass_noTrigMatch),
         "Pri_trackPVPass": int(Pri_trackPVPass),
+        "Pri_trackPVPass_noTrigMatch": int(Pri_trackPVPass_noTrigMatch),
     }
     jpsi_lead_y = _rapidity_from_pt_eta_mass(system.jpsi_lead.pt, system.jpsi_lead.eta, system.jpsi_lead.mass)
     jpsi_sublead_y = _rapidity_from_pt_eta_mass(system.jpsi_sublead.pt, system.jpsi_sublead.eta, system.jpsi_sublead.mass)
@@ -1214,21 +1277,33 @@ def _process_efficiency_chunk_vectorized(
         & fiducial_phi & phi_kaonRECO & phi_kaonID & phi_dikaon
     )
 
-    # Event-level flags: sequential through four_muon_vtx, then Pri_* are parallel
-    _hlt_raw = ak.any(matched_candidate & candidate_hlt, axis=1)
+    # Event-level flags: sequential s_cand → hlt_event → hlt_muon_matched → four_muon_vtx
+    # hlt_event = trigger OR (event-level TrigNames/TrigRes)
+    # hlt_muon_matched = trigger-object matching (per-muon muIsJpsi*Match flags)
+    _trigger_or = hlt_event_path_or != 0
+    _hlt_trigger_match_raw = ak.any(matched_candidate & candidate_hlt, axis=1)
     _four_muon_raw = ak.any(matched_candidate & four_muon_same, axis=1)
     _pri_valid_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_fitValid"]) == 1), axis=1)
     _pri_pass_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_fitPass"]) == 1), axis=1)
     _pri_assoc_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_assocPVPass"]) == 1), axis=1)
     _pri_track_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_trackPVPass"]) == 1), axis=1)
 
-    hlt_event = s_cand & _hlt_raw
-    four_muon_vtx = hlt_event & _four_muon_raw
+    # Chain B: with trigger matching (default column names)
+    hlt_event = s_cand & _trigger_or
+    hlt_muon_matched = hlt_event & _hlt_trigger_match_raw
+    four_muon_vtx = hlt_muon_matched & _four_muon_raw
     # Pri_* flags are parallel: all conditioned on four_muon_vtx, not on each other
     Pri_fitValid = four_muon_vtx & _pri_valid_raw
     Pri_fitPass = four_muon_vtx & _pri_pass_raw
     Pri_assocPVPass = four_muon_vtx & _pri_assoc_raw
     Pri_trackPVPass = four_muon_vtx & _pri_track_raw
+
+    # Chain A: without trigger matching (_noTrigMatch suffixed columns)
+    four_muon_vtx_noTrigMatch = hlt_event & _four_muon_raw
+    Pri_fitValid_noTrigMatch = four_muon_vtx_noTrigMatch & _pri_valid_raw
+    Pri_fitPass_noTrigMatch = four_muon_vtx_noTrigMatch & _pri_pass_raw
+    Pri_assocPVPass_noTrigMatch = four_muon_vtx_noTrigMatch & _pri_assoc_raw
+    Pri_trackPVPass_noTrigMatch = four_muon_vtx_noTrigMatch & _pri_track_raw
     # GEN score (unified with RECO: summed pT²)
     gen_score = jpsi1_pt ** 2 + jpsi2_pt ** 2 + phi_pt ** 2
 
@@ -1251,11 +1326,17 @@ def _process_efficiency_chunk_vectorized(
         "full_gen": has_full_gen,
         "s_cand": s_cand,
         "hlt_event": hlt_event,
+        "hlt_muon_matched": hlt_muon_matched,
         "four_muon_vtx": four_muon_vtx,
+        "four_muon_vtx_noTrigMatch": four_muon_vtx_noTrigMatch,
         "Pri_fitValid": Pri_fitValid,
+        "Pri_fitValid_noTrigMatch": Pri_fitValid_noTrigMatch,
         "Pri_fitPass": Pri_fitPass,
+        "Pri_fitPass_noTrigMatch": Pri_fitPass_noTrigMatch,
         "Pri_assocPVPass": Pri_assocPVPass,
+        "Pri_assocPVPass_noTrigMatch": Pri_assocPVPass_noTrigMatch,
         "Pri_trackPVPass": Pri_trackPVPass,
+        "Pri_trackPVPass_noTrigMatch": Pri_trackPVPass_noTrigMatch,
     }
 
     full_mask = ak.to_numpy(has_full_gen)
@@ -1354,8 +1435,10 @@ def run_efficiency_for_sample(
     tree_path: str = "mkcands/X_data",
     backend: str = "vectorized",
     step_size: str = "100 MB",
+    include_trigger_matching: bool = True,
 ) -> dict[str, pd.DataFrame]:
     cfg = cfg or OfflineSelectionConfig()
+    binning = EfficiencyBinning(include_trigger_matching=include_trigger_matching)
     gen_parts: list[pd.DataFrame] = []
     event_parts: list[pd.DataFrame] = []
     for path in files:
@@ -1371,12 +1454,12 @@ def run_efficiency_for_sample(
             event_parts.append(tables["event_step_flags"])
     gen_df = pd.concat(gen_parts, ignore_index=True) if gen_parts else pd.DataFrame()
     event_df = pd.concat(event_parts, ignore_index=True) if event_parts else pd.DataFrame()
-    counts_df = build_efficiency_counts(gen_df, event_df, EfficiencyBinning())
+    counts_df = build_efficiency_counts(gen_df, event_df, binning)
     return {
         "gen_systems": gen_df,
         "event_step_flags": event_df,
         "efficiency_counts": counts_df,
-        "cutflow": build_cutflow(event_df),
+        "cutflow": build_cutflow(event_df, binning),
     }
 
 
@@ -1425,12 +1508,16 @@ def _merged_gen_events(gen_df: pd.DataFrame, event_df: pd.DataFrame) -> pd.DataF
     return gen_df.merge(event_df, on=keys, how="inner")
 
 
-def build_cutflow(event_df: pd.DataFrame) -> pd.DataFrame:
+def build_cutflow(event_df: pd.DataFrame, binning: EfficiencyBinning | None = None) -> pd.DataFrame:
     """Build per-object + event-level cutflow with conditional efficiencies."""
     if event_df.empty:
         return pd.DataFrame(columns=["step", "total", "passed", "efficiency",
                                       "err_low", "err_high", "err_sym",
                                       "conditional_efficiency"])
+    use_trig_match = binning.include_trigger_matching if binning is not None else True
+    event_steps = EVENT_STEPS if use_trig_match else EVENT_STEPS_NO_TRIG_MATCH
+    event_step_previous = EVENT_STEP_PREVIOUS if use_trig_match else EVENT_STEP_PREVIOUS_NO_TRIG_MATCH
+
     rows: list[dict[str, Any]] = []
 
     def _cutflow_chain(frame: pd.DataFrame, step_list: tuple[str, ...],
@@ -1456,10 +1543,10 @@ def build_cutflow(event_df: pd.DataFrame) -> pd.DataFrame:
 
     # Event-level criteria after four_muon_vtx are parallel diagnostics.
     s_cand_total = int(event_df["s_cand"].sum())
-    for step in EVENT_STEPS:
+    for step in event_steps:
         passed = int(event_df[step].sum()) if step in event_df.columns else 0
         row = _efficiency_row({"step": step, "object": ""}, s_cand_total, passed)
-        previous_step = EVENT_STEP_PREVIOUS[step]
+        previous_step = event_step_previous[step]
         if previous_step == "s_cand":
             previous = s_cand_total
         else:
@@ -1478,14 +1565,14 @@ def build_efficiency_counts(gen_df: pd.DataFrame, event_df: pd.DataFrame, binnin
     if merged.empty:
         return pd.DataFrame()
     rows: list[dict[str, Any]] = []
-    rows.extend(_inclusive_counts(merged))
+    rows.extend(_inclusive_counts(merged, binning))
     rows.extend(_per_object_counts(merged, binning))
     rows.extend(_correlated_3d_counts(merged, binning))
     rows.extend(_triple_sidecheck_counts(merged, binning))
     return pd.DataFrame(rows)
 
 
-def _inclusive_counts(frame: pd.DataFrame) -> list[dict[str, Any]]:
+def _inclusive_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[dict[str, Any]]:
     """One-row-per-step inclusive counts (no binning)."""
     rows: list[dict[str, Any]] = []
     total = int(frame["full_gen"].sum())
@@ -1499,9 +1586,16 @@ def _inclusive_counts(frame: pd.DataFrame) -> list[dict[str, Any]]:
                 total, int(frame[col].sum())))
 
     # Event-level columns
-    for col in ("s_cand", "hlt_event", "four_muon_vtx",
-                 "Pri_fitValid", "Pri_fitPass", "Pri_assocPVPass",
-                 "Pri_trackPVPass", "full_gen"):
+    if binning.include_trigger_matching:
+        event_cols = ("s_cand", "hlt_event", "hlt_muon_matched", "four_muon_vtx",
+                      "Pri_fitValid", "Pri_fitPass", "Pri_assocPVPass",
+                      "Pri_trackPVPass", "full_gen")
+    else:
+        event_cols = ("s_cand", "hlt_event", "four_muon_vtx_noTrigMatch",
+                      "Pri_fitValid_noTrigMatch", "Pri_fitPass_noTrigMatch",
+                      "Pri_assocPVPass_noTrigMatch", "Pri_trackPVPass_noTrigMatch",
+                      "full_gen")
+    for col in event_cols:
         if col in frame.columns:
             rows.append(_efficiency_row(
                 {"map_type": "inclusive", "step": col, "object": ""},
@@ -1560,6 +1654,7 @@ def _per_object_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[
 def _correlated_3d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[dict[str, Any]]:
     """Event-level 3D (jpsi_lead_pt, jpsi_sublead_pt, phi_pt) bins."""
     rows: list[dict[str, Any]] = []
+    map_steps = CORRELATED_MAP_STEPS if binning.include_trigger_matching else CORRELATED_MAP_STEPS_NO_TRIG_MATCH
     jpsi_edges = binning.jpsi_pt_edges
     phi_edges = binning.phi_pt_edges
     for ix in range(len(jpsi_edges) - 1):
@@ -1574,7 +1669,7 @@ def _correlated_3d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> li
                     & (frame["phi_pt"] < phi_edges[iz + 1])
                 ]
                 total = int(subset["full_gen"].sum())
-                for step in CORRELATED_MAP_STEPS:
+                for step in map_steps:
                     rows.append(
                         _efficiency_row(
                             {
@@ -1606,6 +1701,7 @@ def _correlated_3d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> li
 def _triple_sidecheck_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[dict[str, Any]]:
     """1D triple-system side-check counts."""
     rows: list[dict[str, Any]] = []
+    cond_steps = EVENT_CONDITIONAL_STEPS if binning.include_trigger_matching else EVENT_CONDITIONAL_STEPS_NO_TRIG_MATCH
     specs = (
         ("triple_pt", binning.triple_pt_edges),
         ("triple_abs_y", binning.triple_abs_y_edges),
@@ -1615,7 +1711,7 @@ def _triple_sidecheck_counts(frame: pd.DataFrame, binning: EfficiencyBinning) ->
         for idx in range(len(edges) - 1):
             subset = frame[(frame[axis] >= edges[idx]) & (frame[axis] < edges[idx + 1])]
             total = int(subset["full_gen"].sum())
-            for step in EVENT_CONDITIONAL_STEPS:
+            for step in cond_steps:
                 if step in subset.columns:
                     rows.append(
                         _efficiency_row(
@@ -1902,9 +1998,14 @@ _OBJECT_CHAIN = {
 }
 
 
-def build_conditional_maps(counts_df: pd.DataFrame) -> pd.DataFrame:
+def build_conditional_maps(counts_df: pd.DataFrame, binning: EfficiencyBinning | None = None) -> pd.DataFrame:
     if counts_df.empty:
         return pd.DataFrame()
+    use_trig_match = binning.include_trigger_matching if binning is not None else True
+    corr_steps = CORRELATED_MAP_STEPS if use_trig_match else CORRELATED_MAP_STEPS_NO_TRIG_MATCH
+    step_previous = EVENT_STEP_PREVIOUS if use_trig_match else EVENT_STEP_PREVIOUS_NO_TRIG_MATCH
+    cond_steps = EVENT_CONDITIONAL_STEPS if use_trig_match else EVENT_CONDITIONAL_STEPS_NO_TRIG_MATCH
+
     parts: list[pd.DataFrame] = []
 
     for map_type, keys in _MAP_TYPE_KEYS.items():
@@ -1921,16 +2022,16 @@ def build_conditional_maps(counts_df: pd.DataFrame) -> pd.DataFrame:
         elif map_type == "correlated_3d":
             _conditional_rows_with_denominators(
                 subset,
-                CORRELATED_MAP_STEPS,
-                EVENT_STEP_PREVIOUS,
+                corr_steps,
+                step_previous,
                 keys,
                 parts,
             )
         elif map_type == "triple_1d":
             _conditional_rows_with_denominators(
                 subset,
-                EVENT_CONDITIONAL_STEPS,
-                EVENT_STEP_PREVIOUS,
+                cond_steps,
+                step_previous,
                 keys,
                 parts,
             )
@@ -1945,8 +2046,8 @@ def build_conditional_maps(counts_df: pd.DataFrame) -> pd.DataFrame:
                     else:
                         _conditional_rows_with_denominators(
                             obj_subset,
-                            EVENT_CONDITIONAL_STEPS,
-                            EVENT_STEP_PREVIOUS,
+                            cond_steps,
+                            step_previous,
                             keys,
                             parts,
                         )
