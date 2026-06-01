@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import shutil
 from pathlib import Path
+from typing import Callable
 
 import pandas as pd
 
@@ -104,8 +105,13 @@ def rebuild_efficiency_maps_for_sample(
     binning: EfficiencyBinning,
     *,
     copy_existing_derived: bool = False,
+    status_callback: Callable[[str], None] | None = None,
 ) -> Path:
     """Read gen/event parquet files, rebuild counts, and write a new sample bundle."""
+    def status(message: str) -> None:
+        if status_callback is not None:
+            status_callback(message)
+
     gen_path = input_sample_dir / "gen_systems.parquet"
     event_path = input_sample_dir / "event_step_flags.parquet"
     if not gen_path.exists() or not event_path.exists():
@@ -120,20 +126,27 @@ def rebuild_efficiency_maps_for_sample(
                 raise FileExistsError(f"Refusing to overwrite existing rebuilt output: {path}")
 
     ensure_dir(output_sample_dir)
+    status(f"reading gen/event parquet from {input_sample_dir}")
     gen_df = pd.read_parquet(gen_path)
     event_df = pd.read_parquet(event_path)
+    status(f"loaded {len(gen_df)} gen rows and {len(event_df)} event rows")
     _validate_event_schema(event_df, binning, input_sample_dir)
+    status("schema validation passed; rebuilding counts")
     counts_df = build_efficiency_counts(gen_df, event_df, binning)
     cutflow_df = build_cutflow(event_df, binning)
+    status(f"rebuilt {len(counts_df)} efficiency rows and {len(cutflow_df)} cutflow rows")
 
+    status(f"copying source parquet inputs to {output_sample_dir}")
     _copy_if_exists(gen_path, output_sample_dir / "gen_systems.parquet")
     _copy_if_exists(event_path, output_sample_dir / "event_step_flags.parquet")
     _copy_if_exists(input_sample_dir / "sample_manifest.json", output_sample_dir / "sample_manifest.json")
     if input_sample_dir / "cutflow.csv" != output_sample_dir / "cutflow.csv":
         cutflow_df.to_csv(output_sample_dir / "cutflow.csv", index=False)
     if copy_existing_derived:
+        status("copying existing derived/ directory for reference")
         _copy_tree_if_exists(input_sample_dir / "derived", output_sample_dir / "derived")
 
+    status("writing rebuilt efficiency_counts.parquet and efficiency_maps.parquet")
     write_parquet(counts_df, output_sample_dir / "efficiency_counts.parquet")
     write_parquet(counts_df, output_sample_dir / "efficiency_maps.parquet")
 
@@ -144,6 +157,7 @@ def rebuild_efficiency_maps_for_sample(
         "artifacts": _sample_artifacts(output_sample_dir, counts_df, gen_df, event_df),
     }
     write_json(manifest, output_sample_dir / "manifest.json")
+    status(f"wrote manifest: {output_sample_dir / 'manifest.json'}")
     return output_sample_dir / "efficiency_maps.parquet"
 
 
@@ -177,11 +191,13 @@ def main() -> int:
     print(f"  input : {input_dir}")
     print(f"  output: {output_dir}")
     for sample in samples:
+        print(f"[{sample}] start", flush=True)
         out_path = rebuild_efficiency_maps_for_sample(
             input_dir / sample,
             output_dir / sample,
             binning,
             copy_existing_derived=args.copy_existing_derived,
+            status_callback=lambda message, sample=sample: print(f"[{sample}] {message}", flush=True),
         )
         frame = pd.read_parquet(out_path)
         corr_steps = sorted(frame.loc[frame["map_type"] == "correlated_3d", "step"].dropna().unique().tolist())

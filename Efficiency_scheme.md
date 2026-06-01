@@ -13,6 +13,50 @@
 | fourMuonVertexing                           | $\epsilon_{4\mu\mathrm{vtx}}$                           | per $J/\psi J/\psi$ pair | pair-level axes                                          | valid four-muon vertex                                       |
 | triOniaVertexingAndOtherEventLevelSelection | $\epsilon_{\mathrm{triOnia}}$                           | event                    | $(p_T^{J/\psi_1},p_T^{J/\psi_2})$, split by $p_T^{\phi}$ | three-meson vertex and remaining event-level cuts            |
 
+### Current implementation notes
+
+The parquet efficiency workflow stores object-level reconstruction and ID steps
+as conditional chains, then switches to event-level flags. The nominal event
+chain is:
+
+```text
+s_cand -> hlt_event -> four_muon_vtx
+```
+
+The primary-vertex diagnostics are parallel branches with denominator
+`four_muon_vtx`, not a single cumulative final step:
+
+```text
+Pri_fitValid
+Pri_fitPass
+Pri_assocPVPass
+Pri_trackPVPass
+```
+
+For corrected-yield studies the default map is the absolute `correlated_3d`
+efficiency at `Pri_assocPVPass`, binned in
+`(pT(J/psi lead), pT(J/psi sublead), pT(phi))`. The correction code orders the
+two J/psi pT values before lookup, fills zero or low-stat 3D bins from nearby
+valid bins when possible, and reports how many bins were interpolated for each
+subprocess map.
+
+The correction workflow is:
+
+```bash
+python3 rebuild_efficiency_maps.py \
+  --input-dir <merged_efficiency_dir> \
+  --output-dir <fresh_rebuilt_dir> \
+  --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G
+
+python3 build_derived_efficiency.py --input-dir <fresh_rebuilt_dir>
+
+python3 compute_efficiency_corrected_yield.py \
+  --data-input <jjp_data_selected.root> \
+  --efficiency-dir <fresh_rebuilt_dir> \
+  --plot-dir <yield_plot_dir> \
+  -o <yield_summary.json>
+```
+
 ### Definitions
 
 Let

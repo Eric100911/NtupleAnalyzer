@@ -171,6 +171,92 @@ python3 build_derived_efficiency.py --input-dir /tmp/chiw/eff_test
   --output-dir /tmp/chiw/jjp_efficiency_v1
 ```
 
+### Rebuild merged maps
+
+Use `rebuild_efficiency_maps.py` when the merged `gen_systems.parquet` and
+`event_step_flags.parquet` files are already available, but the binned map
+schema or step definitions changed. The script is non-overwriting by default:
+`--output-dir` must be a fresh tree, and the source parquet files are copied
+next to the rebuilt maps for traceability.
+
+```bash
+python3 rebuild_efficiency_maps.py \
+  --input-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged \
+  --output-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601 \
+  --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G
+
+python3 build_derived_efficiency.py \
+  --input-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601
+```
+
+### Efficiency-corrected yield
+
+The JJP corrected-yield workflow fits the selected data once without weights,
+then builds one weighted mini-tree per MC subprocess map and refits each tree.
+The nominal central value currently uses `JJP_DPS1`; the systematic is the
+subprocess envelope across the configured samples. The default correction is
+`Pri_assocPVPass`, `correlated_3d`, `absolute` denominator.
+
+```bash
+python3 compute_efficiency_corrected_yield.py \
+  --data-input /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/merged/jjp_data_selected.root \
+  --efficiency-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601 \
+  --output /tmp/chiw/jjp_efficiency_corrected_yield.json \
+  --plot-dir /tmp/chiw/jjp_efficiency_corrected_yield_plots \
+  -j 4
+```
+
+The command prints status before each expensive stage: raw fit, map loading,
+weighted-tree building, and per-sample weighted fits. The JSON contains the raw
+yield, per-sample corrected yields, interpolation counts, and total uncertainty.
+
+### Move to a faster machine
+
+For a faster interactive machine, move the code and parquet products separately.
+Keep ROOT data files only if the target machine will run the mass fits.
+
+```bash
+# Code package, preserving committed history.
+cd /afs/cern.ch/user/c/chiw/condor/NtupleAnalyzer
+git bundle create /tmp/NtupleAnalyzer_efficiency.bundle HEAD
+
+# On the target machine:
+git clone /path/to/NtupleAnalyzer_efficiency.bundle NtupleAnalyzer
+cd NtupleAnalyzer
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+```
+
+Copy the parquet tree with `rsync` or an equivalent site-local copy command:
+
+```bash
+rsync -av \
+  --include='*/' --include='*.parquet' --include='*.json' --include='*.csv' --exclude='*' \
+  /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601/ \
+  <target>:/scratch/$USER/merged_yieldcorr_20260601/
+```
+
+If running corrected-yield fits on the target, also copy:
+
+```text
+/eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/merged/jjp_data_selected.root
+```
+
+Then validate the transfer with a quick parquet read before launching the full
+fit:
+
+```bash
+python3 - <<'PY'
+import os
+from pathlib import Path
+import pandas as pd
+base = Path(f"/scratch/{os.environ['USER']}/merged_yieldcorr_20260601")
+for sample in ['JJP_DPS1', 'JJP_DPS2_CS', 'JJP_DPS2_G', 'JJP_SPS_CS', 'JJP_SPS_G']:
+    frame = pd.read_parquet(base / sample / 'efficiency_maps.parquet')
+    rows = frame[(frame['map_type'] == 'correlated_3d') & (frame['step'] == 'Pri_assocPVPass')]
+    print(sample, len(rows), rows['efficiency'].mean())
+PY
+```
+
 ### Output products
 
 **Per-file** (`<sample>/`):

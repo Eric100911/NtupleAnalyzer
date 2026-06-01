@@ -66,6 +66,14 @@ def main() -> int:
     args = parse_args()
     output_path = Path(args.output) if args.output else _default_output_path(args.data_input)
     temp_dir = Path(args.temp_dir) if args.temp_dir else output_path.with_suffix("").parent / f"{output_path.stem}_weighted_trees"
+    print("=== Efficiency-corrected yield run ===", flush=True)
+    print(f"Data input    : {args.data_input}", flush=True)
+    print(f"Efficiency dir: {args.efficiency_dir}", flush=True)
+    print(f"Samples       : {', '.join(args.samples)}", flush=True)
+    print(f"Nominal sample: {args.nominal_sample}", flush=True)
+    print(f"Step/map      : {args.efficiency_step} / {args.map_type} ({args.denominator})", flush=True)
+    print(f"Output JSON   : {output_path}", flush=True)
+    print(f"Temp dir      : {temp_dir}", flush=True)
     result = compute_efficiency_corrected_yield(
         args.data_input,
         args.efficiency_dir,
@@ -77,6 +85,7 @@ def main() -> int:
         min_total=args.min_total,
         temp_dir=temp_dir,
         jobs=args.jobs,
+        status_callback=lambda message: print(f"[yieldcorr] {message}", flush=True),
     )
     _print_summary(result, step=args.efficiency_step, map_type=args.map_type, denominator=args.denominator)
     write_yield_result_json(result, output_path)

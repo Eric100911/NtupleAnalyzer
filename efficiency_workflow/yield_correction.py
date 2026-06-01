@@ -5,7 +5,7 @@ import math
 import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 import numpy as np
 import pandas as pd
@@ -271,6 +271,8 @@ def build_weighted_mini_tree(
     *,
     tree_name: str = "selected",
     on_missing: Literal["error", "drop"] = "error",
+    status_callback: Callable[[str], None] | None = None,
+    status_interval: int = 100_000,
 ) -> tuple[int, int, int, int, float]:
     input_path = Path(input_file)
     output_path = Path(output_file)
@@ -300,6 +302,8 @@ def build_weighted_mini_tree(
     n_invalid = 0
     keep_mask = np.ones(n_total, dtype=bool)
     for idx in range(n_total):
+        if status_callback is not None and status_interval > 0 and idx > 0 and idx % status_interval == 0:
+            status_callback(f"processed {idx}/{n_total} selected events")
         correction = correction_map.lookup(
             float(arrays["sel_Jpsi_1_pt"][idx]),
             float(arrays["sel_Jpsi_2_pt"][idx]),
@@ -373,6 +377,7 @@ def compute_efficiency_corrected_yield(
     min_total: int = 10,
     temp_dir: str | Path | None = None,
     jobs: int = 4,
+    status_callback: Callable[[str], None] | None = None,
 ) -> YieldSystematicResult:
     data_input_file = Path(data_input_file)
     efficiency_dir = Path(efficiency_dir)
@@ -380,15 +385,23 @@ def compute_efficiency_corrected_yield(
     if nominal_sample not in samples:
         raise ValueError(f"Nominal sample {nominal_sample!r} is not in --samples")
 
+    def status(message: str) -> None:
+        if status_callback is not None:
+            status_callback(message)
+
+    status(f"Fitting raw unweighted yield from {data_input_file}")
     raw_yield, raw_yield_err, _, _ = run_weighted_yield_fit(data_input_file, weight_branch=None, jobs=jobs)
+    status(f"Raw fit complete: yield={raw_yield:.1f} +/- {raw_yield_err:.1f}")
     temp_context = tempfile.TemporaryDirectory(prefix="yieldcorr_") if temp_dir is None else None
     work_dir = Path(temp_context.name) if temp_context is not None else ensure_dir(Path(temp_dir))
+    status(f"Weighted intermediate trees: {work_dir}")
     per_sample: dict[str, YieldCorrectionResult] = {}
     try:
         for sample in samples:
             map_path = efficiency_dir / sample / "efficiency_maps.parquet"
             if not map_path.exists():
                 raise FileNotFoundError(f"Efficiency map not found for {sample}: {map_path}")
+            status(f"[{sample}] loading correction map: {map_path}")
             correction_map, n_interpolated = load_filled_correction_map(
                 map_path,
                 step=step,
@@ -397,16 +410,24 @@ def compute_efficiency_corrected_yield(
                 min_total=min_total,
             )
             weighted_tree = work_dir / f"{sample}_weighted.root"
+            status(f"[{sample}] building weighted mini tree: {weighted_tree}")
             n_events, n_ok, n_missing, n_invalid, mean_weight = build_weighted_mini_tree(
                 data_input_file,
                 weighted_tree,
                 correction_map,
+                status_callback=lambda message, sample=sample: status(f"[{sample}] {message}"),
             )
+            status(
+                f"[{sample}] lookup complete: events={n_events}, ok={n_ok}, "
+                f"missing={n_missing}, invalid={n_invalid}, interpolated_bins={n_interpolated}"
+            )
+            status(f"[{sample}] fitting weighted yield")
             corrected_yield, corrected_yield_err, fit_nll, _ = run_weighted_yield_fit(
                 weighted_tree,
                 weight_branch=DEFAULT_WEIGHT_BRANCH,
                 jobs=jobs,
             )
+            status(f"[{sample}] fit complete: yield={corrected_yield:.1f} +/- {corrected_yield_err:.1f}")
             per_sample[sample] = YieldCorrectionResult(
                 sample=sample,
                 n_events=n_events,
