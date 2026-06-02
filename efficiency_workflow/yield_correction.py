@@ -481,6 +481,7 @@ def compute_efficiency_corrected_yield(
     correction_mode: Literal["factorized", "legacy-correlated"] = "factorized",
     n_min_fine: int = 30,
     n_min_coarse: int = 50,
+    on_missing: Literal["error", "drop"] = "error",
     temp_dir: str | Path | None = None,
     jobs: int = 4,
     status_callback: Callable[[str], None] | None = None,
@@ -519,6 +520,7 @@ def compute_efficiency_corrected_yield(
                     data_input_file,
                     weighted_tree,
                     factorized_map,
+                    on_missing=on_missing,
                     status_callback=lambda message, sample=sample: status(f"[{sample}] {message}"),
                 )
             elif correction_mode == "legacy-correlated":
@@ -538,6 +540,7 @@ def compute_efficiency_corrected_yield(
                     data_input_file,
                     weighted_tree,
                     correction_map,
+                    on_missing=on_missing,
                     status_callback=lambda message, sample=sample: status(f"[{sample}] {message}"),
                 )
             else:

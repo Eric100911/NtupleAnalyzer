@@ -26,6 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--correction-mode", default="factorized", choices=["factorized", "legacy-correlated"])
     parser.add_argument("--n-min-fine", type=int, default=30, help="Minimum MC total for fine factorized bins")
     parser.add_argument("--n-min-coarse", type=int, default=50, help="Minimum MC total for coarse factorized bins")
+    parser.add_argument("--on-missing", default="error", choices=["error", "drop"], help="Action when efficiency lookup misses a bin (default: error)")
     parser.add_argument("-j", "--jobs", type=int, default=4, help="RooFit NumCPU")
     parser.add_argument("-o", "--output", default=None, help="Output JSON path")
     parser.add_argument("--plot-dir", default=None, help="Directory for yield comparison plot")
@@ -95,6 +96,7 @@ def main() -> int:
         correction_mode=args.correction_mode,
         n_min_fine=args.n_min_fine,
         n_min_coarse=args.n_min_coarse,
+        on_missing=args.on_missing,
         temp_dir=temp_dir,
         jobs=args.jobs,
         status_callback=lambda message: print(f"[yieldcorr] {message}", flush=True),
