@@ -56,6 +56,11 @@ def parse_args():
     parser.add_argument("--plot-dir", default=None, help="Directory for fit projections")
     parser.add_argument("--fit-weight-branch", default=None, help="Optional event-weight branch for efficiency-corrected fits")
     parser.add_argument(
+        "--effcorr-weight-branch",
+        default=None,
+        help="Optional correction branch used only to write signal_effcorr_sw = signal_sw * correction",
+    )
+    parser.add_argument(
         "--weighted-error-mode",
         default="asymptotic",
         choices=["asymptotic", "sumw2", "original"],
@@ -455,6 +460,34 @@ def clone_tree_with_weights(tree, output_file: str, weight_map):
     fout.Close()
 
 
+def read_tree_scalar_branch(tree, branch_name: str) -> list[float]:
+    available = {branch.GetName() for branch in tree.GetListOfBranches()}
+    if branch_name not in available:
+        raise RuntimeError(f"Branch {branch_name!r} not found in input tree")
+    values: list[float] = []
+    for idx in range(int(tree.GetEntries())):
+        tree.GetEntry(idx)
+        values.append(float(getattr(tree, branch_name)))
+    return values
+
+
+def build_splot_weight_map(data, yields, signal_yield_name: str, effcorr_weights: list[float] | None = None):
+    weight_map = OrderedDict()
+    for yield_name in yields:
+        weight_map[f"{yield_name}_sw"] = [data.get(i).getRealValue(f"{yield_name}_sw") for i in range(data.numEntries())]
+    weight_map["signal_sw"] = list(weight_map[f"{signal_yield_name}_sw"])
+    if effcorr_weights is not None:
+        if len(effcorr_weights) != len(weight_map["signal_sw"]):
+            raise RuntimeError(
+                f"Correction weight length mismatch: {len(effcorr_weights)} vs {len(weight_map['signal_sw'])}"
+            )
+        weight_map["signal_effcorr_sw"] = [
+            float(sweight) * float(correction)
+            for sweight, correction in zip(weight_map["signal_sw"], effcorr_weights)
+        ]
+    return weight_map
+
+
 def compute_component_significance(
     model,
     data,
@@ -603,6 +636,8 @@ def run_jjp_fit(
 
 def main():
     args = parse_args()
+    if args.fit_weight_branch and args.effcorr_weight_branch:
+        raise ValueError("Use either --fit-weight-branch or --effcorr-weight-branch, not both")
     channel = normalize_channel(args.channel)
     dataset = normalize_dataset(args.dataset)
     if channel == "JJY" and dataset != "mc":
@@ -637,6 +672,7 @@ def main():
     print(f"[INFO] plot dir   : {plot_dir}")
     print(f"[INFO] entries    : {n_entries}")
     print(f"[INFO] fit weight : {args.fit_weight_branch or '-'}")
+    print(f"[INFO] corr weight: {args.effcorr_weight_branch or '-'}")
     print("=" * 80)
 
     ROOT.gROOT.SetBatch(True)
@@ -704,12 +740,8 @@ def main():
     sdata = ROOT.RooStats.SPlot("sData", "sData", data, model, ROOT.RooArgList(*yields.values()))
     keepalive.append(sdata)
 
-    weight_map = OrderedDict()
-    for yield_name in yields:
-        weight_map[f"{yield_name}_sw"] = [data.get(i).getRealValue(f"{yield_name}_sw") for i in range(data.numEntries())]
-    weight_map["signal_sw"] = list(weight_map[f"{signal_yield_name}_sw"])
-    if args.fit_weight_branch:
-        weight_map["signal_effcorr_sw"] = list(weight_map["signal_sw"])
+    correction_weights = read_tree_scalar_branch(tree, args.effcorr_weight_branch) if args.effcorr_weight_branch else None
+    weight_map = build_splot_weight_map(data, yields, signal_yield_name, correction_weights)
 
     clone_tree_with_weights(tree, output_file, weight_map)
     fit_out = ROOT.TFile(output_file.replace(".root", "_fit_result.root"), "RECREATE")
@@ -719,6 +751,7 @@ def main():
         fit_out,
         {
             "fit_weight_branch": args.fit_weight_branch,
+            "effcorr_weight_branch": args.effcorr_weight_branch,
             "weighted_error_mode": args.weighted_error_mode if args.fit_weight_branch else None,
             "dataset_sum_entries": fitted_sum_entries,
             "dataset_num_entries": data.numEntries(),

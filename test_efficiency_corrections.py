@@ -12,6 +12,7 @@ from efficiency_workflow.corrections import (
     EfficiencyCorrectionMap,
     annotate_root_tree_with_efficiency,
 )
+from efficiency_workflow.yield_correction import write_factorized_corrected_root_tree
 
 
 def _map_frame() -> pd.DataFrame:
@@ -180,3 +181,48 @@ def test_factorized_lookup_uses_coarse_fallback_for_sparse_fine_bin() -> None:
     assert correction.weight == 4.0
     fallback = [component for component in correction.components if component.factor_name == "acceptance_jpsi"]
     assert {component.fallback_level for component in fallback} == {"coarse"}
+
+
+def test_write_factorized_corrected_root_tree_preserves_selected_schema(tmp_path) -> None:
+    import ROOT
+
+    input_path = tmp_path / "selected.root"
+    output_path = tmp_path / "selected_effcorr.root"
+
+    root_file = ROOT.TFile(str(input_path), "RECREATE")
+    tree = ROOT.TTree("selected", "selected")
+    buffers = {
+        "sel_Jpsi_1_mass": array.array("d", [3.1]),
+        "sel_Jpsi_2_mass": array.array("d", [3.1]),
+        "sel_Phi_mass": array.array("d", [1.02]),
+        "sel_Jpsi_1_pt": array.array("d", [7.0]),
+        "sel_Jpsi_1_y": array.array("d", [0.2]),
+        "sel_Jpsi_2_pt": array.array("d", [8.0]),
+        "sel_Jpsi_2_y": array.array("d", [-0.3]),
+        "sel_Phi_pt": array.array("d", [7.0]),
+        "sel_Phi_y": array.array("d", [0.1]),
+        "sel_abs_dy_jpsi1_jpsi2": array.array("d", [0.5]),
+    }
+    for name, buffer in buffers.items():
+        tree.Branch(name, buffer, f"{name}/D")
+    tree.Fill()
+    tree.Write()
+    root_file.Close()
+
+    maps = {factor_name: _factor_frame(factor_name) for factor_name in FactorizedCorrectionMap.REQUIRED_FACTORS}
+    correction_map = FactorizedCorrectionMap(maps, source="memory")
+    summary = write_factorized_corrected_root_tree(input_path, output_path, correction_map)
+
+    assert summary[0] == 1
+    assert summary[1] == 1
+    out_file = ROOT.TFile.Open(str(output_path))
+    out_tree = out_file.Get("selected")
+    branches = {branch.GetName() for branch in out_tree.GetListOfBranches()}
+    assert "sel_abs_dy_jpsi1_jpsi2" in branches
+    assert "effcorr_weight" in branches
+    assert "effcorr_fallback_components" in branches
+    out_tree.GetEntry(0)
+    assert out_tree.effcorr_status == STATUS_OK
+    assert out_tree.effcorr_weight == 1.0
+    assert out_tree.sel_abs_dy_jpsi1_jpsi2 == 0.5
+    out_file.Close()

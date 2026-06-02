@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import math
 import tempfile
+import array
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Any, Callable, Literal
 
 import numpy as np
 import pandas as pd
@@ -444,6 +445,108 @@ def build_factorized_weighted_mini_tree(
         root_file[tree_name] = out_arrays
     mean_weight = float(np.nanmean(weights[status == STATUS_OK])) if n_ok else math.nan
     return n_total, n_ok, n_missing, n_invalid, n_fallback_components, mean_weight, float(math.sqrt(mc_stat_var))
+
+
+def write_factorized_corrected_root_tree(
+    input_file: str | Path,
+    output_file: str | Path,
+    correction_map: FactorizedCorrectionMap,
+    *,
+    tree_name: str = "selected",
+    on_missing: Literal["error", "drop"] = "error",
+    status_callback: Callable[[str], None] | None = None,
+    status_interval: int = 100_000,
+) -> tuple[int, int, int, int, int, float]:
+    """Clone the full selected tree and append factorized efficiency branches."""
+    import ROOT
+
+    input_path = str(input_file)
+    output_path = str(output_file)
+    ensure_dir(Path(output_path).parent)
+
+    fin = ROOT.TFile(str(input_path), "READ")
+    tree = fin.Get(tree_name) if fin else None
+    if not tree:
+        if fin:
+            fin.Close()
+        raise RuntimeError(f"Input tree {tree_name!r} not found in {input_path}")
+
+    available = {branch.GetName() for branch in tree.GetListOfBranches()}
+    missing = sorted(set(CORRECTION_FACTOR_BRANCHES) - available)
+    if missing:
+        fin.Close()
+        raise RuntimeError(f"Input tree is missing correction branch(es): {', '.join(missing)}")
+
+    fout = ROOT.TFile(str(output_path), "RECREATE")
+    out_tree = tree.CloneTree(0)
+    buffers: dict[str, Any] = {
+        DEFAULT_WEIGHT_BRANCH: array.array("d", [0.0]),
+        "effcorr_weight_err": array.array("d", [0.0]),
+        "effcorr_efficiency": array.array("d", [0.0]),
+        "effcorr_status": array.array("i", [0]),
+        "effcorr_fallback_components": array.array("i", [0]),
+    }
+    for name, buffer in buffers.items():
+        suffix = "/I" if name in {"effcorr_status", "effcorr_fallback_components"} else "/D"
+        out_tree.Branch(name, buffer, f"{name}{suffix}")
+
+    n_entries = int(tree.GetEntries())
+    n_ok = 0
+    n_missing = 0
+    n_invalid = 0
+    n_fallback_components = 0
+    weights: list[float] = []
+    for idx in range(n_entries):
+        if status_callback is not None and status_interval > 0 and idx > 0 and idx % status_interval == 0:
+            status_callback(f"processed {idx}/{n_entries} selected events")
+        tree.GetEntry(idx)
+        correction = correction_map.lookup(
+            jpsi1_pt=float(getattr(tree, "sel_Jpsi_1_pt")),
+            jpsi1_y=float(getattr(tree, "sel_Jpsi_1_y")),
+            jpsi2_pt=float(getattr(tree, "sel_Jpsi_2_pt")),
+            jpsi2_y=float(getattr(tree, "sel_Jpsi_2_y")),
+            phi_pt=float(getattr(tree, "sel_Phi_pt")),
+            phi_y=float(getattr(tree, "sel_Phi_y")),
+        )
+        fallback_count = sum(component.fallback_level != "fine" for component in correction.components)
+        n_fallback_components += fallback_count
+        if correction.status == STATUS_OK:
+            n_ok += 1
+        elif correction.status == STATUS_MISSING_BIN:
+            n_missing += 1
+        elif correction.status == STATUS_INVALID_EFFICIENCY:
+            n_invalid += 1
+
+        if correction.status != STATUS_OK and on_missing == "drop":
+            continue
+        if correction.status != STATUS_OK and on_missing == "error":
+            fout.Close()
+            fin.Close()
+            raise RuntimeError(
+                "Factorized efficiency lookup failed while writing full corrected tree: "
+                f"entry={idx}, status={correction.status}"
+            )
+        if on_missing not in {"error", "drop"}:
+            fout.Close()
+            fin.Close()
+            raise ValueError(f"Unsupported on_missing mode: {on_missing}")
+
+        buffers[DEFAULT_WEIGHT_BRANCH][0] = float(correction.weight)
+        buffers["effcorr_weight_err"][0] = float(correction.err_sym)
+        buffers["effcorr_efficiency"][0] = float(correction.efficiency)
+        buffers["effcorr_status"][0] = int(correction.status)
+        buffers["effcorr_fallback_components"][0] = int(fallback_count)
+        if correction.status == STATUS_OK:
+            weights.append(float(correction.weight))
+        out_tree.Fill()
+
+    out_tree.Write()
+    ROOT.TNamed("effcorr_source", str(correction_map.source)).Write()
+    ROOT.TNamed("effcorr_mode", "factorized").Write()
+    fout.Close()
+    fin.Close()
+    mean_weight = float(np.mean(weights)) if weights else math.nan
+    return n_entries, n_ok, n_missing, n_invalid, n_fallback_components, mean_weight
 
 
 def run_weighted_yield_fit(
