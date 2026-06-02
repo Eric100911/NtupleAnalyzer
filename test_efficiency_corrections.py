@@ -6,6 +6,7 @@ import math
 import pandas as pd
 
 from efficiency_workflow.corrections import (
+    FactorizedCorrectionMap,
     STATUS_MISSING_BIN,
     STATUS_OK,
     EfficiencyCorrectionMap,
@@ -124,3 +125,58 @@ def test_annotate_root_tree_with_efficiency(tmp_path) -> None:
     assert out_tree.effcorr_efficiency == 0.25
     assert out_tree.effcorr_weight == 4.0
     out_file.Close()
+
+
+def _factor_frame(factor_name: str, *, fine_total: int = 100, fine_eff: float = 1.0, coarse_eff: float = 1.0) -> pd.DataFrame:
+    rows = []
+    for level, total, eff, y_min, y_max in (
+        ("fine", fine_total, fine_eff, 0.0, 0.6),
+        ("coarse", 100, coarse_eff, math.nan, math.nan),
+        ("inclusive", 100, 1.0, math.nan, math.nan),
+    ):
+        rows.append(
+            {
+                "map_type": "factorized",
+                "factor_name": factor_name,
+                "fallback_level": level,
+                "x_min": 6.0 if level != "inclusive" else math.nan,
+                "x_max": 10.0 if level != "inclusive" else math.nan,
+                "y_min": y_min,
+                "y_max": y_max,
+                "z_min": math.nan,
+                "z_max": math.nan,
+                "x_bin": 0 if level != "inclusive" else -1,
+                "y_bin": 0 if level == "fine" else -1,
+                "z_bin": -1,
+                "total": total,
+                "passed": int(round(total * eff)),
+                "efficiency": eff,
+                "err_sym": 0.01,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def test_factorized_lookup_uses_coarse_fallback_for_sparse_fine_bin() -> None:
+    maps = {}
+    for factor_name in FactorizedCorrectionMap.REQUIRED_FACTORS:
+        if factor_name == "acceptance_jpsi":
+            maps[factor_name] = _factor_frame(factor_name, fine_total=5, fine_eff=0.1, coarse_eff=0.5)
+        else:
+            maps[factor_name] = _factor_frame(factor_name)
+
+    correction_map = FactorizedCorrectionMap(maps, source="memory", n_min_fine=30, n_min_coarse=50)
+    correction = correction_map.lookup(
+        jpsi1_pt=7.0,
+        jpsi1_y=0.2,
+        jpsi2_pt=8.0,
+        jpsi2_y=-0.3,
+        phi_pt=7.0,
+        phi_y=0.1,
+    )
+
+    assert correction.status == STATUS_OK
+    assert correction.efficiency == 0.25
+    assert correction.weight == 4.0
+    fallback = [component for component in correction.components if component.factor_name == "acceptance_jpsi"]
+    assert {component.fallback_level for component in fallback} == {"coarse"}

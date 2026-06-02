@@ -33,12 +33,22 @@ Pri_assocPVPass
 Pri_trackPVPass
 ```
 
-For corrected-yield studies the default map is the absolute `correlated_3d`
-efficiency at `Pri_assocPVPass`, binned in
-`(pT(J/psi lead), pT(J/psi sublead), pT(phi))`. The correction code orders the
-two J/psi pT values before lookup, fills zero or low-stat 3D bins from nearby
-valid bins when possible, and reports how many bins were interpolated for each
-subprocess map.
+For corrected-yield studies the default correction is factorized rather than a
+single cumulative `correlated_3d` lookup. It multiplies per-object acceptance and
+conditional efficiency maps in `(pT, |y|)` by event-level maps for HLT,
+four-muon vertexing, and the final tri-onia/PV endpoint. The default endpoint is
+`Pri_assocPVPass / four_muon_vtx`.
+
+Factorized map lookup uses a tiered fallback:
+
+```text
+fine bin -> coarse bin -> inclusive bin
+```
+
+The nominal central value uses observed bin efficiencies after fallback
+selection. Jeffreys symmetric binomial uncertainties are stored for each bin and
+used for MC-stat diagnostics. The default thresholds are `N_min_fine = 30` and
+`N_min_coarse = 50`.
 
 The correction workflow is:
 
@@ -49,6 +59,10 @@ python3 rebuild_efficiency_maps.py \
   --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G
 
 python3 build_derived_efficiency.py --input-dir <fresh_rebuilt_dir>
+
+python3 -m efficiency_workflow.build_factorized_maps \
+  --input-dir <fresh_rebuilt_dir> \
+  --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G
 
 python3 compute_efficiency_corrected_yield.py \
   --data-input <jjp_data_selected.root> \

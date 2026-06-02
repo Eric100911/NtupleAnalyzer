@@ -44,6 +44,34 @@ class CorrectionSummary:
     mean_weight: float
 
 
+@dataclass(frozen=True)
+class FactorizedComponentCorrection:
+    name: str
+    factor_name: str
+    efficiency: float
+    err_sym: float
+    total: int
+    passed: int
+    fallback_level: str
+    x_bin: int
+    y_bin: int
+    z_bin: int
+    status: int
+
+    @property
+    def bin_key(self) -> tuple[str, str, int, int, int]:
+        return (self.name, self.fallback_level, self.x_bin, self.y_bin, self.z_bin)
+
+
+@dataclass(frozen=True)
+class FactorizedCorrection:
+    efficiency: float
+    weight: float
+    err_sym: float
+    status: int
+    components: tuple[FactorizedComponentCorrection, ...]
+
+
 class EfficiencyCorrectionMap:
     def __init__(
         self,
@@ -180,6 +208,224 @@ class EfficiencyCorrectionMap:
             z_bin=-1,
             status=STATUS_MISSING_BIN,
         )
+
+
+class FactorizedCorrectionMap:
+    """Product of per-object and event-level factorized correction maps."""
+
+    REQUIRED_FACTORS = (
+        "acceptance_jpsi",
+        "acceptance_phi",
+        "eff_muReco_jpsi",
+        "eff_muID_jpsi",
+        "eff_dimuon_jpsi",
+        "eff_kaonReco_phi",
+        "eff_kaonID_phi",
+        "eff_dikaon_phi",
+        "eff_hlt",
+        "eff_4mu_vtx",
+        "eff_triOnia",
+    )
+
+    def __init__(
+        self,
+        maps: dict[str, pd.DataFrame],
+        *,
+        source: Path,
+        n_min_fine: int = 30,
+        n_min_coarse: int = 50,
+    ) -> None:
+        missing = sorted(set(self.REQUIRED_FACTORS) - set(maps))
+        if missing:
+            raise ValueError(f"Missing factorized map(s): {', '.join(missing)}")
+        self.source = Path(source)
+        self.n_min_fine = int(n_min_fine)
+        self.n_min_coarse = int(n_min_coarse)
+        self.maps = {name: self._prepare_frame(frame, name) for name, frame in maps.items()}
+
+    @staticmethod
+    def _prepare_frame(frame: pd.DataFrame, factor_name: str) -> pd.DataFrame:
+        required = {
+            "factor_name",
+            "fallback_level",
+            "x_min",
+            "x_max",
+            "y_min",
+            "y_max",
+            "z_min",
+            "z_max",
+            "x_bin",
+            "y_bin",
+            "z_bin",
+            "total",
+            "passed",
+            "efficiency",
+        }
+        missing = sorted(required - set(frame.columns))
+        if missing:
+            raise ValueError(f"{factor_name} map is missing required column(s): {', '.join(missing)}")
+        selected = frame.loc[frame["factor_name"] == factor_name].copy()
+        if selected.empty:
+            raise ValueError(f"No rows found for factorized map {factor_name!r}")
+        if "err_sym" not in selected.columns:
+            selected["err_sym"] = selected.get("err_high", np.nan)
+        selected["err_sym"] = selected["err_sym"].astype(float)
+        return selected.reset_index(drop=True)
+
+    def _minimum_total_for_level(self, level: str) -> int:
+        if level == "fine":
+            return self.n_min_fine
+        if level == "coarse":
+            return self.n_min_coarse
+        return 1
+
+    @staticmethod
+    def _matches_axis(frame: pd.DataFrame, axis: str, value: float) -> np.ndarray:
+        low = frame[f"{axis}_min"].to_numpy(dtype=float)
+        high = frame[f"{axis}_max"].to_numpy(dtype=float)
+        active = np.isfinite(low) & np.isfinite(high)
+        return (~active) | (np.isfinite(value) & (low <= value) & (value < high))
+
+    def _lookup_component(
+        self,
+        *,
+        component_name: str,
+        factor_name: str,
+        x_value: float,
+        y_value: float = math.nan,
+        z_value: float = math.nan,
+    ) -> FactorizedComponentCorrection:
+        frame = self.maps[factor_name]
+        for level in ("fine", "coarse", "inclusive"):
+            subset = frame.loc[frame["fallback_level"] == level]
+            if subset.empty:
+                continue
+            matches = (
+                self._matches_axis(subset, "x", x_value)
+                & self._matches_axis(subset, "y", y_value)
+                & self._matches_axis(subset, "z", z_value)
+            )
+            indices = np.flatnonzero(matches)
+            if indices.size == 0:
+                continue
+            row = subset.iloc[int(indices[0])]
+            total = int(row["total"])
+            if total < self._minimum_total_for_level(level):
+                continue
+            eff = float(row["efficiency"])
+            if not math.isfinite(eff) or eff <= 0.0:
+                return FactorizedComponentCorrection(
+                    name=component_name,
+                    factor_name=factor_name,
+                    efficiency=eff,
+                    err_sym=float(row.get("err_sym", math.nan)),
+                    total=total,
+                    passed=int(row["passed"]),
+                    fallback_level=level,
+                    x_bin=int(row["x_bin"]),
+                    y_bin=int(row["y_bin"]),
+                    z_bin=int(row["z_bin"]),
+                    status=STATUS_INVALID_EFFICIENCY,
+                )
+            return FactorizedComponentCorrection(
+                name=component_name,
+                factor_name=factor_name,
+                efficiency=eff,
+                err_sym=float(row.get("err_sym", math.nan)),
+                total=total,
+                passed=int(row["passed"]),
+                fallback_level=level,
+                x_bin=int(row["x_bin"]),
+                y_bin=int(row["y_bin"]),
+                z_bin=int(row["z_bin"]),
+                status=STATUS_OK,
+            )
+        return FactorizedComponentCorrection(
+            name=component_name,
+            factor_name=factor_name,
+            efficiency=math.nan,
+            err_sym=math.nan,
+            total=0,
+            passed=0,
+            fallback_level="missing",
+            x_bin=-1,
+            y_bin=-1,
+            z_bin=-1,
+            status=STATUS_MISSING_BIN,
+        )
+
+    def lookup(
+        self,
+        *,
+        jpsi1_pt: float,
+        jpsi1_y: float,
+        jpsi2_pt: float,
+        jpsi2_y: float,
+        phi_pt: float,
+        phi_y: float,
+    ) -> FactorizedCorrection:
+        lead_pt = max(float(jpsi1_pt), float(jpsi2_pt))
+        sublead_pt = min(float(jpsi1_pt), float(jpsi2_pt))
+        components = [
+            self._lookup_component(component_name="jpsi1_acceptance", factor_name="acceptance_jpsi", x_value=float(jpsi1_pt), y_value=abs(float(jpsi1_y))),
+            self._lookup_component(component_name="jpsi1_muReco", factor_name="eff_muReco_jpsi", x_value=float(jpsi1_pt), y_value=abs(float(jpsi1_y))),
+            self._lookup_component(component_name="jpsi1_muID", factor_name="eff_muID_jpsi", x_value=float(jpsi1_pt), y_value=abs(float(jpsi1_y))),
+            self._lookup_component(component_name="jpsi1_dimuon", factor_name="eff_dimuon_jpsi", x_value=float(jpsi1_pt), y_value=abs(float(jpsi1_y))),
+            self._lookup_component(component_name="jpsi2_acceptance", factor_name="acceptance_jpsi", x_value=float(jpsi2_pt), y_value=abs(float(jpsi2_y))),
+            self._lookup_component(component_name="jpsi2_muReco", factor_name="eff_muReco_jpsi", x_value=float(jpsi2_pt), y_value=abs(float(jpsi2_y))),
+            self._lookup_component(component_name="jpsi2_muID", factor_name="eff_muID_jpsi", x_value=float(jpsi2_pt), y_value=abs(float(jpsi2_y))),
+            self._lookup_component(component_name="jpsi2_dimuon", factor_name="eff_dimuon_jpsi", x_value=float(jpsi2_pt), y_value=abs(float(jpsi2_y))),
+            self._lookup_component(component_name="phi_acceptance", factor_name="acceptance_phi", x_value=float(phi_pt), y_value=abs(float(phi_y))),
+            self._lookup_component(component_name="phi_kaonReco", factor_name="eff_kaonReco_phi", x_value=float(phi_pt), y_value=abs(float(phi_y))),
+            self._lookup_component(component_name="phi_kaonID", factor_name="eff_kaonID_phi", x_value=float(phi_pt), y_value=abs(float(phi_y))),
+            self._lookup_component(component_name="phi_dikaon", factor_name="eff_dikaon_phi", x_value=float(phi_pt), y_value=abs(float(phi_y))),
+            self._lookup_component(component_name="event_hlt", factor_name="eff_hlt", x_value=lead_pt, y_value=sublead_pt),
+            self._lookup_component(component_name="event_4mu_vtx", factor_name="eff_4mu_vtx", x_value=lead_pt, y_value=sublead_pt),
+            self._lookup_component(component_name="event_triOnia", factor_name="eff_triOnia", x_value=lead_pt, y_value=sublead_pt, z_value=float(phi_pt)),
+        ]
+        statuses = {component.status for component in components}
+        if STATUS_MISSING_BIN in statuses:
+            return FactorizedCorrection(math.nan, math.nan, math.nan, STATUS_MISSING_BIN, tuple(components))
+        if STATUS_INVALID_EFFICIENCY in statuses:
+            return FactorizedCorrection(math.nan, math.nan, math.nan, STATUS_INVALID_EFFICIENCY, tuple(components))
+
+        efficiencies = np.asarray([component.efficiency for component in components], dtype=float)
+        total_eff = float(np.prod(efficiencies))
+        if not math.isfinite(total_eff) or total_eff <= 0.0:
+            return FactorizedCorrection(total_eff, math.nan, math.nan, STATUS_INVALID_EFFICIENCY, tuple(components))
+        rel_var = 0.0
+        for component in components:
+            if math.isfinite(component.err_sym) and component.efficiency > 0.0:
+                rel_var += float((component.err_sym / component.efficiency) ** 2)
+        weight = 1.0 / total_eff
+        return FactorizedCorrection(
+            efficiency=total_eff,
+            weight=weight,
+            err_sym=weight * math.sqrt(rel_var) if rel_var > 0.0 else math.nan,
+            status=STATUS_OK,
+            components=tuple(components),
+        )
+
+
+def load_factorized_correction_map(
+    sample_dir: str | Path,
+    *,
+    n_min_fine: int = 30,
+    n_min_coarse: int = 50,
+) -> FactorizedCorrectionMap:
+    sample_dir = Path(sample_dir)
+    maps_dir = sample_dir / "maps"
+    maps: dict[str, pd.DataFrame] = {}
+    missing: list[str] = []
+    for factor_name in FactorizedCorrectionMap.REQUIRED_FACTORS:
+        path = maps_dir / f"{factor_name}.parquet"
+        if not path.exists():
+            missing.append(str(path))
+            continue
+        maps[factor_name] = pd.read_parquet(path)
+    if missing:
+        raise FileNotFoundError("Missing factorized correction map file(s): " + ", ".join(missing))
+    return FactorizedCorrectionMap(maps, source=maps_dir, n_min_fine=n_min_fine, n_min_coarse=n_min_coarse)
 
 
 def resolve_efficiency_map_path(

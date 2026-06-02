@@ -19,6 +19,8 @@ from .corrections import (
     STATUS_MISSING_BIN,
     STATUS_OK,
     EfficiencyCorrectionMap,
+    FactorizedCorrectionMap,
+    load_factorized_correction_map,
 )
 from .io import ensure_dir, write_json
 
@@ -27,6 +29,14 @@ DEFAULT_YIELD_SAMPLES = ("JJP_DPS1", "JJP_DPS2_CS", "JJP_DPS2_G", "JJP_SPS_CS", 
 DEFAULT_NOMINAL_SAMPLE = "JJP_DPS1"
 FIT_MASS_BRANCHES = ("sel_Jpsi_1_mass", "sel_Jpsi_2_mass", "sel_Phi_mass")
 CORRECTION_PT_BRANCHES = ("sel_Jpsi_1_pt", "sel_Jpsi_2_pt", "sel_Phi_pt")
+CORRECTION_FACTOR_BRANCHES = (
+    "sel_Jpsi_1_pt",
+    "sel_Jpsi_1_y",
+    "sel_Jpsi_2_pt",
+    "sel_Jpsi_2_y",
+    "sel_Phi_pt",
+    "sel_Phi_y",
+)
 
 
 @dataclass(frozen=True)
@@ -44,6 +54,8 @@ class YieldCorrectionResult:
     fit_nll: float
     mean_weight: float
     weighted_tree: str
+    correction_mode: str = "legacy-correlated"
+    mc_stat_unc: float = math.nan
 
 
 @dataclass(frozen=True)
@@ -87,7 +99,12 @@ class YieldSystematicResult:
 
     @property
     def total_unc(self) -> float:
-        return float(math.hypot(self.stat_unc, self.syst_unc))
+        return float(math.sqrt(self.stat_unc**2 + self.syst_unc**2 + self.mc_stat_unc**2))
+
+    @property
+    def mc_stat_unc(self) -> float:
+        value = self.per_sample[self.nominal_sample].mc_stat_unc
+        return float(value) if math.isfinite(value) else 0.0
 
     def to_dict(self) -> dict:
         return {
@@ -96,6 +113,7 @@ class YieldSystematicResult:
             "raw_yield_err": self.raw_yield_err,
             "nominal_corrected_yield": self.nominal_corrected_yield,
             "stat_unc": self.stat_unc,
+            "mc_stat_unc": self.mc_stat_unc,
             "syst_unc": self.syst_unc,
             "total_unc": self.total_unc,
             "envelope_half_width": self.envelope_half_width,
@@ -343,6 +361,91 @@ def build_weighted_mini_tree(
     return n_total, n_ok, n_missing, n_invalid, mean_weight
 
 
+def build_factorized_weighted_mini_tree(
+    input_file: str | Path,
+    output_file: str | Path,
+    correction_map: FactorizedCorrectionMap,
+    *,
+    tree_name: str = "selected",
+    on_missing: Literal["error", "drop"] = "error",
+    status_callback: Callable[[str], None] | None = None,
+    status_interval: int = 100_000,
+) -> tuple[int, int, int, int, int, float, float]:
+    input_path = Path(input_file)
+    output_path = Path(output_file)
+    ensure_dir(output_path.parent)
+    branches = FIT_MASS_BRANCHES + CORRECTION_FACTOR_BRANCHES
+    with uproot.open(input_path) as root_file:
+        if tree_name not in root_file:
+            raise RuntimeError(f"Input tree {tree_name!r} not found in {input_path}")
+        tree = root_file[tree_name]
+        missing = [branch for branch in branches if branch not in tree.keys()]
+        if missing:
+            raise RuntimeError(f"Input tree is missing branch(es): {', '.join(missing)}")
+        arrays = tree.arrays(branches, library="np")
+
+    n_total = len(arrays[FIT_MASS_BRANCHES[0]])
+    out_arrays = {branch: np.asarray(arrays[branch]) for branch in FIT_MASS_BRANCHES}
+    out_arrays.update({branch: np.asarray(arrays[branch]) for branch in CORRECTION_FACTOR_BRANCHES})
+    weights = np.full(n_total, np.nan, dtype=np.float64)
+    weight_err = np.full(n_total, np.nan, dtype=np.float64)
+    efficiencies = np.full(n_total, np.nan, dtype=np.float64)
+    status = np.full(n_total, STATUS_MISSING_BIN, dtype=np.int32)
+
+    n_ok = 0
+    n_missing = 0
+    n_invalid = 0
+    n_fallback_components = 0
+    keep_mask = np.ones(n_total, dtype=bool)
+    bin_uncertainty_terms: dict[tuple[str, str, int, int, int], tuple[float, float]] = {}
+    for idx in range(n_total):
+        if status_callback is not None and status_interval > 0 and idx > 0 and idx % status_interval == 0:
+            status_callback(f"processed {idx}/{n_total} selected events")
+        correction = correction_map.lookup(
+            jpsi1_pt=float(arrays["sel_Jpsi_1_pt"][idx]),
+            jpsi1_y=float(arrays["sel_Jpsi_1_y"][idx]),
+            jpsi2_pt=float(arrays["sel_Jpsi_2_pt"][idx]),
+            jpsi2_y=float(arrays["sel_Jpsi_2_y"][idx]),
+            phi_pt=float(arrays["sel_Phi_pt"][idx]),
+            phi_y=float(arrays["sel_Phi_y"][idx]),
+        )
+        status[idx] = correction.status
+        efficiencies[idx] = correction.efficiency
+        weights[idx] = correction.weight
+        weight_err[idx] = correction.err_sym
+        if correction.status == STATUS_OK:
+            n_ok += 1
+            for component in correction.components:
+                if component.fallback_level != "fine":
+                    n_fallback_components += 1
+                if math.isfinite(component.err_sym) and component.efficiency > 0.0:
+                    previous_sum, err = bin_uncertainty_terms.get(component.bin_key, (0.0, component.err_sym))
+                    bin_uncertainty_terms[component.bin_key] = (previous_sum + correction.weight / component.efficiency, err)
+        elif correction.status == STATUS_MISSING_BIN:
+            n_missing += 1
+            keep_mask[idx] = on_missing != "drop"
+        elif correction.status == STATUS_INVALID_EFFICIENCY:
+            n_invalid += 1
+            keep_mask[idx] = on_missing != "drop"
+
+    if on_missing == "error" and (n_missing or n_invalid):
+        raise RuntimeError(f"Factorized efficiency lookup failed: missing={n_missing}, invalid={n_invalid}")
+    if on_missing not in {"error", "drop"}:
+        raise ValueError(f"Unsupported on_missing mode: {on_missing}")
+
+    mc_stat_var = sum((sum_w_over_eff * err) ** 2 for sum_w_over_eff, err in bin_uncertainty_terms.values())
+    out_arrays[DEFAULT_WEIGHT_BRANCH] = weights
+    out_arrays["effcorr_weight_err"] = weight_err
+    out_arrays["effcorr_efficiency"] = efficiencies
+    out_arrays["effcorr_status"] = status
+    if on_missing == "drop":
+        out_arrays = {key: value[keep_mask] for key, value in out_arrays.items()}
+    with uproot.recreate(output_path) as root_file:
+        root_file[tree_name] = out_arrays
+    mean_weight = float(np.nanmean(weights[status == STATUS_OK])) if n_ok else math.nan
+    return n_total, n_ok, n_missing, n_invalid, n_fallback_components, mean_weight, float(math.sqrt(mc_stat_var))
+
+
 def run_weighted_yield_fit(
     input_file: str | Path,
     *,
@@ -375,6 +478,9 @@ def compute_efficiency_corrected_yield(
     map_type: str = DEFAULT_MAP_TYPE,
     denominator: Literal["absolute", "conditional"] = "absolute",
     min_total: int = 10,
+    correction_mode: Literal["factorized", "legacy-correlated"] = "factorized",
+    n_min_fine: int = 30,
+    n_min_coarse: int = 50,
     temp_dir: str | Path | None = None,
     jobs: int = 4,
     status_callback: Callable[[str], None] | None = None,
@@ -398,28 +504,47 @@ def compute_efficiency_corrected_yield(
     per_sample: dict[str, YieldCorrectionResult] = {}
     try:
         for sample in samples:
-            map_path = efficiency_dir / sample / "efficiency_maps.parquet"
-            if not map_path.exists():
-                raise FileNotFoundError(f"Efficiency map not found for {sample}: {map_path}")
-            status(f"[{sample}] loading correction map: {map_path}")
-            correction_map, n_interpolated = load_filled_correction_map(
-                map_path,
-                step=step,
-                map_type=map_type,
-                denominator=denominator,
-                min_total=min_total,
-            )
             weighted_tree = work_dir / f"{sample}_weighted.root"
-            status(f"[{sample}] building weighted mini tree: {weighted_tree}")
-            n_events, n_ok, n_missing, n_invalid, mean_weight = build_weighted_mini_tree(
-                data_input_file,
-                weighted_tree,
-                correction_map,
-                status_callback=lambda message, sample=sample: status(f"[{sample}] {message}"),
-            )
+            mc_stat_unc = math.nan
+            if correction_mode == "factorized":
+                sample_dir = efficiency_dir / sample
+                status(f"[{sample}] loading factorized correction maps: {sample_dir / 'maps'}")
+                factorized_map = load_factorized_correction_map(
+                    sample_dir,
+                    n_min_fine=n_min_fine,
+                    n_min_coarse=n_min_coarse,
+                )
+                status(f"[{sample}] building factorized weighted mini tree: {weighted_tree}")
+                n_events, n_ok, n_missing, n_invalid, n_interpolated, mean_weight, mc_stat_unc = build_factorized_weighted_mini_tree(
+                    data_input_file,
+                    weighted_tree,
+                    factorized_map,
+                    status_callback=lambda message, sample=sample: status(f"[{sample}] {message}"),
+                )
+            elif correction_mode == "legacy-correlated":
+                map_path = efficiency_dir / sample / "efficiency_maps.parquet"
+                if not map_path.exists():
+                    raise FileNotFoundError(f"Efficiency map not found for {sample}: {map_path}")
+                status(f"[{sample}] loading correction map: {map_path}")
+                correction_map, n_interpolated = load_filled_correction_map(
+                    map_path,
+                    step=step,
+                    map_type=map_type,
+                    denominator=denominator,
+                    min_total=min_total,
+                )
+                status(f"[{sample}] building weighted mini tree: {weighted_tree}")
+                n_events, n_ok, n_missing, n_invalid, mean_weight = build_weighted_mini_tree(
+                    data_input_file,
+                    weighted_tree,
+                    correction_map,
+                    status_callback=lambda message, sample=sample: status(f"[{sample}] {message}"),
+                )
+            else:
+                raise ValueError(f"Unsupported correction_mode: {correction_mode}")
             status(
                 f"[{sample}] lookup complete: events={n_events}, ok={n_ok}, "
-                f"missing={n_missing}, invalid={n_invalid}, interpolated_bins={n_interpolated}"
+                f"missing={n_missing}, invalid={n_invalid}, fallback_or_interpolated={n_interpolated}"
             )
             status(f"[{sample}] fitting weighted yield")
             corrected_yield, corrected_yield_err, fit_nll, _ = run_weighted_yield_fit(
@@ -442,6 +567,8 @@ def compute_efficiency_corrected_yield(
                 fit_nll=fit_nll,
                 mean_weight=mean_weight,
                 weighted_tree=str(weighted_tree),
+                correction_mode=correction_mode,
+                mc_stat_unc=mc_stat_unc,
             )
         return YieldSystematicResult(
             nominal_sample=nominal_sample,

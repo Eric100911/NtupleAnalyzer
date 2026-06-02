@@ -23,6 +23,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--map-type", default="correlated_3d", help="Efficiency map type to use")
     parser.add_argument("--denominator", default="absolute", choices=["absolute", "conditional"])
     parser.add_argument("--min-total", type=int, default=10, help="Minimum MC total before interpolating a bin")
+    parser.add_argument("--correction-mode", default="factorized", choices=["factorized", "legacy-correlated"])
+    parser.add_argument("--n-min-fine", type=int, default=30, help="Minimum MC total for fine factorized bins")
+    parser.add_argument("--n-min-coarse", type=int, default=50, help="Minimum MC total for coarse factorized bins")
     parser.add_argument("-j", "--jobs", type=int, default=4, help="RooFit NumCPU")
     parser.add_argument("-o", "--output", default=None, help="Output JSON path")
     parser.add_argument("--plot-dir", default=None, help="Directory for yield comparison plot")
@@ -35,13 +38,15 @@ def _default_output_path(data_input: str) -> Path:
     return Path(f"{stem}_efficiency_corrected_yield.json")
 
 
-def _print_summary(result: YieldSystematicResult, *, step: str, map_type: str, denominator: str) -> None:
+def _print_summary(result: YieldSystematicResult, *, correction_mode: str, step: str, map_type: str, denominator: str) -> None:
     print("=== Efficiency-Corrected Yield Summary ===")
-    print(f"Step: {step} | Map: {map_type} | Denominator: {denominator}")
+    print(f"Mode: {correction_mode}")
+    if correction_mode == "legacy-correlated":
+        print(f"Step: {step} | Map: {map_type} | Denominator: {denominator}")
     print()
     print(f"Raw yield (unweighted): {result.raw_yield:.1f} +/- {result.raw_yield_err:.1f}")
     print()
-    print(f"{'Sample':<16} {'Corrected Yield':>22} {'Interp':>8} {'Mean w':>10} {'Status':>8}")
+    print(f"{'Sample':<16} {'Corrected Yield':>22} {'Fallback':>8} {'Mean w':>10} {'MC stat':>10} {'Status':>8}")
     for sample, item in result.per_sample.items():
         marker = " *" if sample == result.nominal_sample else ""
         status = "OK" if item.n_missing == 0 and item.n_invalid == 0 else f"bad={item.n_missing + item.n_invalid}"
@@ -50,11 +55,13 @@ def _print_summary(result: YieldSystematicResult, *, step: str, map_type: str, d
             f"{item.corrected_yield:10.1f} +/- {item.corrected_yield_err:<8.1f} "
             f"{item.n_interpolated:8d} "
             f"{item.mean_weight:10.3g} "
+            f"{item.mc_stat_unc:10.1f} "
             f"{status:>8}"
         )
     print()
     print("Systematic Summary:")
     print(f"  Nominal corrected yield:     {result.nominal_corrected_yield:.1f} +/- {result.stat_unc:.1f} (stat)")
+    print(f"  MC stat uncertainty:         {result.mc_stat_unc:.1f}")
     print(f"  Envelope half-width:         {result.envelope_half_width:.1f}")
     print(f"  RMS:                         {result.rms:.1f}")
     print(f"  Max deviation from nominal:  {result.max_deviation:.1f}")
@@ -71,7 +78,9 @@ def main() -> int:
     print(f"Efficiency dir: {args.efficiency_dir}", flush=True)
     print(f"Samples       : {', '.join(args.samples)}", flush=True)
     print(f"Nominal sample: {args.nominal_sample}", flush=True)
+    print(f"Mode          : {args.correction_mode}", flush=True)
     print(f"Step/map      : {args.efficiency_step} / {args.map_type} ({args.denominator})", flush=True)
+    print(f"Fallback N    : fine={args.n_min_fine}, coarse={args.n_min_coarse}", flush=True)
     print(f"Output JSON   : {output_path}", flush=True)
     print(f"Temp dir      : {temp_dir}", flush=True)
     result = compute_efficiency_corrected_yield(
@@ -83,11 +92,14 @@ def main() -> int:
         map_type=args.map_type,
         denominator=args.denominator,
         min_total=args.min_total,
+        correction_mode=args.correction_mode,
+        n_min_fine=args.n_min_fine,
+        n_min_coarse=args.n_min_coarse,
         temp_dir=temp_dir,
         jobs=args.jobs,
         status_callback=lambda message: print(f"[yieldcorr] {message}", flush=True),
     )
-    _print_summary(result, step=args.efficiency_step, map_type=args.map_type, denominator=args.denominator)
+    _print_summary(result, correction_mode=args.correction_mode, step=args.efficiency_step, map_type=args.map_type, denominator=args.denominator)
     write_yield_result_json(result, output_path)
     print(f"\nWrote JSON: {output_path}")
     if args.plot_dir:

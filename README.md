@@ -187,15 +187,33 @@ python3 rebuild_efficiency_maps.py \
 
 python3 build_derived_efficiency.py \
   --input-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601
+
+python3 -m efficiency_workflow.build_factorized_maps \
+  --input-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601 \
+  --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G
 ```
 
 ### Efficiency-corrected yield
 
 The JJP corrected-yield workflow fits the selected data once without weights,
-then builds one weighted mini-tree per MC subprocess map and refits each tree.
+then builds one weighted mini-tree per MC subprocess correction and refits each tree.
 The nominal central value currently uses `JJP_DPS1`; the systematic is the
-subprocess envelope across the configured samples. The default correction is
-`Pri_assocPVPass`, `correlated_3d`, `absolute` denominator.
+subprocess envelope across the configured samples. The default correction is now
+factorized:
+
+```text
+A(J/psi_1) * A(J/psi_2) * A(phi)
+* eps_muReco(J/psi_1) * eps_muReco(J/psi_2)
+* eps_muID(J/psi_1) * eps_muID(J/psi_2)
+* eps_dimuon(J/psi_1) * eps_dimuon(J/psi_2)
+* eps_kaonReco(phi) * eps_kaonID(phi) * eps_dikaon(phi)
+* eps_HLT * eps_4mu_vtx * eps_triOnia
+```
+
+Each sample must have factorized maps under `<sample>/maps/`, produced by
+`python3 -m efficiency_workflow.build_factorized_maps`. Lookup uses fine bins
+first, then coarse bins, then inclusive bins. The defaults are
+`--n-min-fine 30` and `--n-min-coarse 50`.
 
 ```bash
 python3 compute_efficiency_corrected_yield.py \
@@ -208,7 +226,21 @@ python3 compute_efficiency_corrected_yield.py \
 
 The command prints status before each expensive stage: raw fit, map loading,
 weighted-tree building, and per-sample weighted fits. The JSON contains the raw
-yield, per-sample corrected yields, interpolation counts, and total uncertainty.
+yield, per-sample corrected yields, fallback counts, MC-stat uncertainty,
+subprocess envelope, and total uncertainty.
+
+For comparison with the previous single-map correction, run:
+
+```bash
+python3 compute_efficiency_corrected_yield.py \
+  --correction-mode legacy-correlated \
+  --data-input /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/merged/jjp_data_selected.root \
+  --efficiency-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601 \
+  --efficiency-step Pri_assocPVPass \
+  --map-type correlated_3d \
+  --denominator absolute \
+  -o /tmp/chiw/jjp_legacy_correlated_yield.json
+```
 
 ### Move to a faster machine
 

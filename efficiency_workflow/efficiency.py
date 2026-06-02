@@ -1472,6 +1472,15 @@ def clopper_pearson_interval(total: int, passed: int, confidence: float = 0.6826
     return low, high
 
 
+def jeffreys_efficiency_uncertainty(total: int, passed: int) -> tuple[float, float]:
+    """Return Jeffreys-smoothed efficiency and symmetric binomial uncertainty."""
+    if total <= 0:
+        return math.nan, math.nan
+    eff = float((passed + 0.5) / (total + 1.0))
+    err = float(math.sqrt(eff * (1.0 - eff) / (total + 1.0)))
+    return eff, err
+
+
 def _efficiency_row(base: dict[str, Any], total: int, passed: int) -> dict[str, Any]:
     efficiency = float(passed / total) if total > 0 else math.nan
     low, high = clopper_pearson_interval(total, passed)
