@@ -68,7 +68,20 @@ python3 compute_efficiency_corrected_yield.py \
   --data-input <jjp_data_selected.root> \
   --efficiency-dir <fresh_rebuilt_dir> \
   --plot-dir <yield_plot_dir> \
+  --corrected-root <jjp_data_effcorr_selected.root> \
   -o <yield_summary.json>
+
+python3 fit_splot.py \
+  --channel JJP --dataset data \
+  -i <jjp_data_effcorr_selected.root> \
+  -o <jjp_data_effcorr_splot.root> \
+  --effcorr-weight-branch effcorr_weight
+
+python3 plot_weighted_distributions.py \
+  --channel JJP --dataset data \
+  -i <jjp_data_effcorr_splot.root> \
+  -o <effcorr_splot_dynamics> \
+  -w signal_effcorr_sw
 ```
 
 ### Definitions

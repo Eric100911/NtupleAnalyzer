@@ -220,14 +220,35 @@ python3 compute_efficiency_corrected_yield.py \
   --data-input /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/merged/jjp_data_selected.root \
   --efficiency-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601 \
   --output /tmp/chiw/jjp_efficiency_corrected_yield.json \
+  --corrected-root /tmp/chiw/jjp_data_effcorr_selected.root \
   --plot-dir /tmp/chiw/jjp_efficiency_corrected_yield_plots \
   -j 4
+
+python3 fit_splot.py \
+  --channel JJP \
+  --dataset data \
+  -i /tmp/chiw/jjp_data_effcorr_selected.root \
+  -o /tmp/chiw/jjp_data_effcorr_splot.root \
+  --effcorr-weight-branch effcorr_weight \
+  --plot-dir /tmp/chiw/jjp_effcorr_splot_fit_plots \
+  -j 4
+
+python3 plot_weighted_distributions.py \
+  --channel JJP \
+  --dataset data \
+  -i /tmp/chiw/jjp_data_effcorr_splot.root \
+  -o /tmp/chiw/jjp_effcorr_splot_dynamics \
+  -w signal_effcorr_sw
 ```
 
 The command prints status before each expensive stage: raw fit, map loading,
 weighted-tree building, and per-sample weighted fits. The JSON contains the raw
 yield, per-sample corrected yields, fallback counts, MC-stat uncertainty,
-subprocess envelope, and total uncertainty.
+subprocess envelope, and total uncertainty. The optional `--corrected-root`
+output preserves the full selected-tree schema and appends `effcorr_*` branches
+for the sPlot dynamics chain. `fit_splot.py --effcorr-weight-branch` leaves the
+mass fit unweighted and writes `signal_effcorr_sw = signal_sw * effcorr_weight`
+for plotting.
 
 For comparison with the previous single-map correction, run:
 

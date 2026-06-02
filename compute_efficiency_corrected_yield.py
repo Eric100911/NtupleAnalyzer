@@ -9,8 +9,10 @@ from efficiency_workflow.yield_correction import (
     DEFAULT_YIELD_SAMPLES,
     YieldSystematicResult,
     compute_efficiency_corrected_yield,
+    write_factorized_corrected_root_tree,
     write_yield_result_json,
 )
+from efficiency_workflow.corrections import load_factorized_correction_map
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,6 +32,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("-o", "--output", default=None, help="Output JSON path")
     parser.add_argument("--plot-dir", default=None, help="Directory for yield comparison plot")
     parser.add_argument("--temp-dir", default=None, help="Directory for weighted intermediate ROOT trees")
+    parser.add_argument("--corrected-root", default=None, help="Optional full selected ROOT output with appended effcorr branches")
+    parser.add_argument("--corrected-root-sample", default=None, help="Sample map to use for --corrected-root; defaults to --nominal-sample")
     return parser.parse_args()
 
 
@@ -83,6 +87,8 @@ def main() -> int:
     print(f"Fallback N    : fine={args.n_min_fine}, coarse={args.n_min_coarse}", flush=True)
     print(f"Output JSON   : {output_path}", flush=True)
     print(f"Temp dir      : {temp_dir}", flush=True)
+    if args.corrected_root:
+        print(f"Corrected ROOT: {args.corrected_root}", flush=True)
     result = compute_efficiency_corrected_yield(
         args.data_input,
         args.efficiency_dir,
@@ -102,6 +108,28 @@ def main() -> int:
     _print_summary(result, correction_mode=args.correction_mode, step=args.efficiency_step, map_type=args.map_type, denominator=args.denominator)
     write_yield_result_json(result, output_path)
     print(f"\nWrote JSON: {output_path}")
+    if args.corrected_root:
+        if args.correction_mode != "factorized":
+            raise ValueError("--corrected-root currently supports --correction-mode factorized")
+        corrected_sample = args.corrected_root_sample or args.nominal_sample
+        print(f"Writing full corrected ROOT tree using sample {corrected_sample}: {args.corrected_root}", flush=True)
+        factorized_map = load_factorized_correction_map(
+            Path(args.efficiency_dir) / corrected_sample,
+            n_min_fine=args.n_min_fine,
+            n_min_coarse=args.n_min_coarse,
+        )
+        summary = write_factorized_corrected_root_tree(
+            args.data_input,
+            args.corrected_root,
+            factorized_map,
+            status_callback=lambda message: print(f"[corrected-root] {message}", flush=True),
+        )
+        print(
+            "Wrote corrected ROOT: "
+            f"entries={summary[0]}, ok={summary[1]}, missing={summary[2]}, invalid={summary[3]}, "
+            f"fallback_components={summary[4]}, mean_weight={summary[5]:.3g}",
+            flush=True,
+        )
     if args.plot_dir:
         from efficiency_workflow.config import CmsPlotStyleConfig
         from efficiency_workflow.plotting import write_yield_comparison_plot
