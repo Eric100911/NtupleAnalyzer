@@ -388,53 +388,33 @@ def build_factorized_weighted_mini_tree(
     n_total = len(arrays[FIT_MASS_BRANCHES[0]])
     out_arrays = {branch: np.asarray(arrays[branch]) for branch in FIT_MASS_BRANCHES}
     out_arrays.update({branch: np.asarray(arrays[branch]) for branch in CORRECTION_FACTOR_BRANCHES})
-    weights = np.full(n_total, np.nan, dtype=np.float64)
-    weight_err = np.full(n_total, np.nan, dtype=np.float64)
-    efficiencies = np.full(n_total, np.nan, dtype=np.float64)
-    status = np.full(n_total, STATUS_MISSING_BIN, dtype=np.int32)
+    if status_callback is not None:
+        status_callback(f"vectorized lookup for {n_total} selected events")
+    correction = correction_map.lookup_arrays(
+        jpsi1_pt=np.asarray(arrays["sel_Jpsi_1_pt"], dtype=float),
+        jpsi1_y=np.asarray(arrays["sel_Jpsi_1_y"], dtype=float),
+        jpsi2_pt=np.asarray(arrays["sel_Jpsi_2_pt"], dtype=float),
+        jpsi2_y=np.asarray(arrays["sel_Jpsi_2_y"], dtype=float),
+        phi_pt=np.asarray(arrays["sel_Phi_pt"], dtype=float),
+        phi_y=np.asarray(arrays["sel_Phi_y"], dtype=float),
+    )
+    weights = correction.weight
+    weight_err = correction.weight_err
+    efficiencies = correction.efficiency
+    status = correction.status
 
-    n_ok = 0
-    n_missing = 0
-    n_invalid = 0
-    n_fallback_components = 0
+    n_ok = int(np.count_nonzero(status == STATUS_OK))
+    n_missing = int(np.count_nonzero(status == STATUS_MISSING_BIN))
+    n_invalid = int(np.count_nonzero(status == STATUS_INVALID_EFFICIENCY))
+    n_fallback_components = int(np.sum(correction.fallback_components[status == STATUS_OK]))
     keep_mask = np.ones(n_total, dtype=bool)
-    bin_uncertainty_terms: dict[tuple[str, str, int, int, int], tuple[float, float]] = {}
-    for idx in range(n_total):
-        if status_callback is not None and status_interval > 0 and idx > 0 and idx % status_interval == 0:
-            status_callback(f"processed {idx}/{n_total} selected events")
-        correction = correction_map.lookup(
-            jpsi1_pt=float(arrays["sel_Jpsi_1_pt"][idx]),
-            jpsi1_y=float(arrays["sel_Jpsi_1_y"][idx]),
-            jpsi2_pt=float(arrays["sel_Jpsi_2_pt"][idx]),
-            jpsi2_y=float(arrays["sel_Jpsi_2_y"][idx]),
-            phi_pt=float(arrays["sel_Phi_pt"][idx]),
-            phi_y=float(arrays["sel_Phi_y"][idx]),
-        )
-        status[idx] = correction.status
-        efficiencies[idx] = correction.efficiency
-        weights[idx] = correction.weight
-        weight_err[idx] = correction.err_sym
-        if correction.status == STATUS_OK:
-            n_ok += 1
-            for component in correction.components:
-                if component.fallback_level != "fine":
-                    n_fallback_components += 1
-                if math.isfinite(component.err_sym) and component.efficiency > 0.0:
-                    previous_sum, err = bin_uncertainty_terms.get(component.bin_key, (0.0, component.err_sym))
-                    bin_uncertainty_terms[component.bin_key] = (previous_sum + correction.weight / component.efficiency, err)
-        elif correction.status == STATUS_MISSING_BIN:
-            n_missing += 1
-            keep_mask[idx] = on_missing != "drop"
-        elif correction.status == STATUS_INVALID_EFFICIENCY:
-            n_invalid += 1
-            keep_mask[idx] = on_missing != "drop"
+    keep_mask[status != STATUS_OK] = on_missing != "drop"
 
     if on_missing == "error" and (n_missing or n_invalid):
         raise RuntimeError(f"Factorized efficiency lookup failed: missing={n_missing}, invalid={n_invalid}")
     if on_missing not in {"error", "drop"}:
         raise ValueError(f"Unsupported on_missing mode: {on_missing}")
 
-    mc_stat_var = sum((sum_w_over_eff * err) ** 2 for sum_w_over_eff, err in bin_uncertainty_terms.values())
     out_arrays[DEFAULT_WEIGHT_BRANCH] = weights
     out_arrays["effcorr_weight_err"] = weight_err
     out_arrays["effcorr_efficiency"] = efficiencies
@@ -444,7 +424,7 @@ def build_factorized_weighted_mini_tree(
     with uproot.recreate(output_path) as root_file:
         root_file[tree_name] = out_arrays
     mean_weight = float(np.nanmean(weights[status == STATUS_OK])) if n_ok else math.nan
-    return n_total, n_ok, n_missing, n_invalid, n_fallback_components, mean_weight, float(math.sqrt(mc_stat_var))
+    return n_total, n_ok, n_missing, n_invalid, n_fallback_components, mean_weight, correction.mc_stat_unc
 
 
 def write_factorized_corrected_root_tree(

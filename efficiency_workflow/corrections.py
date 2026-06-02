@@ -72,6 +72,30 @@ class FactorizedCorrection:
     components: tuple[FactorizedComponentCorrection, ...]
 
 
+@dataclass(frozen=True)
+class FactorizedCorrectionArrays:
+    efficiency: np.ndarray
+    weight: np.ndarray
+    weight_err: np.ndarray
+    status: np.ndarray
+    fallback_components: np.ndarray
+    mc_stat_unc: float
+
+
+@dataclass(frozen=True)
+class _FactorizedComponentArrays:
+    name: str
+    factor_name: str
+    efficiency: np.ndarray
+    err_sym: np.ndarray
+    status: np.ndarray
+    fallback_level: np.ndarray
+    row_index: np.ndarray
+    x_bin: np.ndarray
+    y_bin: np.ndarray
+    z_bin: np.ndarray
+
+
 class EfficiencyCorrectionMap:
     def __init__(
         self,
@@ -242,6 +266,13 @@ class FactorizedCorrectionMap:
         self.n_min_fine = int(n_min_fine)
         self.n_min_coarse = int(n_min_coarse)
         self.maps = {name: self._prepare_frame(frame, name) for name, frame in maps.items()}
+        self._maps_by_level = {
+            name: {
+                level: frame.loc[frame["fallback_level"] == level]
+                for level in ("fine", "coarse", "inclusive")
+            }
+            for name, frame in self.maps.items()
+        }
 
     @staticmethod
     def _prepare_frame(frame: pd.DataFrame, factor_name: str) -> pd.DataFrame:
@@ -285,6 +316,14 @@ class FactorizedCorrectionMap:
         high = frame[f"{axis}_max"].to_numpy(dtype=float)
         active = np.isfinite(low) & np.isfinite(high)
         return (~active) | (np.isfinite(value) & (low <= value) & (value < high))
+
+    @staticmethod
+    def _matches_axis_array(row: pd.Series, axis: str, values: np.ndarray) -> np.ndarray:
+        low = float(row[f"{axis}_min"])
+        high = float(row[f"{axis}_max"])
+        if not (math.isfinite(low) and math.isfinite(high)):
+            return np.ones(len(values), dtype=bool)
+        return np.isfinite(values) & (low <= values) & (values < high)
 
     def _lookup_component(
         self,
@@ -354,6 +393,79 @@ class FactorizedCorrectionMap:
             status=STATUS_MISSING_BIN,
         )
 
+    def _lookup_component_arrays(
+        self,
+        *,
+        component_name: str,
+        factor_name: str,
+        x_values: np.ndarray,
+        y_values: np.ndarray | None = None,
+        z_values: np.ndarray | None = None,
+    ) -> _FactorizedComponentArrays:
+        x_values = np.asarray(x_values, dtype=float)
+        n_events = len(x_values)
+        if y_values is None:
+            y_values = np.full(n_events, math.nan, dtype=float)
+        else:
+            y_values = np.asarray(y_values, dtype=float)
+        if z_values is None:
+            z_values = np.full(n_events, math.nan, dtype=float)
+        else:
+            z_values = np.asarray(z_values, dtype=float)
+
+        efficiency = np.full(n_events, math.nan, dtype=np.float64)
+        err_sym = np.full(n_events, math.nan, dtype=np.float64)
+        status = np.full(n_events, STATUS_MISSING_BIN, dtype=np.int32)
+        fallback_level = np.full(n_events, "missing", dtype=object)
+        row_index = np.full(n_events, -1, dtype=np.int32)
+        x_bin = np.full(n_events, -1, dtype=np.int32)
+        y_bin = np.full(n_events, -1, dtype=np.int32)
+        z_bin = np.full(n_events, -1, dtype=np.int32)
+        unresolved = np.ones(n_events, dtype=bool)
+
+        for level in ("fine", "coarse", "inclusive"):
+            level_frame = self._maps_by_level[factor_name][level]
+            if level_frame.empty:
+                continue
+            min_total = self._minimum_total_for_level(level)
+            for idx, row in level_frame.iterrows():
+                if not np.any(unresolved):
+                    break
+                if int(row["total"]) < min_total:
+                    continue
+                matches = (
+                    unresolved
+                    & self._matches_axis_array(row, "x", x_values)
+                    & self._matches_axis_array(row, "y", y_values)
+                    & self._matches_axis_array(row, "z", z_values)
+                )
+                if not np.any(matches):
+                    continue
+                eff = float(row["efficiency"])
+                row_status = STATUS_OK if math.isfinite(eff) and eff > 0.0 else STATUS_INVALID_EFFICIENCY
+                efficiency[matches] = eff
+                err_sym[matches] = float(row.get("err_sym", math.nan))
+                status[matches] = row_status
+                fallback_level[matches] = level
+                row_index[matches] = int(idx)
+                x_bin[matches] = int(row["x_bin"])
+                y_bin[matches] = int(row["y_bin"])
+                z_bin[matches] = int(row["z_bin"])
+                unresolved[matches] = False
+
+        return _FactorizedComponentArrays(
+            name=component_name,
+            factor_name=factor_name,
+            efficiency=efficiency,
+            err_sym=err_sym,
+            status=status,
+            fallback_level=fallback_level,
+            row_index=row_index,
+            x_bin=x_bin,
+            y_bin=y_bin,
+            z_bin=z_bin,
+        )
+
     def lookup(
         self,
         *,
@@ -404,6 +516,105 @@ class FactorizedCorrectionMap:
             err_sym=weight * math.sqrt(rel_var) if rel_var > 0.0 else math.nan,
             status=STATUS_OK,
             components=tuple(components),
+        )
+
+    def lookup_arrays(
+        self,
+        *,
+        jpsi1_pt: np.ndarray,
+        jpsi1_y: np.ndarray,
+        jpsi2_pt: np.ndarray,
+        jpsi2_y: np.ndarray,
+        phi_pt: np.ndarray,
+        phi_y: np.ndarray,
+    ) -> FactorizedCorrectionArrays:
+        jpsi1_pt = np.asarray(jpsi1_pt, dtype=float)
+        jpsi1_y = np.asarray(jpsi1_y, dtype=float)
+        jpsi2_pt = np.asarray(jpsi2_pt, dtype=float)
+        jpsi2_y = np.asarray(jpsi2_y, dtype=float)
+        phi_pt = np.asarray(phi_pt, dtype=float)
+        phi_y = np.asarray(phi_y, dtype=float)
+        lengths = {len(jpsi1_pt), len(jpsi1_y), len(jpsi2_pt), len(jpsi2_y), len(phi_pt), len(phi_y)}
+        if len(lengths) != 1:
+            raise ValueError("All lookup arrays must have the same length")
+
+        lead_pt = np.maximum(jpsi1_pt, jpsi2_pt)
+        sublead_pt = np.minimum(jpsi1_pt, jpsi2_pt)
+        component_results = [
+            self._lookup_component_arrays(component_name="jpsi1_acceptance", factor_name="acceptance_jpsi", x_values=jpsi1_pt, y_values=np.abs(jpsi1_y)),
+            self._lookup_component_arrays(component_name="jpsi1_muReco", factor_name="eff_muReco_jpsi", x_values=jpsi1_pt, y_values=np.abs(jpsi1_y)),
+            self._lookup_component_arrays(component_name="jpsi1_muID", factor_name="eff_muID_jpsi", x_values=jpsi1_pt, y_values=np.abs(jpsi1_y)),
+            self._lookup_component_arrays(component_name="jpsi1_dimuon", factor_name="eff_dimuon_jpsi", x_values=jpsi1_pt, y_values=np.abs(jpsi1_y)),
+            self._lookup_component_arrays(component_name="jpsi2_acceptance", factor_name="acceptance_jpsi", x_values=jpsi2_pt, y_values=np.abs(jpsi2_y)),
+            self._lookup_component_arrays(component_name="jpsi2_muReco", factor_name="eff_muReco_jpsi", x_values=jpsi2_pt, y_values=np.abs(jpsi2_y)),
+            self._lookup_component_arrays(component_name="jpsi2_muID", factor_name="eff_muID_jpsi", x_values=jpsi2_pt, y_values=np.abs(jpsi2_y)),
+            self._lookup_component_arrays(component_name="jpsi2_dimuon", factor_name="eff_dimuon_jpsi", x_values=jpsi2_pt, y_values=np.abs(jpsi2_y)),
+            self._lookup_component_arrays(component_name="phi_acceptance", factor_name="acceptance_phi", x_values=phi_pt, y_values=np.abs(phi_y)),
+            self._lookup_component_arrays(component_name="phi_kaonReco", factor_name="eff_kaonReco_phi", x_values=phi_pt, y_values=np.abs(phi_y)),
+            self._lookup_component_arrays(component_name="phi_kaonID", factor_name="eff_kaonID_phi", x_values=phi_pt, y_values=np.abs(phi_y)),
+            self._lookup_component_arrays(component_name="phi_dikaon", factor_name="eff_dikaon_phi", x_values=phi_pt, y_values=np.abs(phi_y)),
+            self._lookup_component_arrays(component_name="event_hlt", factor_name="eff_hlt", x_values=lead_pt, y_values=sublead_pt),
+            self._lookup_component_arrays(component_name="event_4mu_vtx", factor_name="eff_4mu_vtx", x_values=lead_pt, y_values=sublead_pt),
+            self._lookup_component_arrays(component_name="event_triOnia", factor_name="eff_triOnia", x_values=lead_pt, y_values=sublead_pt, z_values=phi_pt),
+        ]
+
+        n_events = len(jpsi1_pt)
+        status = np.full(n_events, STATUS_OK, dtype=np.int32)
+        missing = np.zeros(n_events, dtype=bool)
+        invalid = np.zeros(n_events, dtype=bool)
+        for component in component_results:
+            missing |= component.status == STATUS_MISSING_BIN
+            invalid |= component.status == STATUS_INVALID_EFFICIENCY
+        status[invalid] = STATUS_INVALID_EFFICIENCY
+        status[missing] = STATUS_MISSING_BIN
+
+        efficiency = np.ones(n_events, dtype=np.float64)
+        rel_var = np.zeros(n_events, dtype=np.float64)
+        fallback_components = np.zeros(n_events, dtype=np.int32)
+        for component in component_results:
+            efficiency *= component.efficiency
+            valid_err = np.isfinite(component.err_sym) & (component.efficiency > 0.0)
+            rel_var[valid_err] += (component.err_sym[valid_err] / component.efficiency[valid_err]) ** 2
+            fallback_components += ((component.status == STATUS_OK) & (component.fallback_level != "fine")).astype(np.int32)
+
+        invalid_eff = ~np.isfinite(efficiency) | (efficiency <= 0.0)
+        status[(status == STATUS_OK) & invalid_eff] = STATUS_INVALID_EFFICIENCY
+        weight = np.full(n_events, math.nan, dtype=np.float64)
+        ok = status == STATUS_OK
+        weight[ok] = 1.0 / efficiency[ok]
+        weight_err = np.full(n_events, math.nan, dtype=np.float64)
+        has_rel_var = ok & (rel_var > 0.0)
+        weight_err[has_rel_var] = weight[has_rel_var] * np.sqrt(rel_var[has_rel_var])
+        efficiency[~ok] = np.nan
+
+        mc_stat_terms: dict[tuple[str, str, int, int, int], tuple[float, float]] = {}
+        for component in component_results:
+            valid_component = ok & (component.status == STATUS_OK) & np.isfinite(component.err_sym) & (component.efficiency > 0.0)
+            for row_idx in np.unique(component.row_index[valid_component]):
+                if row_idx < 0:
+                    continue
+                mask = valid_component & (component.row_index == row_idx)
+                if not np.any(mask):
+                    continue
+                first = int(np.flatnonzero(mask)[0])
+                key = (
+                    component.name,
+                    str(component.fallback_level[first]),
+                    int(component.x_bin[first]),
+                    int(component.y_bin[first]),
+                    int(component.z_bin[first]),
+                )
+                previous_sum, err = mc_stat_terms.get(key, (0.0, float(component.err_sym[first])))
+                mc_stat_terms[key] = (previous_sum + float(np.sum(weight[mask] / component.efficiency[mask])), err)
+        mc_stat_var = sum((sum_w_over_eff * err) ** 2 for sum_w_over_eff, err in mc_stat_terms.values())
+
+        return FactorizedCorrectionArrays(
+            efficiency=efficiency,
+            weight=weight,
+            weight_err=weight_err,
+            status=status,
+            fallback_components=fallback_components,
+            mc_stat_unc=float(math.sqrt(mc_stat_var)),
         )
 
 

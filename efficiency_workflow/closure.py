@@ -39,23 +39,32 @@ def _corrected_sum(
 ) -> tuple[float, int, int]:
     if selected_col not in frame.columns:
         raise ValueError(f"Selected column {selected_col!r} is not present in merged gen/event table")
-    selected = frame.loc[frame[selected_col].astype(bool)].copy()
-    total = 0.0
-    failed = 0
-    for row in selected.itertuples(index=False):
-        correction = correction_map.lookup(
-            jpsi1_pt=float(getattr(row, "jpsi_lead_pt")),
-            jpsi1_y=float(getattr(row, "jpsi_lead_y")),
-            jpsi2_pt=float(getattr(row, "jpsi_sublead_pt")),
-            jpsi2_y=float(getattr(row, "jpsi_sublead_y")),
-            phi_pt=float(getattr(row, "phi_pt")),
-            phi_y=float(getattr(row, "phi_y")),
-        )
-        if correction.status == STATUS_OK:
-            total += correction.weight
-        else:
-            failed += 1
+    selected = frame.loc[frame[selected_col].astype(bool)]
+    result = correction_map.lookup_arrays(
+        jpsi1_pt=selected["jpsi_lead_pt"].to_numpy(dtype=float),
+        jpsi1_y=selected["jpsi_lead_y"].to_numpy(dtype=float),
+        jpsi2_pt=selected["jpsi_sublead_pt"].to_numpy(dtype=float),
+        jpsi2_y=selected["jpsi_sublead_y"].to_numpy(dtype=float),
+        phi_pt=selected["phi_pt"].to_numpy(dtype=float),
+        phi_y=selected["phi_y"].to_numpy(dtype=float),
+    )
+    ok = result.status == STATUS_OK
+    total = float(np.nansum(result.weight[ok])) if ok.size else 0.0
+    failed = int(np.count_nonzero(~ok))
     return total, int(len(selected)), failed
+
+
+def _closure_result_from_merged(
+    label: str,
+    correction_map: FactorizedCorrectionMap,
+    merged: pd.DataFrame,
+    *,
+    selected_col: str,
+) -> ClosureResult:
+    corrected, n_selected, failed = _corrected_sum(merged, correction_map, selected_col=selected_col)
+    n_gen = int(merged["full_gen"].sum()) if "full_gen" in merged.columns else int(len(merged))
+    ratio = float(corrected / n_gen) if n_gen > 0 else math.nan
+    return ClosureResult(label, n_gen, n_selected, corrected, ratio, failed)
 
 
 def self_closure_test(
@@ -67,10 +76,7 @@ def self_closure_test(
     selected_col: str = "Pri_assocPVPass",
 ) -> ClosureResult:
     merged = _merged_gen_events(gen_df, event_df)
-    corrected, n_selected, failed = _corrected_sum(merged, correction_map, selected_col=selected_col)
-    n_gen = int(merged["full_gen"].sum()) if "full_gen" in merged.columns else int(len(merged))
-    ratio = float(corrected / n_gen) if n_gen > 0 else math.nan
-    return ClosureResult(sample, n_gen, n_selected, corrected, ratio, failed)
+    return _closure_result_from_merged(sample, correction_map, merged, selected_col=selected_col)
 
 
 def cross_closure_test(
@@ -149,10 +155,11 @@ def run_closure_matrix(
         for sample in samples
     }
     gen, event = _load_sample_inputs(input_path, samples)
+    merged = {sample: _merged_gen_events(gen[sample], event[sample]) for sample in samples}
 
     rows: list[dict] = []
     for sample in samples:
-        result = self_closure_test(sample, maps[sample], gen[sample], event[sample], selected_col=selected_col)
+        result = _closure_result_from_merged(sample, maps[sample], merged[sample], selected_col=selected_col)
         rows.append(
             {
                 "closure_type": "self",
@@ -168,11 +175,10 @@ def run_closure_matrix(
                 if map_sample == target_sample:
                     continue
                 label = f"{map_sample}_on_{target_sample}"
-                result = cross_closure_test(
+                result = _closure_result_from_merged(
                     label,
                     maps[map_sample],
-                    gen[target_sample],
-                    event[target_sample],
+                    merged[target_sample],
                     selected_col=selected_col,
                 )
                 rows.append(
