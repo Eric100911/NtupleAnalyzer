@@ -387,10 +387,16 @@ submit_job() {
         MODES_TO_SUBMIT=("")  # Use default
     fi
     
+    # Build runtime tarball for file transfer to worker nodes
+    msg_info "Building runtime tarball..."
+    local RUNTIME_TARBALL
+    RUNTIME_TARBALL="$(bash "${SCRIPT_DIR}/build_runtime_tarball.sh" | tail -1)"
+
     # Submit jobs
     for m in "${MODES_TO_SUBMIT[@]}"; do
         local CMD_PARTS=("condor_submit")
         [ -n "$m" ] && CMD_PARTS+=("-append" "MODE = $m")
+        CMD_PARTS+=("-append" "RUNTIME_TARBALL = $RUNTIME_TARBALL")
         CMD_PARTS+=("${SUBMIT_APPEND_ARGS[@]}")
         CMD_PARTS+=("$SUB_FILE")
         
