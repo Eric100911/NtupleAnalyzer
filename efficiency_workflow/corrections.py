@@ -31,6 +31,8 @@ class EfficiencyCorrection:
     y_bin: int
     z_bin: int
     status: int
+    u_bin: int = -1
+    v_bin: int = -1
 
 
 @dataclass(frozen=True)
@@ -97,6 +99,22 @@ class _FactorizedComponentArrays:
 
 
 class EfficiencyCorrectionMap:
+    """Non-factorized efficiency correction with hierarchical fallback levels.
+
+    Each level corresponds to a different binning granularity.  During lookup
+    the finest level is tried first; if the matching bin has too few MC events
+    (total < level_min_total) the next coarser level is used as fallback.
+
+    Typical configuration for the 5D non-factorized approach:
+      - fine:   correlated_5d  (jpsi_lead_pt, jpsi_sublead_pt, phi_pt,
+                                 jpsi_lead_abs_y, jpsi_sublead_abs_y)
+      - coarse: correlated_3d  (jpsi_lead_pt, jpsi_sublead_pt, phi_pt)
+      - inclusive: inclusive   (no binning)
+
+    The coarse and inclusive levels are optional.  When omitted the map
+    behaves identically to the original single-level implementation.
+    """
+
     def __init__(
         self,
         frame: pd.DataFrame,
@@ -105,25 +123,94 @@ class EfficiencyCorrectionMap:
         step: str,
         map_type: str = DEFAULT_MAP_TYPE,
         denominator: Literal["absolute", "conditional"] = "absolute",
+        fallback_frames: list[pd.DataFrame] | None = None,
+        fallback_min_total: list[int] | None = None,
+        fine_min_total: int = 0,
     ) -> None:
         self.source = source
         self.step = step
         self.map_type = map_type
         self.denominator = denominator
-        self.frame = self._prepare_frame(frame, step=step, map_type=map_type, denominator=denominator)
 
-        self.x_min = self.frame["x_min"].to_numpy(dtype=float)
-        self.x_max = self.frame["x_max"].to_numpy(dtype=float)
-        self.y_min = self.frame["y_min"].to_numpy(dtype=float)
-        self.y_max = self.frame["y_max"].to_numpy(dtype=float)
-        self.z_min = self.frame["z_min"].to_numpy(dtype=float)
-        self.z_max = self.frame["z_max"].to_numpy(dtype=float)
-        self.efficiency = self.frame["lookup_efficiency"].to_numpy(dtype=float)
-        self.err_low = self.frame["lookup_err_low"].to_numpy(dtype=float)
-        self.err_high = self.frame["lookup_err_high"].to_numpy(dtype=float)
-        self.x_bin = self.frame["x_bin"].to_numpy(dtype=int)
-        self.y_bin = self.frame["y_bin"].to_numpy(dtype=int)
-        self.z_bin = self.frame["z_bin"].to_numpy(dtype=int)
+        # --- primary (finest) level ---
+        self.frame = self._prepare_frame(frame, step=step, map_type=map_type, denominator=denominator)
+        self._levels: list[dict[str, Any]] = []
+        self._add_level(self.frame, min_total=fine_min_total, level_name="fine")
+
+        # --- optional fallback levels ---
+        if fallback_frames is not None:
+            for i, fb_frame in enumerate(fallback_frames):
+                fb_map_type = fb_frame["map_type"].iloc[0] if "map_type" in fb_frame.columns else f"fallback_{i}"
+                prepared = self._prepare_frame(fb_frame, step=step, map_type=fb_map_type, denominator=denominator)
+                min_tot = fallback_min_total[i] if fallback_min_total and i < len(fallback_min_total) else 0
+                self._add_level(prepared, min_total=min_tot, level_name=("coarse" if i == 0 else f"fallback_{i}"))
+
+        # expose axis arrays from the primary level for backward compatibility
+        self._refresh_primary_attrs()
+
+    def _refresh_primary_attrs(self) -> None:
+        """Sync the convenience attributes from the first (finest) level."""
+        primary = self._levels[0]
+        self.x_min = primary["x_min"]
+        self.x_max = primary["x_max"]
+        self.y_min = primary["y_min"]
+        self.y_max = primary["y_max"]
+        self.z_min = primary["z_min"]
+        self.z_max = primary["z_max"]
+        self.efficiency = primary["efficiency"]
+        self.err_low = primary["err_low"]
+        self.err_high = primary["err_high"]
+        self.x_bin = primary["x_bin"]
+        self.y_bin = primary["y_bin"]
+        self.z_bin = primary["z_bin"]
+
+    def _add_level(self, prepared: pd.DataFrame, *, min_total: int, level_name: str) -> None:
+        """Extract axis arrays from a prepared frame and register as a fallback level."""
+        arrays: dict[str, np.ndarray] = {}
+        for ax in ("x", "y", "z"):
+            arrays[f"{ax}_min"] = prepared[f"{ax}_min"].to_numpy(dtype=float)
+            arrays[f"{ax}_max"] = prepared[f"{ax}_max"].to_numpy(dtype=float)
+            arrays[f"{ax}_bin"] = prepared[f"{ax}_bin"].to_numpy(dtype=int)
+        has_u = "u_min" in prepared.columns
+        has_v = "v_min" in prepared.columns
+        for ax in ("u", "v"):
+            if f"{ax}_min" in prepared.columns:
+                arrays[f"{ax}_min"] = prepared[f"{ax}_min"].to_numpy(dtype=float)
+                arrays[f"{ax}_max"] = prepared[f"{ax}_max"].to_numpy(dtype=float)
+                arrays[f"{ax}_bin"] = prepared[f"{ax}_bin"].to_numpy(dtype=int)
+            else:
+                arrays[f"{ax}_min"] = np.array([])
+                arrays[f"{ax}_max"] = np.array([])
+                arrays[f"{ax}_bin"] = np.array([])
+        arrays["efficiency"] = prepared["lookup_efficiency"].to_numpy(dtype=float)
+        arrays["err_low"] = prepared["lookup_err_low"].to_numpy(dtype=float)
+        arrays["err_high"] = prepared["lookup_err_high"].to_numpy(dtype=float)
+        arrays["total"] = prepared["total"].to_numpy(dtype=int) if "total" in prepared.columns else np.full(len(prepared), -1, dtype=int)
+        arrays["has_u"] = has_u
+        arrays["has_v"] = has_v
+        arrays["min_total"] = min_total
+        arrays["level_name"] = level_name
+        self._levels.append(arrays)
+
+    @property
+    def has_u(self) -> bool:
+        """True when the primary level includes u-axis (rapidity) binning."""
+        return bool(self._levels[0].get("has_u", False))
+
+    @property
+    def has_v(self) -> bool:
+        """True when the primary level includes v-axis (rapidity) binning."""
+        return bool(self._levels[0].get("has_v", False))
+
+    @property
+    def axis_names(self) -> list[str]:
+        """Ordered list of axis names present in the primary level."""
+        names = ["x", "y", "z"]
+        if self.has_u:
+            names.append("u")
+        if self.has_v:
+            names.append("v")
+        return names
 
     @staticmethod
     def _prepare_frame(
@@ -176,48 +263,190 @@ class EfficiencyCorrectionMap:
 
         selected["lookup_err_low"] = selected["lookup_err_low"].astype(float)
         selected["lookup_err_high"] = selected["lookup_err_high"].astype(float)
-        selected.sort_values(["x_bin", "y_bin", "z_bin"], inplace=True)
+        sort_cols = ["x_bin", "y_bin", "z_bin"]
+        if "u_bin" in selected.columns:
+            sort_cols.append("u_bin")
+        if "v_bin" in selected.columns:
+            sort_cols.append("v_bin")
+        selected.sort_values(sort_cols, inplace=True)
         return selected.reset_index(drop=True)
 
-    def lookup(self, jpsi1_pt: float, jpsi2_pt: float, phi_pt: float) -> EfficiencyCorrection:
+    # ------------------------------------------------------------------
+    # axis matching helpers (handle NaN = unbounded for inclusive bins)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _axis_match(level: dict[str, np.ndarray], axis: str, value: float) -> np.ndarray:
+        low = level[f"{axis}_min"]
+        high = level[f"{axis}_max"]
+        active = np.isfinite(low) & np.isfinite(high)
+        return (~active) | (np.isfinite(value) & (low <= value) & (value < high))
+
+    @staticmethod
+    def _axis_match_idx(level: dict[str, np.ndarray], axis: str, idx: int, value: float) -> bool:
+        low = level[f"{axis}_min"][idx]
+        high = level[f"{axis}_max"][idx]
+        if not (math.isfinite(low) and math.isfinite(high)):
+            return True  # unbounded — always matches
+        return math.isfinite(value) and low <= value < high
+
+    @staticmethod
+    def _axis_match_idx_array(level: dict[str, np.ndarray], axis: str, idx: int, values: np.ndarray) -> np.ndarray:
+        low = float(level[f"{axis}_min"][idx])
+        high = float(level[f"{axis}_max"][idx])
+        if not (math.isfinite(low) and math.isfinite(high)):
+            return np.ones(len(values), dtype=bool)  # unbounded
+        return np.isfinite(values) & (low <= values) & (values < high)
+
+    # ------------------------------------------------------------------
+    # scalar lookup
+    # ------------------------------------------------------------------
+    def lookup(
+        self,
+        jpsi1_pt: float,
+        jpsi2_pt: float,
+        phi_pt: float,
+        jpsi1_abs_y: float | None = None,
+        jpsi2_abs_y: float | None = None,
+    ) -> EfficiencyCorrection:
         if not (math.isfinite(jpsi1_pt) and math.isfinite(jpsi2_pt) and math.isfinite(phi_pt)):
             return self._missing()
-        lead = max(float(jpsi1_pt), float(jpsi2_pt))
-        sublead = min(float(jpsi1_pt), float(jpsi2_pt))
+        lead_pt = max(float(jpsi1_pt), float(jpsi2_pt))
+        sublead_pt = min(float(jpsi1_pt), float(jpsi2_pt))
         phi = float(phi_pt)
-        matches = (
-            (self.x_min <= lead)
-            & (lead < self.x_max)
-            & (self.y_min <= sublead)
-            & (sublead < self.y_max)
-            & (self.z_min <= phi)
-            & (phi < self.z_max)
-        )
-        indices = np.flatnonzero(matches)
-        if indices.size == 0:
-            return self._missing()
-        idx = int(indices[0])
-        eff = float(self.efficiency[idx])
-        if not math.isfinite(eff) or eff <= 0.0:
+
+        # determine lead/sublead rapidity from the same ordering as pT
+        if jpsi1_abs_y is not None and jpsi2_abs_y is not None and math.isfinite(jpsi1_abs_y) and math.isfinite(jpsi2_abs_y):
+            if float(jpsi1_pt) >= float(jpsi2_pt):
+                lead_abs_y = float(jpsi1_abs_y)
+                sublead_abs_y = float(jpsi2_abs_y)
+            else:
+                lead_abs_y = float(jpsi2_abs_y)
+                sublead_abs_y = float(jpsi1_abs_y)
+        else:
+            lead_abs_y = math.nan
+            sublead_abs_y = math.nan
+
+        for level in self._levels:
+            matches = self._axis_match(level, "x", lead_pt) & self._axis_match(level, "y", sublead_pt) & self._axis_match(level, "z", phi)
+            if level["has_u"]:
+                matches &= self._axis_match(level, "u", lead_abs_y)
+            if level["has_v"]:
+                matches &= self._axis_match(level, "v", sublead_abs_y)
+            indices = np.flatnonzero(matches)
+            if indices.size == 0:
+                continue
+            idx = int(indices[0])
+            total = int(level["total"][idx])
+            if level["min_total"] > 0 and total < level["min_total"]:
+                continue
+            eff = float(level["efficiency"][idx])
+            if not math.isfinite(eff) or eff <= 0.0:
+                # fall through to next (coarser) level
+                continue
+            u_bin = int(level["u_bin"][idx]) if level["has_u"] else -1
+            v_bin = int(level["v_bin"][idx]) if level["has_v"] else -1
             return EfficiencyCorrection(
                 efficiency=eff,
-                weight=math.nan,
-                err_low=float(self.err_low[idx]),
-                err_high=float(self.err_high[idx]),
-                x_bin=int(self.x_bin[idx]),
-                y_bin=int(self.y_bin[idx]),
-                z_bin=int(self.z_bin[idx]),
-                status=STATUS_INVALID_EFFICIENCY,
+                weight=1.0 / eff,
+                err_low=float(level["err_low"][idx]),
+                err_high=float(level["err_high"][idx]),
+                x_bin=int(level["x_bin"][idx]),
+                y_bin=int(level["y_bin"][idx]),
+                z_bin=int(level["z_bin"][idx]),
+                u_bin=u_bin,
+                v_bin=v_bin,
+                status=STATUS_OK,
             )
-        return EfficiencyCorrection(
-            efficiency=eff,
-            weight=1.0 / eff,
-            err_low=float(self.err_low[idx]),
-            err_high=float(self.err_high[idx]),
-            x_bin=int(self.x_bin[idx]),
-            y_bin=int(self.y_bin[idx]),
-            z_bin=int(self.z_bin[idx]),
-            status=STATUS_OK,
+        return self._missing()
+
+    # ------------------------------------------------------------------
+    # vectorized array lookup  (needed for closure tests & scalability)
+    # ------------------------------------------------------------------
+    def lookup_arrays(
+        self,
+        jpsi1_pt: np.ndarray,
+        jpsi2_pt: np.ndarray,
+        phi_pt: np.ndarray,
+        jpsi1_abs_y: np.ndarray | None = None,
+        jpsi2_abs_y: np.ndarray | None = None,
+    ) -> FactorizedCorrectionArrays:
+        """Vectorized correction lookup with hierarchical fallback.
+
+        Returns a FactorizedCorrectionArrays for interface compatibility
+        with the existing closure test pipeline.  Only ``efficiency``,
+        ``weight``, ``status``, and ``mc_stat_unc`` are populated;
+        ``weight_err`` and ``fallback_components`` are set to zero/empty.
+        """
+        jpsi1_pt = np.asarray(jpsi1_pt, dtype=float)
+        jpsi2_pt = np.asarray(jpsi2_pt, dtype=float)
+        phi_pt = np.asarray(phi_pt, dtype=float)
+        n_events = len(jpsi1_pt)
+
+        lead_pt = np.maximum(jpsi1_pt, jpsi2_pt)
+        sublead_pt = np.minimum(jpsi1_pt, jpsi2_pt)
+
+        # sort rapidity following the same pT ordering
+        if jpsi1_abs_y is not None and jpsi2_abs_y is not None:
+            jpsi1_abs_y = np.asarray(jpsi1_abs_y, dtype=float)
+            jpsi2_abs_y = np.asarray(jpsi2_abs_y, dtype=float)
+            jpsi1_is_lead = jpsi1_pt >= jpsi2_pt
+            lead_abs_y = np.where(jpsi1_is_lead, jpsi1_abs_y, jpsi2_abs_y)
+            sublead_abs_y = np.where(jpsi1_is_lead, jpsi2_abs_y, jpsi1_abs_y)
+        else:
+            lead_abs_y = np.full(n_events, math.nan, dtype=float)
+            sublead_abs_y = np.full(n_events, math.nan, dtype=float)
+
+        efficiency = np.full(n_events, math.nan, dtype=np.float64)
+        weight = np.full(n_events, math.nan, dtype=np.float64)
+        status = np.full(n_events, STATUS_MISSING_BIN, dtype=np.int32)
+
+        unresolved = np.ones(n_events, dtype=bool)
+
+        for level in self._levels:
+            if not np.any(unresolved):
+                break
+            min_total = level["min_total"]
+            for idx in range(len(level["efficiency"])):
+                if not np.any(unresolved):
+                    break
+                if min_total > 0 and int(level["total"][idx]) < min_total:
+                    continue
+                # use axis-match helpers that treat NaN edges as unbounded
+                matches = (
+                    unresolved
+                    & self._axis_match_idx_array(level, "x", idx, lead_pt)
+                    & self._axis_match_idx_array(level, "y", idx, sublead_pt)
+                    & self._axis_match_idx_array(level, "z", idx, phi_pt)
+                )
+                if level["has_u"]:
+                    matches &= self._axis_match_idx_array(level, "u", idx, lead_abs_y)
+                if level["has_v"]:
+                    matches &= self._axis_match_idx_array(level, "v", idx, sublead_abs_y)
+                if not np.any(matches):
+                    continue
+                eff = float(level["efficiency"][idx])
+                row_status = STATUS_OK if math.isfinite(eff) and eff > 0.0 else STATUS_INVALID_EFFICIENCY
+                efficiency[matches] = eff
+                status[matches] = row_status
+                if row_status == STATUS_OK:
+                    unresolved[matches] = False
+                # invalid-efficiency events stay unresolved → fall through to next level
+
+        ok = status == STATUS_OK
+        weight[ok] = 1.0 / efficiency[ok]
+        efficiency[~ok] = np.nan
+
+        # mc_stat_unc is not propagated in the non-factorized approach
+        # (the hierarchical fallback makes the covariance structure complex);
+        # set to 0.0 as a placeholder.
+        return FactorizedCorrectionArrays(
+            efficiency=efficiency,
+            weight=weight,
+            weight_err=np.zeros(n_events, dtype=np.float64),
+            status=status,
+            fallback_components=np.zeros(n_events, dtype=np.int32),
+            mc_stat_unc=0.0,
         )
 
     @staticmethod
@@ -674,6 +903,8 @@ def load_efficiency_correction_map(
     step: str = DEFAULT_EFFICIENCY_STEP,
     map_type: str = DEFAULT_MAP_TYPE,
     denominator: Literal["absolute", "conditional"] = "absolute",
+    min_total_fine: int = 0,
+    min_total_coarse: int = 0,
 ) -> EfficiencyCorrectionMap:
     map_path = resolve_efficiency_map_path(
         efficiency_map=efficiency_map,
@@ -681,7 +912,36 @@ def load_efficiency_correction_map(
         efficiency_sample=efficiency_sample,
     )
     frame = pd.read_parquet(map_path)
-    return EfficiencyCorrectionMap(frame, source=map_path, step=step, map_type=map_type, denominator=denominator)
+
+    fallback_frames: list[pd.DataFrame] | None = None
+    fallback_min_total: list[int] | None = None
+
+    if map_type == "correlated_5d":
+        # coarse fallback: 3D pT-only correlated map
+        coarse = frame.loc[(frame["map_type"] == "correlated_3d") & (frame["step"] == step)].copy()
+        if not coarse.empty:
+            fallback_frames = [coarse]
+            fallback_min_total = [min_total_coarse]
+        # inclusive fallback: always cascades to 3D first, then inclusive via
+        # the same frame if 3D also misses
+        inclusive = frame.loc[(frame["map_type"] == "inclusive") & (frame["step"] == step)].copy()
+        if not inclusive.empty:
+            if fallback_frames is None:
+                fallback_frames = []
+                fallback_min_total = []
+            fallback_frames.append(inclusive)
+            fallback_min_total.append(0)
+
+    return EfficiencyCorrectionMap(
+        frame,
+        source=map_path,
+        step=step,
+        map_type=map_type,
+        denominator=denominator,
+        fallback_frames=fallback_frames,
+        fallback_min_total=fallback_min_total,
+        fine_min_total=min_total_fine if map_type == "correlated_5d" else 0,
+    )
 
 
 def _fill_from_correction(buffers: dict[str, Any], correction: EfficiencyCorrection) -> None:
@@ -693,6 +953,10 @@ def _fill_from_correction(buffers: dict[str, Any], correction: EfficiencyCorrect
     buffers["effcorr_y_bin"][0] = correction.y_bin
     buffers["effcorr_z_bin"][0] = correction.z_bin
     buffers["effcorr_status"][0] = correction.status
+    if "effcorr_u_bin" in buffers:
+        buffers["effcorr_u_bin"][0] = correction.u_bin
+    if "effcorr_v_bin" in buffers:
+        buffers["effcorr_v_bin"][0] = correction.v_bin
 
 
 def _summarize(corrections: list[EfficiencyCorrection]) -> CorrectionSummary:
@@ -734,22 +998,30 @@ def annotate_root_tree_with_efficiency(
             fin.Close()
         raise RuntimeError(f"Input tree {tree_name!r} not found in {input_path}")
 
-    required_branches = ("sel_Jpsi_1_pt", "sel_Jpsi_2_pt", "sel_Phi_pt")
+    required_branches = ["sel_Jpsi_1_pt", "sel_Jpsi_2_pt", "sel_Phi_pt"]
+    if correction_map.has_u:
+        required_branches.extend(["sel_Jpsi_1_y", "sel_Jpsi_2_y"])
     available = {branch.GetName() for branch in tree.GetListOfBranches()}
     missing = sorted(set(required_branches) - available)
     if missing:
         fin.Close()
         raise RuntimeError(f"Input tree is missing correction branch(es): {', '.join(missing)}")
 
+    use_rapidity = correction_map.has_u
     raw_corrections: list[EfficiencyCorrection] = []
     n_entries = int(tree.GetEntries())
     for idx in range(n_entries):
         tree.GetEntry(idx)
+        kwargs: dict = {}
+        if use_rapidity:
+            kwargs["jpsi1_abs_y"] = abs(float(getattr(tree, "sel_Jpsi_1_y")))
+            kwargs["jpsi2_abs_y"] = abs(float(getattr(tree, "sel_Jpsi_2_y")))
         raw_corrections.append(
             correction_map.lookup(
                 float(getattr(tree, "sel_Jpsi_1_pt")),
                 float(getattr(tree, "sel_Jpsi_2_pt")),
                 float(getattr(tree, "sel_Phi_pt")),
+                **kwargs,
             )
         )
 
@@ -774,8 +1046,11 @@ def annotate_root_tree_with_efficiency(
         "effcorr_z_bin": array.array("i", [0]),
         "effcorr_status": array.array("i", [0]),
     }
+    if use_rapidity:
+        buffers["effcorr_u_bin"] = array.array("i", [0])
+        buffers["effcorr_v_bin"] = array.array("i", [0])
     for name, buffer in buffers.items():
-        suffix = "/I" if name.endswith("_bin") or name == "effcorr_status" else "/D"
+        suffix = "/I" if (name.endswith("_bin") and name != "effcorr_weight") or name == "effcorr_status" else "/D"
         out_tree.Branch(name, buffer, f"{name}{suffix}")
 
     written_corrections: list[EfficiencyCorrection] = []
@@ -792,6 +1067,8 @@ def annotate_root_tree_with_efficiency(
                     x_bin=correction.x_bin,
                     y_bin=correction.y_bin,
                     z_bin=correction.z_bin,
+                    u_bin=correction.u_bin,
+                    v_bin=correction.v_bin,
                     status=correction.status,
                 )
             elif on_missing == "drop":

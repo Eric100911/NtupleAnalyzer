@@ -280,7 +280,35 @@ def load_filled_correction_map(
     frame = pd.read_parquet(map_path)
     frame = fold_signed_y_bins(frame, min_total=min_total)
     frame, n_filled = fill_zero_efficiency_bins(frame, min_total=min_total)
-    return EfficiencyCorrectionMap(frame, source=map_path, step=step, map_type=map_type, denominator=denominator), n_filled
+
+    fallback_frames: list[pd.DataFrame] | None = None
+    fallback_min_total: list[int] | None = None
+
+    if map_type == "correlated_5d":
+        # coarse fallback: 3D pT-only (bins already filled by fill_zero_efficiency_bins)
+        coarse = frame.loc[(frame["map_type"] == "correlated_3d") & (frame["step"] == step)].copy()
+        if not coarse.empty:
+            fallback_frames = [coarse]
+            fallback_min_total = [0]
+        # inclusive fallback
+        inclusive = frame.loc[(frame["map_type"] == "inclusive") & (frame["step"] == step)].copy()
+        if not inclusive.empty:
+            if fallback_frames is None:
+                fallback_frames = []
+                fallback_min_total = []
+            fallback_frames.append(inclusive)
+            fallback_min_total.append(0)
+
+    return EfficiencyCorrectionMap(
+        frame,
+        source=map_path,
+        step=step,
+        map_type=map_type,
+        denominator=denominator,
+        fallback_frames=fallback_frames,
+        fallback_min_total=fallback_min_total,
+        fine_min_total=min_total if map_type == "correlated_5d" else 0,
+    ), n_filled
 
 
 def build_weighted_mini_tree(
@@ -296,7 +324,13 @@ def build_weighted_mini_tree(
     input_path = Path(input_file)
     output_path = Path(output_file)
     ensure_dir(output_path.parent)
-    branches = FIT_MASS_BRANCHES + CORRECTION_PT_BRANCHES
+
+    # Detect whether the correction map uses rapidity axes
+    use_rapidity = getattr(correction_map, "has_u", False)
+    branches = list(FIT_MASS_BRANCHES) + list(CORRECTION_PT_BRANCHES)
+    if use_rapidity:
+        branches.extend(["sel_Jpsi_1_y", "sel_Jpsi_2_y"])
+
     with uproot.open(input_path) as root_file:
         if tree_name not in root_file:
             raise RuntimeError(f"Input tree {tree_name!r} not found in {input_path}")
@@ -309,39 +343,68 @@ def build_weighted_mini_tree(
     n_total = len(arrays[FIT_MASS_BRANCHES[0]])
     out_arrays = {branch: np.asarray(arrays[branch]) for branch in FIT_MASS_BRANCHES}
     out_arrays.update({branch: np.asarray(arrays[branch]) for branch in CORRECTION_PT_BRANCHES})
-    weights = np.full(n_total, np.nan, dtype=np.float64)
-    efficiencies = np.full(n_total, np.nan, dtype=np.float64)
-    status = np.full(n_total, STATUS_MISSING_BIN, dtype=np.int32)
-    x_bin = np.full(n_total, -1, dtype=np.int32)
-    y_bin = np.full(n_total, -1, dtype=np.int32)
-    z_bin = np.full(n_total, -1, dtype=np.int32)
+    if use_rapidity:
+        out_arrays["sel_Jpsi_1_y"] = np.asarray(arrays["sel_Jpsi_1_y"])
+        out_arrays["sel_Jpsi_2_y"] = np.asarray(arrays["sel_Jpsi_2_y"])
 
-    n_ok = 0
-    n_missing = 0
-    n_invalid = 0
-    keep_mask = np.ones(n_total, dtype=bool)
-    for idx in range(n_total):
-        if status_callback is not None and status_interval > 0 and idx > 0 and idx % status_interval == 0:
-            status_callback(f"processed {idx}/{n_total} selected events")
-        correction = correction_map.lookup(
-            float(arrays["sel_Jpsi_1_pt"][idx]),
-            float(arrays["sel_Jpsi_2_pt"][idx]),
-            float(arrays["sel_Phi_pt"][idx]),
+    if use_rapidity:
+        # --- vectorized lookup for 5D maps ---
+        if status_callback is not None:
+            status_callback(f"vectorized 5D lookup for {n_total} selected events")
+        result = correction_map.lookup_arrays(
+            jpsi1_pt=np.asarray(arrays["sel_Jpsi_1_pt"], dtype=float),
+            jpsi2_pt=np.asarray(arrays["sel_Jpsi_2_pt"], dtype=float),
+            phi_pt=np.asarray(arrays["sel_Phi_pt"], dtype=float),
+            jpsi1_abs_y=np.abs(np.asarray(arrays["sel_Jpsi_1_y"], dtype=float)),
+            jpsi2_abs_y=np.abs(np.asarray(arrays["sel_Jpsi_2_y"], dtype=float)),
         )
-        status[idx] = correction.status
-        x_bin[idx] = correction.x_bin
-        y_bin[idx] = correction.y_bin
-        z_bin[idx] = correction.z_bin
-        efficiencies[idx] = correction.efficiency
-        weights[idx] = correction.weight
-        if correction.status == STATUS_OK:
-            n_ok += 1
-        elif correction.status == STATUS_MISSING_BIN:
-            n_missing += 1
-            keep_mask[idx] = on_missing != "drop"
-        elif correction.status == STATUS_INVALID_EFFICIENCY:
-            n_invalid += 1
-            keep_mask[idx] = on_missing != "drop"
+        weights = result.weight
+        efficiencies = result.efficiency
+        status = result.status
+        n_ok = int(np.count_nonzero(status == STATUS_OK))
+        n_missing = int(np.count_nonzero(status == STATUS_MISSING_BIN))
+        n_invalid = int(np.count_nonzero(status == STATUS_INVALID_EFFICIENCY))
+        keep_mask = np.ones(n_total, dtype=bool)
+        if on_missing in ("drop",):
+            keep_mask = status == STATUS_OK
+    else:
+        # --- per-event loop for 3D maps (backward-compatible path) ---
+        weights = np.full(n_total, np.nan, dtype=np.float64)
+        efficiencies = np.full(n_total, np.nan, dtype=np.float64)
+        status = np.full(n_total, STATUS_MISSING_BIN, dtype=np.int32)
+        x_bin = np.full(n_total, -1, dtype=np.int32)
+        y_bin = np.full(n_total, -1, dtype=np.int32)
+        z_bin = np.full(n_total, -1, dtype=np.int32)
+
+        n_ok = 0
+        n_missing = 0
+        n_invalid = 0
+        keep_mask = np.ones(n_total, dtype=bool)
+        for idx in range(n_total):
+            if status_callback is not None and status_interval > 0 and idx > 0 and idx % status_interval == 0:
+                status_callback(f"processed {idx}/{n_total} selected events")
+            correction = correction_map.lookup(
+                float(arrays["sel_Jpsi_1_pt"][idx]),
+                float(arrays["sel_Jpsi_2_pt"][idx]),
+                float(arrays["sel_Phi_pt"][idx]),
+            )
+            status[idx] = correction.status
+            x_bin[idx] = correction.x_bin
+            y_bin[idx] = correction.y_bin
+            z_bin[idx] = correction.z_bin
+            efficiencies[idx] = correction.efficiency
+            weights[idx] = correction.weight
+            if correction.status == STATUS_OK:
+                n_ok += 1
+            elif correction.status == STATUS_MISSING_BIN:
+                n_missing += 1
+                keep_mask[idx] = on_missing != "drop"
+            elif correction.status == STATUS_INVALID_EFFICIENCY:
+                n_invalid += 1
+                keep_mask[idx] = on_missing != "drop"
+        out_arrays["effcorr_x_bin"] = x_bin
+        out_arrays["effcorr_y_bin"] = y_bin
+        out_arrays["effcorr_z_bin"] = z_bin
 
     if on_missing == "error" and (n_missing or n_invalid):
         raise RuntimeError(f"Efficiency lookup failed: missing={n_missing}, invalid={n_invalid}")
@@ -351,9 +414,6 @@ def build_weighted_mini_tree(
     out_arrays[DEFAULT_WEIGHT_BRANCH] = weights
     out_arrays["effcorr_efficiency"] = efficiencies
     out_arrays["effcorr_status"] = status
-    out_arrays["effcorr_x_bin"] = x_bin
-    out_arrays["effcorr_y_bin"] = y_bin
-    out_arrays["effcorr_z_bin"] = z_bin
     if on_missing == "drop":
         out_arrays = {key: value[keep_mask] for key, value in out_arrays.items()}
     with uproot.recreate(output_path) as root_file:

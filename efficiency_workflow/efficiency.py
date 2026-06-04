@@ -1577,6 +1577,7 @@ def build_efficiency_counts(gen_df: pd.DataFrame, event_df: pd.DataFrame, binnin
     rows.extend(_inclusive_counts(merged, binning))
     rows.extend(_per_object_counts(merged, binning))
     rows.extend(_correlated_3d_counts(merged, binning))
+    rows.extend(_correlated_5d_counts(merged, binning))
     rows.extend(_triple_sidecheck_counts(merged, binning))
     return pd.DataFrame(rows)
 
@@ -1704,6 +1705,76 @@ def _correlated_3d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> li
                             int(subset[step].sum()) if total else 0,
                         )
                     )
+    return rows
+
+
+def _correlated_5d_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[dict[str, Any]]:
+    """Event-level 5D (jpsi_lead_pt, jpsi_sublead_pt, phi_pt, jpsi_lead_abs_y, jpsi_sublead_abs_y) bins.
+
+    This is the non-factorized approach with rapidity binning for both J/psi mesons.
+    The 4mu vertex correlation between the two J/psi mesons is preserved because the
+    full event efficiency P(selected|gen) is computed in a single multi-dimensional bin.
+    Phi abs_y is omitted to keep the bin count manageable (2,304 vs 9,216 with phi y).
+    """
+    rows: list[dict[str, Any]] = []
+    map_steps = CORRELATED_MAP_STEPS if binning.include_trigger_matching else CORRELATED_MAP_STEPS_NO_TRIG_MATCH
+    jpsi_edges = binning.jpsi_pt_edges
+    phi_edges = binning.phi_pt_edges
+    y_edges = binning.object_abs_y_edges
+    for ix in range(len(jpsi_edges) - 1):
+        for iy in range(len(jpsi_edges) - 1):
+            for iz in range(len(phi_edges) - 1):
+                for iu in range(len(y_edges) - 1):
+                    for iv in range(len(y_edges) - 1):
+                        subset = frame[
+                            (frame["jpsi_lead_pt"] >= jpsi_edges[ix])
+                            & (frame["jpsi_lead_pt"] < jpsi_edges[ix + 1])
+                            & (frame["jpsi_sublead_pt"] >= jpsi_edges[iy])
+                            & (frame["jpsi_sublead_pt"] < jpsi_edges[iy + 1])
+                            & (frame["phi_pt"] >= phi_edges[iz])
+                            & (frame["phi_pt"] < phi_edges[iz + 1])
+                            & (frame["jpsi_lead_abs_y"] >= y_edges[iu])
+                            & (frame["jpsi_lead_abs_y"] < y_edges[iu + 1])
+                            & (frame["jpsi_sublead_abs_y"] >= y_edges[iv])
+                            & (frame["jpsi_sublead_abs_y"] < y_edges[iv + 1])
+                        ]
+                        total = int(subset["full_gen"].sum())
+                        for step in map_steps:
+                            rows.append(
+                                _efficiency_row(
+                                    {
+                                        "map_type": "correlated_5d",
+                                        "step": step,
+                                        "x_axis": "jpsi_lead_pt",
+                                        "y_axis": "jpsi_sublead_pt",
+                                        "z_axis": "phi_pt",
+                                        "u_axis": "jpsi_lead_abs_y",
+                                        "v_axis": "jpsi_sublead_abs_y",
+                                        "x_bin": ix,
+                                        "y_bin": iy,
+                                        "z_bin": iz,
+                                        "u_bin": iu,
+                                        "v_bin": iv,
+                                        "x_min": jpsi_edges[ix],
+                                        "x_max": jpsi_edges[ix + 1],
+                                        "y_min": jpsi_edges[iy],
+                                        "y_max": jpsi_edges[iy + 1],
+                                        "z_min": phi_edges[iz],
+                                        "z_max": phi_edges[iz + 1],
+                                        "u_min": y_edges[iu],
+                                        "u_max": y_edges[iu + 1],
+                                        "v_min": y_edges[iv],
+                                        "v_max": y_edges[iv + 1],
+                                        "x_label": _bin_label(jpsi_edges, ix),
+                                        "y_label": _bin_label(jpsi_edges, iy),
+                                        "z_label": _bin_label(phi_edges, iz),
+                                        "u_label": _bin_label(y_edges, iu),
+                                        "v_label": _bin_label(y_edges, iv),
+                                    },
+                                    total,
+                                    int(subset[step].sum()) if total else 0,
+                                )
+                            )
     return rows
 
 
@@ -1996,6 +2067,7 @@ _MAP_TYPE_KEYS: dict[str, list[str]] = {
     "object_2d": ["object", "x_bin", "y_bin"],
     "object_acceptance_2d": ["object", "x_bin", "y_bin"],
     "correlated_3d": ["x_bin", "y_bin", "z_bin"],
+    "correlated_5d": ["x_bin", "y_bin", "z_bin", "u_bin", "v_bin"],
     "triple_1d": ["x_axis", "x_bin"],
 }
 
@@ -2029,6 +2101,14 @@ def build_conditional_maps(counts_df: pd.DataFrame, binning: EfficiencyBinning |
                 chain = _OBJECT_CHAIN.get(obj_name, ())
                 _chain_conditional_rows(obj_subset, chain, keys, parts)
         elif map_type == "correlated_3d":
+            _conditional_rows_with_denominators(
+                subset,
+                corr_steps,
+                step_previous,
+                keys,
+                parts,
+            )
+        elif map_type == "correlated_5d":
             _conditional_rows_with_denominators(
                 subset,
                 corr_steps,

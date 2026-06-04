@@ -42,6 +42,27 @@ ROOT_FIT_XLABELS = {
 }
 
 
+def apply_root_cms_style() -> None:
+    """Use a plain ROOT style close to mplhep CMS output for RooFit frames."""
+    ROOT.gStyle.SetOptStat(0)
+    ROOT.gStyle.SetOptTitle(0)
+    ROOT.gStyle.SetCanvasColor(0)
+    ROOT.gStyle.SetPadColor(0)
+    ROOT.gStyle.SetFrameFillColor(0)
+    ROOT.gStyle.SetFrameBorderMode(0)
+    ROOT.gStyle.SetPadBorderMode(0)
+    ROOT.gStyle.SetCanvasBorderMode(0)
+    ROOT.gStyle.SetLegendBorderSize(0)
+    ROOT.gStyle.SetLegendFillColor(0)
+    ROOT.gStyle.SetEndErrorSize(2)
+    ROOT.gStyle.SetTitleFont(42, "XYZ")
+    ROOT.gStyle.SetLabelFont(42, "XYZ")
+    ROOT.gStyle.SetTitleSize(0.045, "XYZ")
+    ROOT.gStyle.SetLabelSize(0.04, "XYZ")
+    ROOT.gStyle.SetPadTickX(1)
+    ROOT.gStyle.SetPadTickY(1)
+
+
 def open_root_file_read(path):
     return ROOT.TFile(str(path), "READ")
 
@@ -406,27 +427,78 @@ def save_projection_plots(channel: str, plot_dir: str, data, model, observables,
     background_components = ",".join(name.replace("yield_", "pdf_") for name in yields if name != signal_yield_name)
     signal_component = signal_yield_name.replace("yield_", "pdf_")
 
-    ROOT.gStyle.SetOptStat(0)
+    apply_root_cms_style()
     ROOT.gROOT.SetBatch(True)
-    plot_style_cfg = CmsPlotStyleConfig(is_data=(dataset == "data"), era="Run 3", lumi_fb=lumi_fb, energy_tev=13.6)
+    plot_style_cfg = CmsPlotStyleConfig(
+        caption="Work In Progress",
+        is_data=(dataset == "data"),
+        era="Run 3",
+        lumi_fb=lumi_fb,
+        energy_tev=13.6,
+    )
     for branch_name, obs in observables.items():
-        canvas = ROOT.TCanvas(f"c_{branch_name}", branch_name, 800, 700)
-        canvas.SetTopMargin(0.12)
-        canvas.SetBottomMargin(0.13)
-        canvas.SetLeftMargin(0.13)
+        canvas = ROOT.TCanvas(f"c_{branch_name}", branch_name, 850, 760)
+        canvas.SetTopMargin(0.11)
+        canvas.SetBottomMargin(0.14)
+        canvas.SetLeftMargin(0.15)
         canvas.SetRightMargin(0.04)
+        canvas.SetTicks(1, 1)
         frame = obs.frame(ROOT.RooFit.Title(""))
-        data.plotOn(frame, ROOT.RooFit.Name("data"))
-        model.plotOn(frame, ROOT.RooFit.Name("model"))
+        data.plotOn(
+            frame,
+            ROOT.RooFit.Name("data"),
+            ROOT.RooFit.MarkerStyle(ROOT.kFullCircle),
+            ROOT.RooFit.MarkerSize(0.9),
+            ROOT.RooFit.LineColor(ROOT.kBlack),
+        )
+        model.plotOn(
+            frame,
+            ROOT.RooFit.Name("model"),
+            ROOT.RooFit.LineColor(ROOT.kBlack),
+            ROOT.RooFit.LineWidth(2),
+        )
         if background_components:
-            model.plotOn(frame, ROOT.RooFit.Components(background_components), ROOT.RooFit.LineStyle(ROOT.kDashed), ROOT.RooFit.LineColor(ROOT.kBlue + 1))
-        model.plotOn(frame, ROOT.RooFit.Components(signal_component), ROOT.RooFit.LineStyle(ROOT.kDashed), ROOT.RooFit.LineColor(ROOT.kRed + 1))
+            model.plotOn(
+                frame,
+                ROOT.RooFit.Components(background_components),
+                ROOT.RooFit.Name("background"),
+                ROOT.RooFit.LineStyle(ROOT.kDashed),
+                ROOT.RooFit.LineColor(ROOT.kAzure + 2),
+                ROOT.RooFit.LineWidth(2),
+            )
+        model.plotOn(
+            frame,
+            ROOT.RooFit.Components(signal_component),
+            ROOT.RooFit.Name("signal"),
+            ROOT.RooFit.LineStyle(ROOT.kDashed),
+            ROOT.RooFit.LineColor(ROOT.kRed + 1),
+            ROOT.RooFit.LineWidth(2),
+        )
         frame.SetTitle("")
         frame.GetXaxis().SetTitle(ROOT_FIT_XLABELS.get(branch_name, branch_name))
         frame.GetYaxis().SetTitle("Events / bin")
-        frame.GetXaxis().SetTitleOffset(1.05)
-        frame.GetYaxis().SetTitleOffset(1.25)
+        frame.GetXaxis().SetTitleOffset(1.10)
+        frame.GetYaxis().SetTitleOffset(1.45)
+        frame.GetXaxis().SetTitleSize(0.045)
+        frame.GetYaxis().SetTitleSize(0.045)
+        frame.GetXaxis().SetLabelSize(0.04)
+        frame.GetYaxis().SetLabelSize(0.04)
+        frame.SetMinimum(0.0)
+        frame.SetMaximum(frame.GetMaximum() * 1.25)
         frame.Draw()
+
+        legend = ROOT.TLegend(0.62, 0.70, 0.93, 0.88)
+        legend.SetTextFont(42)
+        legend.SetTextSize(0.035)
+        legend.SetFillStyle(0)
+        legend.SetBorderSize(0)
+        legend.AddEntry(frame.findObject("data"), "Data", "lep")
+        legend.AddEntry(frame.findObject("model"), "Total fit", "l")
+        legend.AddEntry(frame.findObject("signal"), "Signal", "l")
+        if background_components:
+            legend.AddEntry(frame.findObject("background"), "Background", "l")
+        legend.Draw()
+
         apply_cms_label_root(canvas, plot_style_cfg)
         canvas.SaveAs(os.path.join(plot_dir, f"{branch_name}_fit.pdf"))
         canvas.SaveAs(os.path.join(plot_dir, f"{branch_name}_fit.png"))

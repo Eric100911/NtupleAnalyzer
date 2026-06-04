@@ -121,6 +121,7 @@ def split_branch_name(name: str) -> tuple[str | None, str]:
         "mass",
         "ctau",
         "pt",
+        "y",
         "eta",
         "phi",
         "px",
@@ -183,6 +184,8 @@ def label_for_branch(name: str) -> str:
         return rf"$\eta({obj})$"
     if quantity == "phi" and obj:
         return rf"$\phi({obj})$"
+    if quantity == "y" and obj:
+        return rf"$y({obj})$"
     if quantity in {"px", "py", "pz"} and obj:
         component = quantity.removeprefix("p")
         return rf"$p_{{{component}}}({obj})$ [GeV]"

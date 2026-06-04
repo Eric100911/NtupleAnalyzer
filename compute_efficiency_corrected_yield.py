@@ -12,7 +12,11 @@ from efficiency_workflow.yield_correction import (
     write_factorized_corrected_root_tree,
     write_yield_result_json,
 )
-from efficiency_workflow.corrections import load_factorized_correction_map
+from efficiency_workflow.corrections import (
+    load_efficiency_correction_map,
+    load_factorized_correction_map,
+    annotate_root_tree_with_efficiency,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -111,27 +115,48 @@ def main() -> int:
     write_yield_result_json(result, output_path)
     print(f"\nWrote JSON: {output_path}")
     if args.corrected_root:
-        if args.correction_mode != "factorized":
-            raise ValueError("--corrected-root currently supports --correction-mode factorized")
         corrected_sample = args.corrected_root_sample or args.nominal_sample
-        print(f"Writing full corrected ROOT tree using sample {corrected_sample}: {args.corrected_root}", flush=True)
-        factorized_map = load_factorized_correction_map(
-            Path(args.efficiency_dir) / corrected_sample,
-            n_min_fine=args.n_min_fine,
-            n_min_coarse=args.n_min_coarse,
-        )
-        summary = write_factorized_corrected_root_tree(
-            args.data_input,
-            args.corrected_root,
-            factorized_map,
-            status_callback=lambda message: print(f"[corrected-root] {message}", flush=True),
-        )
-        print(
-            "Wrote corrected ROOT: "
-            f"entries={summary[0]}, ok={summary[1]}, missing={summary[2]}, invalid={summary[3]}, "
-            f"fallback_components={summary[4]}, mean_weight={summary[5]:.3g}",
-            flush=True,
-        )
+        if args.correction_mode == "factorized":
+            print(f"Writing full factorized-corrected ROOT tree using sample {corrected_sample}: {args.corrected_root}", flush=True)
+            factorized_map = load_factorized_correction_map(
+                Path(args.efficiency_dir) / corrected_sample,
+                n_min_fine=args.n_min_fine,
+                n_min_coarse=args.n_min_coarse,
+            )
+            summary = write_factorized_corrected_root_tree(
+                args.data_input,
+                args.corrected_root,
+                factorized_map,
+                status_callback=lambda message: print(f"[corrected-root] {message}", flush=True),
+            )
+            print(
+                "Wrote corrected ROOT: "
+                f"entries={summary[0]}, ok={summary[1]}, missing={summary[2]}, invalid={summary[3]}, "
+                f"fallback_components={summary[4]}, mean_weight={summary[5]:.3g}",
+                flush=True,
+            )
+        elif args.correction_mode == "legacy-correlated":
+            print(f"Writing full non-factorized-corrected ROOT tree using sample {corrected_sample}: {args.corrected_root}", flush=True)
+            nonfactorized_map = load_efficiency_correction_map(
+                efficiency_dir=args.efficiency_dir,
+                efficiency_sample=corrected_sample,
+                step=args.efficiency_step,
+                map_type=args.map_type,
+                denominator=args.denominator,
+            )
+            corr_summary = annotate_root_tree_with_efficiency(
+                input_file=args.data_input,
+                output_file=args.corrected_root,
+                correction_map=nonfactorized_map,
+                on_missing=args.on_missing,
+            )
+            print(
+                "Wrote corrected ROOT: "
+                f"entries={corr_summary.entries}, ok={corr_summary.ok}, "
+                f"missing={corr_summary.missing_bin}, invalid={corr_summary.invalid_efficiency}, "
+                f"mean_weight={corr_summary.mean_weight:.3g}",
+                flush=True,
+            )
     if args.plot_dir:
         from efficiency_workflow.config import CmsPlotStyleConfig
         from efficiency_workflow.plotting import write_yield_comparison_plot

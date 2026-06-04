@@ -200,8 +200,12 @@ def main() -> int:
             status_callback=lambda message, sample=sample: print(f"[{sample}] {message}", flush=True),
         )
         frame = pd.read_parquet(out_path)
-        corr_steps = sorted(frame.loc[frame["map_type"] == "correlated_3d", "step"].dropna().unique().tolist())
-        print(f"[{sample}] wrote {out_path} ({len(frame)} rows); correlated_3d steps: {', '.join(corr_steps)}")
+        corr_3d_steps = sorted(frame.loc[frame["map_type"] == "correlated_3d", "step"].dropna().unique().tolist())
+        corr_5d_steps = sorted(frame.loc[frame["map_type"] == "correlated_5d", "step"].dropna().unique().tolist())
+        extra = ""
+        if corr_5d_steps:
+            extra = f"; correlated_5d steps: {', '.join(corr_5d_steps)}"
+        print(f"[{sample}] wrote {out_path} ({len(frame)} rows); correlated_3d steps: {', '.join(corr_3d_steps)}{extra}")
 
     write_top_manifest(input_dir, output_dir, samples)
     print(f"Done. Manifest: {output_dir / 'manifest.json'}")
