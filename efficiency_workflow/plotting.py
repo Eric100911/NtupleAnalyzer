@@ -617,7 +617,13 @@ def _axis_labels_for_frame(frame: pd.DataFrame, xlabel: str | None, ylabel: str 
         return xlabel, ylabel
     obj = frame["object"].dropna().iloc[0] if "object" in frame and not frame["object"].dropna().empty else "object"
     label = _object_label(obj)
-    return xlabel or rf"$p_{{\mathrm{{T}}}}({label})$ [GeV]", ylabel or rf"$y({label})$"
+    is_abs_y = (
+        "y_axis" in frame.columns
+        and not frame["y_axis"].dropna().empty
+        and str(frame["y_axis"].dropna().iloc[0]) == "abs_y"
+    )
+    y_axis_label = rf"$|y({label})|$" if is_abs_y else rf"$y({label})$"
+    return xlabel or rf"$p_{{\mathrm{{T}}}}({label})$ [GeV]", ylabel or y_axis_label
 
 
 def _draw_heatmap_panel(fig, ax, frame: pd.DataFrame, value_col: str, zlabel: str, annotate: bool, include_uncertainty_text: bool):
@@ -848,6 +854,46 @@ def _write_2d_object_maps(
     return written
 
 
+def _write_2d_object_maps_abs_y(
+    output_dir: Path,
+    df: pd.DataFrame,
+    plot_style_cfg: CmsPlotStyleConfig,
+    min_total: int = 1,
+    include_uncertainty: bool = False,
+    *,
+    subdir: str | None = None,
+    zlabel_fn: Callable[[str], str] = _efficiency_zlabel,
+) -> dict[str, Path]:
+    """Write 2D efficiency heatmaps in (pT, |y|) by folding signed-y bins."""
+    from .efficiency import fold_object_2d_to_abs_y
+
+    target_dir = (output_dir / subdir) if subdir else output_dir
+    target_dir.mkdir(parents=True, exist_ok=True)
+    written: dict[str, Path] = {}
+
+    folded = fold_object_2d_to_abs_y(df)
+    abs_df = folded.loc[folded["map_type"] == "object_2d_abs_y"].copy()
+    if abs_df.empty:
+        return written
+
+    for (obj, step), frame in abs_df.groupby(["object", "step"], dropna=False):
+        step_label = _step_display_name(step)
+        obj_label = _object_math_label(obj)
+        path = target_dir / f"object2d_absy_{obj}_{step}.png"
+        written[f"object2d_absy.{obj}.{step}"] = save_efficiency_heatmap(
+            path, frame,
+            title=f"{obj_label} {step_label}",
+            xlabel=r"$p_{\mathrm{T}}$ [GeV]",
+            ylabel=None,
+            plot_style_cfg=plot_style_cfg,
+            min_total=min_total,
+            include_uncertainty=include_uncertainty,
+            show_title=include_uncertainty,
+            zlabel=zlabel_fn(step),
+        )
+    return written
+
+
 def _write_correlated_3d_maps(
     output_dir: Path,
     df: pd.DataFrame,
@@ -894,6 +940,11 @@ def write_efficiency_plots(
     output_dir.mkdir(parents=True, exist_ok=True)
     written: dict[str, Path] = {}
     written.update(_write_2d_object_maps(
+        output_dir, counts_df,
+        plot_style_cfg=plot_style_cfg, min_total=min_total,
+        include_uncertainty=include_uncertainty,
+    ))
+    written.update(_write_2d_object_maps_abs_y(
         output_dir, counts_df,
         plot_style_cfg=plot_style_cfg, min_total=min_total,
         include_uncertainty=include_uncertainty,
@@ -1026,40 +1077,104 @@ def write_stacked_jpsi_plots(
     min_total: int = 1,
     include_uncertainty: bool = False,
 ) -> dict[str, Path]:
+    from .efficiency import _fold_frame_to_abs_y
+
     output_dir.mkdir(parents=True, exist_ok=True)
     written: dict[str, Path] = {}
-    if not stacked_acceptance_df.empty:
-        path = output_dir / "stacked_jpsi_fiducial_acceptance.png"
-        written["stacked_jpsi.fiducial_acceptance"] = save_efficiency_heatmap(
-            path,
-            stacked_acceptance_df,
-            title=r"Stacked $J/\psi$ fiducial acceptance",
-            xlabel=None,
-            ylabel=None,
-            plot_style_cfg=plot_style_cfg,
-            min_total=min_total,
-            include_uncertainty=include_uncertainty,
-            show_title=include_uncertainty,
-            zlabel="Acceptance",
+
+    def _is_abs_y_frame(frame: pd.DataFrame) -> bool:
+        return (
+            "y_axis" in frame.columns
+            and not frame["y_axis"].dropna().empty
+            and set(frame["y_axis"].dropna().astype(str).unique()) == {"abs_y"}
         )
-    if not stacked_efficiency_df.empty:
-        for step, frame in stacked_efficiency_df.groupby("step", dropna=False):
-            if step in {"full_gen", "fiducial", "fiducial_acceptance"}:
-                continue
-            step_label = _step_display_name(step)
-            path = output_dir / f"stacked_jpsi_{step}.png"
-            written[f"stacked_jpsi.{step}"] = save_efficiency_heatmap(
+
+    def _as_abs_y_frame(frame: pd.DataFrame, output_map_type: str) -> pd.DataFrame:
+        if frame.empty:
+            return frame
+        if _is_abs_y_frame(frame):
+            abs_frame = frame.copy()
+            if "map_type" in abs_frame.columns:
+                abs_frame["map_type"] = output_map_type
+            return abs_frame
+        return _fold_frame_to_abs_y(
+            frame,
+            group_keys=["step", "x_bin"],
+            output_map_type=output_map_type,
+        )
+
+    if not stacked_acceptance_df.empty:
+        if not _is_abs_y_frame(stacked_acceptance_df):
+            path = output_dir / "stacked_jpsi_fiducial_acceptance.png"
+            written["stacked_jpsi.fiducial_acceptance"] = save_efficiency_heatmap(
                 path,
-                frame,
-                title=rf"Stacked $J/\psi$ {step_label}",
+                stacked_acceptance_df,
+                title=r"Stacked $J/\psi$ fiducial acceptance",
                 xlabel=None,
                 ylabel=None,
                 plot_style_cfg=plot_style_cfg,
                 min_total=min_total,
                 include_uncertainty=include_uncertainty,
                 show_title=include_uncertainty,
-                zlabel=_efficiency_zlabel(step),
+                zlabel="Acceptance",
             )
+        acc_abs = _as_abs_y_frame(
+            stacked_acceptance_df,
+            output_map_type="stacked_jpsi_acceptance_2d_abs_y",
+        )
+        if not acc_abs.empty:
+            path_abs = output_dir / "stacked_jpsi_absy_fiducial_acceptance.png"
+            written["stacked_jpsi_absy.fiducial_acceptance"] = save_efficiency_heatmap(
+                path_abs,
+                acc_abs,
+                title=r"Stacked $J/\psi$ fiducial acceptance $(|y|)$",
+                xlabel=None,
+                ylabel=None,
+                plot_style_cfg=plot_style_cfg,
+                min_total=min_total,
+                include_uncertainty=include_uncertainty,
+                show_title=include_uncertainty,
+                zlabel="Acceptance",
+            )
+
+    if not stacked_efficiency_df.empty:
+        for step, frame in stacked_efficiency_df.groupby("step", dropna=False):
+            if step in {"full_gen", "fiducial", "fiducial_acceptance"}:
+                continue
+            step_label = _step_display_name(step)
+            if not _is_abs_y_frame(frame):
+                path = output_dir / f"stacked_jpsi_{step}.png"
+                written[f"stacked_jpsi.{step}"] = save_efficiency_heatmap(
+                    path,
+                    frame,
+                    title=rf"Stacked $J/\psi$ {step_label}",
+                    xlabel=None,
+                    ylabel=None,
+                    plot_style_cfg=plot_style_cfg,
+                    min_total=min_total,
+                    include_uncertainty=include_uncertainty,
+                    show_title=include_uncertainty,
+                    zlabel=_efficiency_zlabel(step),
+                )
+            eff_abs = _as_abs_y_frame(
+                frame,
+                output_map_type="stacked_jpsi_efficiency_2d_abs_y",
+            )
+            if not eff_abs.empty:
+                path_abs = output_dir / f"stacked_jpsi_absy_{step}.png"
+                written[f"stacked_jpsi_absy.{step}"] = save_efficiency_heatmap(
+                    path_abs,
+                    eff_abs,
+                    title=rf"Stacked $J/\psi$ {step_label} $(|y|)$",
+                    xlabel=None,
+                    ylabel=None,
+                    plot_style_cfg=plot_style_cfg,
+                    min_total=min_total,
+                    include_uncertainty=include_uncertainty,
+                    show_title=include_uncertainty,
+                    zlabel=_efficiency_zlabel(step),
+                )
+
     return written
 
 

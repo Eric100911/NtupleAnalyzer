@@ -9,7 +9,9 @@ from efficiency_workflow.efficiency import EfficiencyBinning
 from efficiency_workflow.plotting import (
     write_derived_plot_bundle,
     write_efficiency_plot_bundle,
+    write_stacked_jpsi_plots,
     write_systematic_uncertainty_plots,
+    with_subprocess_label,
 )
 from efficiency_workflow.products import (
     build_derived_efficiency_products,
@@ -24,6 +26,17 @@ def main() -> None:
     parser.add_argument("--input-dir", required=True, help="Merge output directory (contains per-sample subdirs + manifest.json)")
     parser.add_argument("--output-dir", default=None, help="Output directory (default: same as --input-dir)")
     parser.add_argument("--skip-plots", action="store_true")
+    parser.add_argument(
+        "--plot-scope",
+        default="all",
+        choices=("all", "stacked-jpsi"),
+        help="Limit plot production. Use 'stacked-jpsi' to skip cumulative, conditional, and pair-level plots.",
+    )
+    parser.add_argument(
+        "--with-uncertainty-plots",
+        action="store_true",
+        help="In --plot-scope stacked-jpsi mode, also write the uncertainty QA versions.",
+    )
     parser.add_argument("--min-plot-total", type=int, default=1)
     parser.add_argument("--skip-trigger-matching", action="store_true",
                         help="Use the no-trigger-matching chain (_noTrigMatch columns)")
@@ -47,29 +60,60 @@ def main() -> None:
 
     if not args.skip_plots:
         for products in products_by_sample.values():
-            print(f"[{products.sample}] Generating cumulative efficiency plots ...")
-            cumul_outputs = write_efficiency_plot_bundle(
-                products.derived_dir,
-                products.counts_df,
-                plot_style_cfg=CmsPlotStyleConfig(is_data=False),
-                min_total=args.min_plot_total,
-            )
-            if cumul_outputs:
-                products.manifest["outputs"].update(cumul_outputs)
-                update_manifest_outputs(products.derived_dir / "manifest.json", cumul_outputs)
+            if args.plot_scope == "all":
+                print(f"[{products.sample}] Generating cumulative efficiency plots ...")
+                cumul_outputs = write_efficiency_plot_bundle(
+                    products.derived_dir,
+                    products.counts_df,
+                    plot_style_cfg=CmsPlotStyleConfig(is_data=False),
+                    min_total=args.min_plot_total,
+                )
+                if cumul_outputs:
+                    products.manifest["outputs"].update(cumul_outputs)
+                    update_manifest_outputs(products.derived_dir / "manifest.json", cumul_outputs)
 
-            print(f"[{products.sample}] Generating derived plots ...")
-            plot_outputs = write_derived_plot_bundle(
-                products.derived_dir,
-                acceptance_df=products.acceptance_df,
-                conditional_df=products.conditional_df,
-                per_object_acceptance_df=products.per_object_acceptance_df,
-                stacked_jpsi_acceptance_df=products.stacked_jpsi_acceptance_df,
-                stacked_jpsi_efficiency_df=products.stacked_jpsi_efficiency_df,
-                pair_level_dfs=products.pair_level_dfs,
-                plot_style_cfg=CmsPlotStyleConfig(is_data=False),
-                min_total=args.min_plot_total,
-            )
+                print(f"[{products.sample}] Generating derived plots ...")
+                plot_outputs = write_derived_plot_bundle(
+                    products.derived_dir,
+                    acceptance_df=products.acceptance_df,
+                    conditional_df=products.conditional_df,
+                    per_object_acceptance_df=products.per_object_acceptance_df,
+                    stacked_jpsi_acceptance_df=products.stacked_jpsi_acceptance_df,
+                    stacked_jpsi_efficiency_df=products.stacked_jpsi_efficiency_df,
+                    pair_level_dfs=products.pair_level_dfs,
+                    plot_style_cfg=CmsPlotStyleConfig(is_data=False),
+                    min_total=args.min_plot_total,
+                )
+            else:
+                print(f"[{products.sample}] Generating stacked J/psi plots only ...")
+                style = with_subprocess_label(CmsPlotStyleConfig(is_data=False), products.sample)
+                regular = write_stacked_jpsi_plots(
+                    products.derived_dir / "plots" / "stacked_jpsi",
+                    products.stacked_jpsi_acceptance_df,
+                    products.stacked_jpsi_efficiency_df,
+                    plot_style_cfg=style,
+                    min_total=args.min_plot_total,
+                )
+                plot_outputs = {}
+                if regular:
+                    plot_outputs["stacked_jpsi_plots"] = {
+                        key: str(path.relative_to(products.derived_dir))
+                        for key, path in regular.items()
+                    }
+                if args.with_uncertainty_plots:
+                    qa = write_stacked_jpsi_plots(
+                        products.derived_dir / "plots_with_uncertainty" / "stacked_jpsi",
+                        products.stacked_jpsi_acceptance_df,
+                        products.stacked_jpsi_efficiency_df,
+                        plot_style_cfg=style,
+                        min_total=args.min_plot_total,
+                        include_uncertainty=True,
+                    )
+                    if qa:
+                        plot_outputs["plots_with_uncertainty"] = {
+                            f"stacked_jpsi_qa.{key}": str(path.relative_to(products.derived_dir))
+                            for key, path in qa.items()
+                        }
             if plot_outputs:
                 products.manifest["outputs"].update(plot_outputs)
                 update_manifest_outputs(products.derived_dir / "manifest.json", plot_outputs)

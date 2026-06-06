@@ -7,6 +7,11 @@ from pathlib import Path
 import pandas as pd
 
 from efficiency_workflow.config import CmsPlotStyleConfig
+from efficiency_workflow.efficiency import (
+    EfficiencyBinning,
+    build_stacked_jpsi_acceptance_maps,
+    build_stacked_jpsi_efficiency_maps,
+)
 from efficiency_workflow.io import ensure_dir
 from efficiency_workflow.plotting import (
     save_efficiency_heatmap,
@@ -30,6 +35,85 @@ def test_subprocess_labels_are_known_for_current_samples() -> None:
 def test_with_subprocess_label_preserves_explicit_label() -> None:
     style = CmsPlotStyleConfig(subprocess_label="custom")
     assert with_subprocess_label(style, "JJP_DPS1").subprocess_label == "custom"
+
+
+def test_stacked_jpsi_maps_use_pt_and_abs_y() -> None:
+    keys = {
+        "sample": "JJP_DPS1",
+        "source_file": "input.root",
+        "run": 1,
+        "lumi": 1,
+    }
+    gen_df = pd.DataFrame(
+        [
+            {
+                **keys,
+                "entry": 0,
+                "event": 10,
+                "jpsi_lead_pt": 8.0,
+                "jpsi_lead_y": -0.4,
+                "jpsi_lead_abs_y": 0.4,
+                "jpsi_sublead_pt": 12.0,
+                "jpsi_sublead_y": 1.4,
+                "jpsi_sublead_abs_y": 1.4,
+            },
+            {
+                **keys,
+                "entry": 1,
+                "event": 11,
+                "jpsi_lead_pt": 22.0,
+                "jpsi_lead_y": -2.0,
+                "jpsi_lead_abs_y": 2.0,
+                "jpsi_sublead_pt": 7.0,
+                "jpsi_sublead_y": 0.8,
+                "jpsi_sublead_abs_y": 0.8,
+            },
+        ]
+    )
+    event_df = pd.DataFrame(
+        [
+            {
+                **keys,
+                "entry": 0,
+                "event": 10,
+                "full_gen": 1,
+                "jpsi_lead_fiducial": 1,
+                "jpsi_lead_muonRECO": 1,
+                "jpsi_lead_muonID": 1,
+                "jpsi_lead_dimuon": 1,
+                "jpsi_sublead_fiducial": 1,
+                "jpsi_sublead_muonRECO": 1,
+                "jpsi_sublead_muonID": 0,
+                "jpsi_sublead_dimuon": 0,
+            },
+            {
+                **keys,
+                "entry": 1,
+                "event": 11,
+                "full_gen": 1,
+                "jpsi_lead_fiducial": 0,
+                "jpsi_lead_muonRECO": 0,
+                "jpsi_lead_muonID": 0,
+                "jpsi_lead_dimuon": 0,
+                "jpsi_sublead_fiducial": 1,
+                "jpsi_sublead_muonRECO": 1,
+                "jpsi_sublead_muonID": 1,
+                "jpsi_sublead_dimuon": 0,
+            },
+        ]
+    )
+
+    binning = EfficiencyBinning()
+    acc = build_stacked_jpsi_acceptance_maps(gen_df, event_df, binning)
+    eff = build_stacked_jpsi_efficiency_maps(gen_df, event_df, binning)
+
+    n_cells = (len(binning.jpsi_pt_edges) - 1) * (len(binning.object_abs_y_edges) - 1)
+    assert len(acc) == n_cells
+    assert len(eff) == n_cells * 3
+    assert set(acc["y_axis"]) == {"abs_y"}
+    assert set(eff["y_axis"]) == {"abs_y"}
+    assert acc["y_min"].min() >= 0.0
+    assert eff["y_max"].max() == binning.object_abs_y_edges[-1]
 
 
 def render_smoke_plots(derived_dir: Path, output_dir: Path, min_plot_total: int, with_uncertainty: bool) -> dict[str, Path]:

@@ -50,6 +50,19 @@ selection. Jeffreys symmetric binomial uncertainties are stored for each bin and
 used for MC-stat diagnostics. The default thresholds are `N_min_fine = 30` and
 `N_min_coarse = 50`.
 
+The stacked J/psi derived plots are diagnostics for the two J/psi objects
+combined into one per-object map. Their parquet products use direct
+`(pT, |y|)` binning (`y_axis == "abs_y"`):
+
+```text
+stacked_jpsi_acceptance_maps.parquet: fiducial acceptance
+stacked_jpsi_efficiency_maps.parquet: muonRECO, muonID, dimuon
+```
+
+When only these plots are needed, use `build_derived_efficiency.py
+--plot-scope stacked-jpsi` to skip cumulative, conditional, pair-level, and
+systematics plots.
+
 The correction workflow is:
 
 ```bash

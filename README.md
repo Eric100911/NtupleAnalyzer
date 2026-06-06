@@ -103,7 +103,7 @@ source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
 | [prepare_efficiency_shards.py](prepare_efficiency_shards.py) | 准备 Condor shard 列表 |
 | [merge_efficiency_shards.py](merge_efficiency_shards.py) | 合并 shard 输出 |
 | [rebuild_efficiency_maps.py](rebuild_efficiency_maps.py) | 从已有 gen/event parquet 重建 efficiency maps（非覆盖式） |
-| [build_derived_efficiency.py](build_derived_efficiency.py) | 构建 derived 产品: acceptance, conditional, per-object, stacked, pair-level maps + plots |
+| [build_derived_efficiency.py](build_derived_efficiency.py) | 构建 derived 产品: acceptance, conditional, per-object, stacked, pair-level maps + plots；`--plot-scope stacked-jpsi` 只画 stacked J/ψ |
 | [build_systematic_uncertainty.py](build_systematic_uncertainty.py) | 计算 subprocess envelope systematics（ratio, envelope half-width, max-pull） |
 | [build_response_classification.py](build_response_classification.py) | 构建 response matrix 分类用于效率修正诊断 |
 | [print_cutflow.py](print_cutflow.py) | 打印格式化的 cutflow 表格（text / LaTeX / CSV） |
@@ -303,7 +303,7 @@ cd condor
 
 ## JJP efficiency
 
-The efficiency pipeline computes fiducial acceptance and per-step conditional efficiencies for J/ψ+J/ψ+φ events, binned in meson pT and rapidity. It works directly on GEN-level ntuples (not merged selected ROOT files).
+The efficiency pipeline computes fiducial acceptance and per-step conditional efficiencies for J/ψ+J/ψ+φ events, binned in meson pT and rapidity. It works directly on GEN-level ntuples (not merged selected ROOT files). Raw per-object maps keep signed rapidity `y`; factorized correction maps and stacked J/ψ derived maps use `(pT, |y|)`.
 
 ### Efficiency step schema
 
@@ -331,7 +331,7 @@ Each Pri_* step is conditional on `four_muon_vtx` (parallel, not sequential amon
 
 1. **`run_efficiency.py`** — per-file efficiency shard: finds gen J/ψ+J/ψ+φ systems, matches reco candidates, computes cumulative step flags. Supports `--efficiency-backend vectorized|python-loop`, `--max-files N` for testing.
 2. **`merge_efficiency_shards.py`** — merges shard outputs into per-sample files.
-3. **`build_derived_efficiency.py`** — produces derived maps and plots from merged output.
+3. **`build_derived_efficiency.py`** — produces derived maps and plots from merged output. Use `--plot-scope stacked-jpsi` when only the stacked J/ψ `(pT, |y|)` plots are needed.
 4. **`build_systematic_uncertainty.py`** — computes subprocess envelope systematics (optional, for yield correction).
 5. **`compute_efficiency_corrected_yield.py`** — applies efficiency weights to data and computes corrected signal yield.
 
@@ -347,6 +347,27 @@ python3 run_efficiency.py --analysis-mode JpsiJpsiPhi \
 # Build derived products
 python3 build_derived_efficiency.py --input-dir /tmp/chiw/eff_test
 ```
+
+### Stacked J/psi plots only
+
+This mode rebuilds derived parquet/csv products but only renders the stacked
+lead+sublead J/psi acceptance and per-object efficiency plots. It skips
+cumulative, conditional, pair-level, and systematics plots.
+
+```bash
+bash -c 'source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh && \
+  python3 build_derived_efficiency.py \
+    --input-dir ../merged_efficiency_output_20260601_01 \
+    --output-dir stacked_jpsi_pt_absy_only_YYYYMMDD \
+    --plot-scope stacked-jpsi --min-plot-total 1'
+```
+
+Expected regular output is four PNGs per sample in
+`<output>/<sample>/derived/plots/stacked_jpsi/`:
+`stacked_jpsi_absy_fiducial_acceptance.png`,
+`stacked_jpsi_absy_muonRECO.png`, `stacked_jpsi_absy_muonID.png`, and
+`stacked_jpsi_absy_dimuon.png`. Add `--with-uncertainty-plots` only when the
+matching QA uncertainty panels are needed.
 
 ### Full run
 
@@ -496,7 +517,7 @@ cd condor && ./submit.sh jjp_efficiency
 ### Output products
 
 **Per-file** (`<sample>/`):
-- `efficiency_maps.parquet` — cumulative step counts by (pT, y) bin
+- `efficiency_maps.parquet` — cumulative step counts; raw `object_2d` rows are binned by `(pT, signed y)`
 - `efficiency_counts.parquet` — alias for efficiency_maps
 - `gen_systems.parquet` — gen-level kinematics per event + `n_gen_jpsi`, `n_gen_phi`
 - `event_step_flags.parquet` — per-event step flags, per-object fiducial flags, best-reco-candidate columns
@@ -507,8 +528,8 @@ cd condor && ./submit.sh jjp_efficiency
 - `acceptance_maps.parquet` — fiducial_acceptance / full_gen
 - `conditional_efficiency_maps.parquet` — per-step conditional (each step / previous)
 - `per_object_acceptance_maps.parquet` — per-object decomposed acceptance
-- `stacked_jpsi_acceptance_maps.parquet` — lead+sublead combined
-- `stacked_jpsi_efficiency_maps.parquet` — lead+sublead per-step
+- `stacked_jpsi_acceptance_maps.parquet` — lead+sublead J/psi combined, direct `(pT, |y|)` with `y_axis == "abs_y"`
+- `stacked_jpsi_efficiency_maps.parquet` — lead+sublead J/psi `muonRECO`, `muonID`, `dimuon` per-step maps, direct `(pT, |y|)` with `y_axis == "abs_y"`
 - `pair_vertex_*.parquet` — pair-level vertex efficiency
 - `plots/` — CMS-style heatmaps (2D efficiency, acceptance)
 

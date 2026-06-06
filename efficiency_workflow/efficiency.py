@@ -1497,6 +1497,107 @@ def _efficiency_row(base: dict[str, Any], total: int, passed: int) -> dict[str, 
     }
 
 
+# Mapping from signed-y y_bin (8 bins, -2.4..+2.4) to |y| bin (4 bins, 0..2.4).
+# Signed bins: 0=[-2.4,-1.8), 1=[-1.8,-1.2), 2=[-1.2,-0.6), 3=[-0.6,0),
+#               4=[0,0.6), 5=[0.6,1.2), 6=[1.2,1.8), 7=[1.8,2.4)
+# |y| bins:    0=[0,0.6), 1=[0.6,1.2), 2=[1.2,1.8), 3=[1.8,2.4)
+_SIGNED_TO_ABS_Y_MAP: dict[int, int] = {3: 0, 4: 0, 2: 1, 5: 1, 1: 2, 6: 2, 0: 3, 7: 3}
+
+
+def _fold_frame_to_abs_y(
+    frame: "pd.DataFrame",
+    group_keys: list[str],
+    output_map_type: str,
+    *,
+    extra_cols: dict[str, object] | None = None,
+) -> "pd.DataFrame":
+    """Fold signed-y bins to |y| for an arbitrary 2D efficiency frame.
+
+    Parameters
+    ----------
+    frame : DataFrame
+        Must have columns ``y_bin``, ``total``, ``passed``, ``x_min``, ``x_max``,
+        ``x_label``, ``x_axis``, and any columns listed in *group_keys*.
+    group_keys : list of str
+        Columns that identify a kinematic cell (e.g. ``["object", "step", "x_bin"]``).
+    output_map_type : str
+        Value to write into the ``"map_type"`` column of output rows.
+    extra_cols : dict, optional
+        Additional fixed column values to set on every output row.
+
+    Returns
+    -------
+    DataFrame
+        New DataFrame with ``y_axis="abs_y"`` and |y| binning (0..4 bins).
+    """
+    import pandas as pd
+
+    folded = frame.copy()
+    folded["abs_y_bin"] = folded["y_bin"].map(_SIGNED_TO_ABS_Y_MAP)
+    folded = folded.loc[folded["abs_y_bin"].notna()]
+
+    agg = folded.groupby(
+        group_keys + ["abs_y_bin"], dropna=False
+    ).agg(
+        total=("total", "sum"),
+        passed=("passed", "sum"),
+        x_min=("x_min", "first"),
+        x_max=("x_max", "first"),
+        x_label=("x_label", "first"),
+        x_axis=("x_axis", "first"),
+    ).reset_index()  # move group keys + abs_y_bin back to columns
+
+    abs_y_edges = (0.0, 0.6, 1.2, 1.8, 2.4)
+    rows = []
+    for _, row in agg.iterrows():
+        iy = int(row["abs_y_bin"])
+        key_values = [row[k] for k in group_keys]
+
+        base: dict[str, Any] = {
+            "map_type": output_map_type,
+            "x_axis": str(row["x_axis"]),
+            "y_axis": "abs_y",
+            "x_bin": int(row["x_bin"]),
+            "y_bin": iy,
+            "x_min": float(row["x_min"]),
+            "x_max": float(row["x_max"]),
+            "y_min": float(abs_y_edges[iy]),
+            "y_max": float(abs_y_edges[iy + 1]),
+            "x_label": str(row["x_label"]),
+            "y_label": f"{abs_y_edges[iy]:g}-{abs_y_edges[iy + 1]:g}",
+        }
+        # Thread group-key values back into the row (preserve original types)
+        for ki, key in enumerate(group_keys):
+            base[key] = key_values[ki]
+        # Ensure x_bin stays as int (it may have been overwritten by key threading)
+        if "x_bin" in base:
+            base["x_bin"] = int(base["x_bin"])
+        if extra_cols:
+            base.update(extra_cols)
+        rows.append(_efficiency_row(base, int(row["total"]), int(row["passed"])))
+
+    return pd.DataFrame(rows)
+
+
+def fold_object_2d_to_abs_y(counts_df: "pd.DataFrame") -> "pd.DataFrame":
+    """Fold signed-y object_2d bins to |y| bins by aggregating ±y pairs.
+
+    Returns the input DataFrame augmented with ``object_2d_abs_y`` rows.
+    The original ``object_2d`` rows are preserved unchanged.
+    """
+    import pandas as pd
+
+    obj2d = counts_df.loc[counts_df["map_type"] == "object_2d"].copy()
+    if obj2d.empty:
+        return counts_df
+
+    abs_df = _fold_frame_to_abs_y(
+        obj2d, group_keys=["object", "step", "x_bin"],
+        output_map_type="object_2d_abs_y",
+    )
+    return pd.concat([counts_df, abs_df], ignore_index=True)
+
+
 def _bin_index(value: float, edges: tuple[float, ...]) -> int:
     if not np.isfinite(value):
         return -1
@@ -1943,6 +2044,7 @@ def _stacked_jpsi_frame(gen_df: pd.DataFrame, event_df: pd.DataFrame) -> pd.Data
         part["jpsi_role"] = role
         part["jpsi_pt"] = part[f"jpsi_{role}_pt"]
         part["jpsi_y"] = part[f"jpsi_{role}_y"]
+        part["jpsi_abs_y"] = part[f"jpsi_{role}_abs_y"] if f"jpsi_{role}_abs_y" in part.columns else part["jpsi_y"].abs()
         part["jpsi_fiducial_acceptance"] = part[flag_col].astype(int)
         # Copy per-J/psi step flags for this role
         for suffix in PER_JPSI_STEPS:
@@ -1961,14 +2063,14 @@ def build_stacked_jpsi_acceptance_maps(
         return pd.DataFrame()
     rows: list[dict[str, Any]] = []
     pt_edges = binning.jpsi_pt_edges
-    y_edges = binning.object_y_edges
+    y_edges = binning.object_abs_y_edges
     for ix in range(len(pt_edges) - 1):
         for iy in range(len(y_edges) - 1):
             subset = stacked[
                 (stacked["jpsi_pt"] >= pt_edges[ix])
                 & (stacked["jpsi_pt"] < pt_edges[ix + 1])
-                & (stacked["jpsi_y"] >= y_edges[iy])
-                & (stacked["jpsi_y"] < y_edges[iy + 1])
+                & (stacked["jpsi_abs_y"] >= y_edges[iy])
+                & (stacked["jpsi_abs_y"] < y_edges[iy + 1])
             ]
             total = int(len(subset))
             rows.append(
@@ -1978,7 +2080,7 @@ def build_stacked_jpsi_acceptance_maps(
                         "object": "jpsi",
                         "step": "fiducial",
                         "x_axis": "pt",
-                        "y_axis": "y",
+                        "y_axis": "abs_y",
                         "x_bin": ix,
                         "y_bin": iy,
                         "x_min": pt_edges[ix],
@@ -2004,14 +2106,14 @@ def build_stacked_jpsi_efficiency_maps(
         return pd.DataFrame()
     rows: list[dict[str, Any]] = []
     pt_edges = binning.jpsi_pt_edges
-    y_edges = binning.object_y_edges
+    y_edges = binning.object_abs_y_edges
     for ix in range(len(pt_edges) - 1):
         for iy in range(len(y_edges) - 1):
             subset = stacked[
                 (stacked["jpsi_pt"] >= pt_edges[ix])
                 & (stacked["jpsi_pt"] < pt_edges[ix + 1])
-                & (stacked["jpsi_y"] >= y_edges[iy])
-                & (stacked["jpsi_y"] < y_edges[iy + 1])
+                & (stacked["jpsi_abs_y"] >= y_edges[iy])
+                & (stacked["jpsi_abs_y"] < y_edges[iy + 1])
             ]
             total = int(len(subset))
             for suffix in PER_JPSI_STEPS[1:]:  # skip fiducial (already in acceptance)
@@ -2023,7 +2125,7 @@ def build_stacked_jpsi_efficiency_maps(
                             "object": "jpsi",
                             "step": suffix,
                             "x_axis": "pt",
-                            "y_axis": "y",
+                            "y_axis": "abs_y",
                             "x_bin": ix,
                             "y_bin": iy,
                             "x_min": pt_edges[ix],
