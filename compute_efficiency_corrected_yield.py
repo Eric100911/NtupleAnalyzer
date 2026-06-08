@@ -15,6 +15,7 @@ from efficiency_workflow.yield_correction import (
 from efficiency_workflow.corrections import (
     load_efficiency_correction_map,
     load_factorized_correction_map,
+    load_hybrid_correction_map,
     annotate_root_tree_with_efficiency,
 )
 
@@ -29,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--map-type", default="correlated_3d", help="Efficiency map type to use")
     parser.add_argument("--denominator", default="absolute", choices=["absolute", "conditional"])
     parser.add_argument("--min-total", type=int, default=10, help="Minimum MC total before interpolating a bin")
-    parser.add_argument("--correction-mode", default="factorized", choices=["factorized", "legacy-correlated"])
+    parser.add_argument("--correction-mode", default="factorized", choices=["factorized", "legacy-correlated", "hybrid"])
     parser.add_argument("--n-min-fine", type=int, default=30, help="Minimum MC total for fine factorized bins")
     parser.add_argument("--n-min-coarse", type=int, default=50, help="Minimum MC total for coarse factorized bins")
     parser.add_argument("--on-missing", default="error", choices=["error", "drop"], help="Action when efficiency lookup misses a bin (default: error)")
@@ -155,6 +156,25 @@ def main() -> int:
                 f"entries={corr_summary.entries}, ok={corr_summary.ok}, "
                 f"missing={corr_summary.missing_bin}, invalid={corr_summary.invalid_efficiency}, "
                 f"mean_weight={corr_summary.mean_weight:.3g}",
+                flush=True,
+            )
+        elif args.correction_mode == "hybrid":
+            print(f"Writing full hybrid-corrected ROOT tree using sample {corrected_sample}: {args.corrected_root}", flush=True)
+            hybrid_map = load_hybrid_correction_map(
+                Path(args.efficiency_dir) / corrected_sample,
+                n_min_fine=args.n_min_fine,
+                n_min_coarse=args.n_min_coarse,
+            )
+            summary = write_factorized_corrected_root_tree(
+                args.data_input,
+                args.corrected_root,
+                hybrid_map,
+                status_callback=lambda message: print(f"[corrected-root] {message}", flush=True),
+            )
+            print(
+                "Wrote corrected ROOT: "
+                f"entries={summary[0]}, ok={summary[1]}, missing={summary[2]}, invalid={summary[3]}, "
+                f"fallback_components={summary[4]}, mean_weight={summary[5]:.3g}",
                 flush=True,
             )
     if args.plot_dir:

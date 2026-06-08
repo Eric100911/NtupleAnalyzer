@@ -847,6 +847,434 @@ class FactorizedCorrectionMap:
         )
 
 
+class HybridCorrectionMap:
+    """Hybrid efficiency correction: factorized acceptance × 5D conditional post-acceptance.
+
+    w = 1 / (A_jpsi_lead × A_jpsi_sublead × A_phi × ε_5d_post_acceptance)
+
+    The acceptance factors are looked up in 2D (pT, |y|) with fine→coarse→inclusive
+    fallback.  The post-acceptance efficiency is looked up in 5D (lead pT, sublead pT,
+    φ pT, |lead y|, |sublead y|) with 3D coarse and inclusive fallbacks.
+    """
+
+    def __init__(
+        self,
+        acceptance_jpsi: pd.DataFrame,
+        acceptance_phi: pd.DataFrame,
+        post_acceptance_5d: pd.DataFrame,
+        *,
+        source: Path,
+        n_min_fine: int = 30,
+        n_min_coarse: int = 50,
+    ) -> None:
+        self.source = Path(source)
+        self.n_min_fine = int(n_min_fine)
+        self.n_min_coarse = int(n_min_coarse)
+
+        # Prepare acceptance maps (same pattern as FactorizedCorrectionMap)
+        self._acc_jpsi = self._prepare_factor_frame(acceptance_jpsi, "acceptance_jpsi")
+        self._acc_phi = self._prepare_factor_frame(acceptance_phi, "acceptance_phi")
+        self._acc_jpsi_by_level = self._split_by_level(self._acc_jpsi)
+        self._acc_phi_by_level = self._split_by_level(self._acc_phi)
+
+        # Prepare post-acceptance 5D map
+        self._pa5d = self._prepare_post_acceptance(post_acceptance_5d)
+        self._pa5d_by_level = self._split_by_level(self._pa5d)
+
+    # ------------------------------------------------------------------
+    # Frame preparation (shared with FactorizedCorrectionMap)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _prepare_factor_frame(frame: pd.DataFrame, factor_name: str) -> pd.DataFrame:
+        required = {"factor_name", "fallback_level", "x_min", "x_max", "y_min", "y_max",
+                     "z_min", "z_max", "x_bin", "y_bin", "z_bin", "total", "passed", "efficiency"}
+        missing = sorted(required - set(frame.columns))
+        if missing:
+            raise ValueError(f"{factor_name} map is missing required column(s): {', '.join(missing)}")
+        selected = frame.loc[frame["factor_name"] == factor_name].copy()
+        if selected.empty:
+            raise ValueError(f"No rows found for factorized map {factor_name!r}")
+        if "err_sym" not in selected.columns:
+            selected["err_sym"] = selected.get("err_high", np.nan)
+        selected["err_sym"] = selected["err_sym"].astype(float)
+        return selected.reset_index(drop=True)
+
+    @staticmethod
+    def _prepare_post_acceptance(frame: pd.DataFrame) -> pd.DataFrame:
+        required = {"fallback_level", "x_min", "x_max", "y_min", "y_max", "z_min", "z_max",
+                     "x_bin", "y_bin", "z_bin", "total", "passed", "efficiency"}
+        missing = sorted(required - set(frame.columns))
+        if missing:
+            raise ValueError(f"Post-acceptance 5D map missing column(s): {', '.join(missing)}")
+        selected = frame.copy()
+        if "err_sym" not in selected.columns:
+            selected["err_sym"] = selected.get("err_high", np.nan)
+        selected["err_sym"] = selected["err_sym"].astype(float)
+        # Ensure u/v columns exist
+        for col, default in [("u_min", np.nan), ("u_max", np.nan), ("u_bin", -1),
+                              ("v_min", np.nan), ("v_max", np.nan), ("v_bin", -1)]:
+            if col not in selected.columns:
+                selected[col] = default
+        return selected.reset_index(drop=True)
+
+    @staticmethod
+    def _split_by_level(frame: pd.DataFrame) -> dict[str, pd.DataFrame]:
+        return {
+            level: frame.loc[frame["fallback_level"] == level]
+            for level in ("fine", "coarse", "inclusive")
+        }
+
+    # ------------------------------------------------------------------
+    # Fallback threshold
+    # ------------------------------------------------------------------
+
+    def _min_total_for_level(self, level: str) -> int:
+        if level == "fine":
+            return self.n_min_fine
+        if level == "coarse":
+            return self.n_min_coarse
+        return 1
+
+    # ------------------------------------------------------------------
+    # Axis matching helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _matches_axis(frame: pd.DataFrame, axis: str, value: float) -> np.ndarray:
+        low = frame[f"{axis}_min"].to_numpy(dtype=float)
+        high = frame[f"{axis}_max"].to_numpy(dtype=float)
+        active = np.isfinite(low) & np.isfinite(high)
+        return (~active) | (np.isfinite(value) & (low <= value) & (value < high))
+
+    @staticmethod
+    def _matches_axis_array(row: pd.Series, axis: str, values: np.ndarray) -> np.ndarray:
+        low = float(row[f"{axis}_min"])
+        high = float(row[f"{axis}_max"])
+        if not (math.isfinite(low) and math.isfinite(high)):
+            return np.ones(len(values), dtype=bool)
+        return np.isfinite(values) & (low <= values) & (values < high)
+
+    # ------------------------------------------------------------------
+    # Scalar: lookup a single acceptance component
+    # ------------------------------------------------------------------
+
+    def _lookup_acc(
+        self, factor_frame: pd.DataFrame, by_level: dict[str, pd.DataFrame],
+        x_value: float, y_value: float,
+    ) -> tuple[float, float, str, int]:
+        """Return (efficiency, err_sym, fallback_level, status) for one acceptance factor."""
+        for level in ("fine", "coarse", "inclusive"):
+            subset = by_level[level]
+            if subset.empty:
+                continue
+            matches = self._matches_axis(subset, "x", x_value) & self._matches_axis(subset, "y", y_value)
+            indices = np.flatnonzero(matches)
+            if indices.size == 0:
+                continue
+            row = subset.iloc[int(indices[0])]
+            if int(row["total"]) < self._min_total_for_level(level):
+                continue
+            eff = float(row["efficiency"])
+            if not math.isfinite(eff) or eff <= 0.0:
+                continue  # fall through to coarser level
+            return (eff, float(row.get("err_sym", np.nan)), level, STATUS_OK)
+        return (np.nan, np.nan, "missing", STATUS_MISSING_BIN)
+
+    # ------------------------------------------------------------------
+    # Scalar: lookup post-acceptance 5D
+    # ------------------------------------------------------------------
+
+    def _lookup_pa5d(
+        self,
+        lead_pt: float, sublead_pt: float, phi_pt: float,
+        lead_abs_y: float, sublead_abs_y: float,
+    ) -> tuple[float, float, str, int]:
+        """Return (efficiency, err_sym, fallback_level, status) for post-acceptance 5D."""
+        for level in ("fine", "coarse", "inclusive"):
+            subset = self._pa5d_by_level[level]
+            if subset.empty:
+                continue
+            matches = (
+                self._matches_axis(subset, "x", lead_pt)
+                & self._matches_axis(subset, "y", sublead_pt)
+                & self._matches_axis(subset, "z", phi_pt)
+            )
+            # u/v only used in fine level
+            if level == "fine":
+                matches &= self._matches_axis(subset, "u", lead_abs_y)
+                matches &= self._matches_axis(subset, "v", sublead_abs_y)
+            indices = np.flatnonzero(matches)
+            if indices.size == 0:
+                continue
+            row = subset.iloc[int(indices[0])]
+            if int(row["total"]) < self._min_total_for_level(level):
+                continue
+            eff = float(row["efficiency"])
+            if not math.isfinite(eff) or eff <= 0.0:
+                continue  # fall through to coarser level
+            return (eff, float(row.get("err_sym", np.nan)), level, STATUS_OK)
+        return (np.nan, np.nan, "missing", STATUS_MISSING_BIN)
+
+    # ------------------------------------------------------------------
+    # Scalar lookup
+    # ------------------------------------------------------------------
+
+    def lookup(
+        self,
+        *,
+        jpsi1_pt: float,
+        jpsi1_y: float,
+        jpsi2_pt: float,
+        jpsi2_y: float,
+        phi_pt: float,
+        phi_y: float,
+    ) -> FactorizedCorrection:
+        # Determine lead/sublead ordering
+        j1_pt = float(jpsi1_pt); j1_y = float(jpsi1_y)
+        j2_pt = float(jpsi2_pt); j2_y = float(jpsi2_y)
+        p_pt = float(phi_pt); p_y = float(phi_y)
+        if j1_pt >= j2_pt:
+            lead_pt, lead_y = j1_pt, j1_y
+            sublead_pt, sublead_y = j2_pt, j2_y
+        else:
+            lead_pt, lead_y = j2_pt, j2_y
+            sublead_pt, sublead_y = j1_pt, j1_y
+
+        # Acceptance components
+        a_lead_eff, a_lead_err, a_lead_lvl, a_lead_st = self._lookup_acc(
+            self._acc_jpsi, self._acc_jpsi_by_level, lead_pt, abs(lead_y))
+        a_sublead_eff, a_sublead_err, a_sublead_lvl, a_sublead_st = self._lookup_acc(
+            self._acc_jpsi, self._acc_jpsi_by_level, sublead_pt, abs(sublead_y))
+        a_phi_eff, a_phi_err, a_phi_lvl, a_phi_st = self._lookup_acc(
+            self._acc_phi, self._acc_phi_by_level, p_pt, abs(p_y))
+
+        # Post-acceptance 5D
+        pa_eff, pa_err, pa_lvl, pa_st = self._lookup_pa5d(
+            lead_pt, sublead_pt, p_pt, abs(lead_y), abs(sublead_y))
+
+        # Build component list for diagnostics
+        components = (
+            FactorizedComponentCorrection("jpsi_lead_acceptance", "acceptance_jpsi", float(a_lead_eff), float(a_lead_err), 0, 0, str(a_lead_lvl), -1, -1, -1, int(a_lead_st)),
+            FactorizedComponentCorrection("jpsi_sublead_acceptance", "acceptance_jpsi", float(a_sublead_eff), float(a_sublead_err), 0, 0, str(a_sublead_lvl), -1, -1, -1, int(a_sublead_st)),
+            FactorizedComponentCorrection("phi_acceptance", "acceptance_phi", float(a_phi_eff), float(a_phi_err), 0, 0, str(a_phi_lvl), -1, -1, -1, int(a_phi_st)),
+            FactorizedComponentCorrection("post_acceptance_5d", "post_acceptance_5d", float(pa_eff), float(pa_err), 0, 0, str(pa_lvl), -1, -1, -1, int(pa_st)),
+        )
+
+        statuses = {a_lead_st, a_sublead_st, a_phi_st, pa_st}
+        if STATUS_MISSING_BIN in statuses:
+            return FactorizedCorrection(np.nan, np.nan, np.nan, STATUS_MISSING_BIN, components)
+        if STATUS_INVALID_EFFICIENCY in statuses:
+            return FactorizedCorrection(np.nan, np.nan, np.nan, STATUS_INVALID_EFFICIENCY, components)
+
+        total_eff = float(a_lead_eff * a_sublead_eff * a_phi_eff * pa_eff)
+        if not math.isfinite(total_eff) or total_eff <= 0.0:
+            return FactorizedCorrection(total_eff, np.nan, np.nan, STATUS_INVALID_EFFICIENCY, components)
+
+        # Relative uncertainty
+        rel_var = 0.0
+        for eff_val, err_val in [(a_lead_eff, a_lead_err), (a_sublead_eff, a_sublead_err),
+                                  (a_phi_eff, a_phi_err), (pa_eff, pa_err)]:
+            if math.isfinite(err_val) and eff_val > 0.0:
+                rel_var += float((err_val / eff_val) ** 2)
+        weight = 1.0 / total_eff
+        err_sym = weight * math.sqrt(rel_var) if rel_var > 0.0 else np.nan
+        return FactorizedCorrection(total_eff, weight, err_sym, STATUS_OK, components)
+
+    # ------------------------------------------------------------------
+    # Vectorized: lookup a single acceptance component
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _lookup_acc_arrays(
+        by_level: dict[str, pd.DataFrame],
+        x_values: np.ndarray, y_values: np.ndarray,
+        min_total_for_level: callable,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Return (efficiency, err_sym, fallback_str, status) arrays."""
+        n_events = len(x_values)
+        efficiency = np.full(n_events, np.nan, dtype=np.float64)
+        err_sym = np.full(n_events, np.nan, dtype=np.float64)
+        status = np.full(n_events, STATUS_MISSING_BIN, dtype=np.int32)
+        fallback_level = np.full(n_events, "missing", dtype=object)
+        unresolved = np.ones(n_events, dtype=bool)
+
+        for level in ("fine", "coarse", "inclusive"):
+            level_frame = by_level[level]
+            if level_frame.empty:
+                continue
+            min_total = min_total_for_level(level)
+            for _, row in level_frame.iterrows():
+                if not np.any(unresolved):
+                    break
+                if int(row["total"]) < min_total:
+                    continue
+                matches = (
+                    unresolved
+                    & HybridCorrectionMap._matches_axis_array(row, "x", x_values)
+                    & HybridCorrectionMap._matches_axis_array(row, "y", y_values)
+                )
+                if not np.any(matches):
+                    continue
+                eff = float(row["efficiency"])
+                row_status = STATUS_OK if math.isfinite(eff) and eff > 0.0 else STATUS_INVALID_EFFICIENCY
+                efficiency[matches] = eff
+                err_sym[matches] = float(row.get("err_sym", np.nan))
+                status[matches] = row_status
+                fallback_level[matches] = level
+                # Only mark resolved if OK; invalid eff → fall through to coarser level
+                unresolved[matches] = (row_status != STATUS_OK)
+        return efficiency, err_sym, fallback_level, status
+
+    # ------------------------------------------------------------------
+    # Vectorized: lookup post-acceptance 5D
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _lookup_pa5d_arrays(
+        by_level: dict[str, pd.DataFrame],
+        lead_pt: np.ndarray, sublead_pt: np.ndarray, phi_pt: np.ndarray,
+        lead_abs_y: np.ndarray, sublead_abs_y: np.ndarray,
+        min_total_for_level: callable,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Return (efficiency, err_sym, fallback_str, status) arrays for 5D."""
+        n_events = len(lead_pt)
+        efficiency = np.full(n_events, np.nan, dtype=np.float64)
+        err_sym = np.full(n_events, np.nan, dtype=np.float64)
+        status = np.full(n_events, STATUS_MISSING_BIN, dtype=np.int32)
+        fallback_level = np.full(n_events, "missing", dtype=object)
+        unresolved = np.ones(n_events, dtype=bool)
+
+        for level in ("fine", "coarse", "inclusive"):
+            level_frame = by_level[level]
+            if level_frame.empty:
+                continue
+            min_total = min_total_for_level(level)
+            for _, row in level_frame.iterrows():
+                if not np.any(unresolved):
+                    break
+                if int(row["total"]) < min_total:
+                    continue
+                matches = (
+                    unresolved
+                    & HybridCorrectionMap._matches_axis_array(row, "x", lead_pt)
+                    & HybridCorrectionMap._matches_axis_array(row, "y", sublead_pt)
+                    & HybridCorrectionMap._matches_axis_array(row, "z", phi_pt)
+                )
+                if level == "fine":
+                    matches &= HybridCorrectionMap._matches_axis_array(row, "u", lead_abs_y)
+                    matches &= HybridCorrectionMap._matches_axis_array(row, "v", sublead_abs_y)
+                if not np.any(matches):
+                    continue
+                eff = float(row["efficiency"])
+                row_status = STATUS_OK if math.isfinite(eff) and eff > 0.0 else STATUS_INVALID_EFFICIENCY
+                efficiency[matches] = eff
+                err_sym[matches] = float(row.get("err_sym", np.nan))
+                status[matches] = row_status
+                fallback_level[matches] = level
+                # Only mark resolved if OK; invalid eff → fall through to coarser level
+                unresolved[matches] = (row_status != STATUS_OK)
+        return efficiency, err_sym, fallback_level, status
+
+    # ------------------------------------------------------------------
+    # Vectorized array lookup
+    # ------------------------------------------------------------------
+
+    def lookup_arrays(
+        self,
+        *,
+        jpsi1_pt: np.ndarray,
+        jpsi1_y: np.ndarray,
+        jpsi2_pt: np.ndarray,
+        jpsi2_y: np.ndarray,
+        phi_pt: np.ndarray,
+        phi_y: np.ndarray,
+    ) -> FactorizedCorrectionArrays:
+        jpsi1_pt = np.asarray(jpsi1_pt, dtype=float)
+        jpsi1_y = np.asarray(jpsi1_y, dtype=float)
+        jpsi2_pt = np.asarray(jpsi2_pt, dtype=float)
+        jpsi2_y = np.asarray(jpsi2_y, dtype=float)
+        phi_pt = np.asarray(phi_pt, dtype=float)
+        phi_y = np.asarray(phi_y, dtype=float)
+        lengths = {len(jpsi1_pt), len(jpsi1_y), len(jpsi2_pt), len(jpsi2_y), len(phi_pt), len(phi_y)}
+        if len(lengths) != 1:
+            raise ValueError("All lookup arrays must have the same length")
+        n_events = len(jpsi1_pt)
+
+        # Lead/sublead ordering
+        jpsi1_is_lead = jpsi1_pt >= jpsi2_pt
+        lead_pt = np.where(jpsi1_is_lead, jpsi1_pt, jpsi2_pt)
+        sublead_pt = np.where(jpsi1_is_lead, jpsi2_pt, jpsi1_pt)
+        lead_abs_y = np.abs(np.where(jpsi1_is_lead, jpsi1_y, jpsi2_y))
+        sublead_abs_y = np.abs(np.where(jpsi1_is_lead, jpsi2_y, jpsi1_y))
+        phi_abs_y = np.abs(phi_y)
+
+        min_total_fn = self._min_total_for_level
+
+        # Lookup all 4 components
+        a_lead_eff, a_lead_err, a_lead_lvl, a_lead_st = self._lookup_acc_arrays(
+            self._acc_jpsi_by_level, lead_pt, lead_abs_y, min_total_fn)
+        a_sublead_eff, a_sublead_err, a_sublead_lvl, a_sublead_st = self._lookup_acc_arrays(
+            self._acc_jpsi_by_level, sublead_pt, sublead_abs_y, min_total_fn)
+        a_phi_eff, a_phi_err, a_phi_lvl, a_phi_st = self._lookup_acc_arrays(
+            self._acc_phi_by_level, phi_pt, phi_abs_y, min_total_fn)
+        pa_eff, pa_err, pa_lvl, pa_st = self._lookup_pa5d_arrays(
+            self._pa5d_by_level, lead_pt, sublead_pt, phi_pt, lead_abs_y, sublead_abs_y, min_total_fn)
+
+        # Combine status
+        status = np.full(n_events, STATUS_OK, dtype=np.int32)
+        missing = np.zeros(n_events, dtype=bool)
+        invalid = np.zeros(n_events, dtype=bool)
+        for st in (a_lead_st, a_sublead_st, a_phi_st, pa_st):
+            missing |= st == STATUS_MISSING_BIN
+            invalid |= st == STATUS_INVALID_EFFICIENCY
+        status[invalid] = STATUS_INVALID_EFFICIENCY
+        status[missing] = STATUS_MISSING_BIN
+
+        # Combined efficiency
+        efficiency = a_lead_eff * a_sublead_eff * a_phi_eff * pa_eff
+        invalid_eff = ~np.isfinite(efficiency) | (efficiency <= 0.0)
+        status[(status == STATUS_OK) & invalid_eff] = STATUS_INVALID_EFFICIENCY
+
+        weight = np.full(n_events, np.nan, dtype=np.float64)
+        ok = status == STATUS_OK
+        weight[ok] = 1.0 / efficiency[ok]
+        efficiency[~ok] = np.nan
+
+        # Relative uncertainty
+        rel_var = np.zeros(n_events, dtype=np.float64)
+        for eff_arr, err_arr in [(a_lead_eff, a_lead_err), (a_sublead_eff, a_sublead_err),
+                                  (a_phi_eff, a_phi_err), (pa_eff, pa_err)]:
+            valid_err = np.isfinite(err_arr) & (eff_arr > 0.0)
+            rel_var[valid_err] += (err_arr[valid_err] / eff_arr[valid_err]) ** 2
+        weight_err = np.full(n_events, np.nan, dtype=np.float64)
+        has_rel_var = ok & (rel_var > 0.0)
+        weight_err[has_rel_var] = weight[has_rel_var] * np.sqrt(rel_var[has_rel_var])
+
+        # Fallback component count
+        fallback_components = np.zeros(n_events, dtype=np.int32)
+        for lvl_arr in (a_lead_lvl, a_sublead_lvl, a_phi_lvl, pa_lvl):
+            fallback_components += (ok & (lvl_arr != "fine")).astype(np.int32)
+
+        # MC stat uncertainty (simplified: use post-acceptance 5D uncertainty)
+        mc_stat_var = 0.0
+        for i in range(n_events):
+            if not ok[i]:
+                continue
+            # Only propagate post-acceptance 5D stat uncertainty for now
+            if np.isfinite(pa_err[i]) and pa_eff[i] > 0.0:
+                mc_stat_var += (weight[i] * pa_err[i] / pa_eff[i]) ** 2
+
+        return FactorizedCorrectionArrays(
+            efficiency=efficiency,
+            weight=weight,
+            weight_err=weight_err,
+            status=status,
+            fallback_components=fallback_components,
+            mc_stat_unc=float(math.sqrt(mc_stat_var)),
+        )
+
+
 def load_factorized_correction_map(
     sample_dir: str | Path,
     *,
@@ -941,6 +1369,37 @@ def load_efficiency_correction_map(
         fallback_frames=fallback_frames,
         fallback_min_total=fallback_min_total,
         fine_min_total=min_total_fine if map_type == "correlated_5d" else 0,
+    )
+
+
+def load_hybrid_correction_map(
+    sample_dir: str | Path,
+    *,
+    n_min_fine: int = 30,
+    n_min_coarse: int = 50,
+) -> HybridCorrectionMap:
+    """Load a HybridCorrectionMap from factorized acceptance + post-acceptance 5D maps."""
+    sample_dir = Path(sample_dir)
+    maps_dir = sample_dir / "maps"
+
+    acc_jpsi_path = maps_dir / "acceptance_jpsi.parquet"
+    acc_phi_path = maps_dir / "acceptance_phi.parquet"
+    pa5d_path = maps_dir / "post_acceptance_5d.parquet"
+
+    missing: list[str] = []
+    for p in [acc_jpsi_path, acc_phi_path, pa5d_path]:
+        if not p.exists():
+            missing.append(str(p))
+    if missing:
+        raise FileNotFoundError("Missing hybrid correction map file(s): " + ", ".join(missing))
+
+    return HybridCorrectionMap(
+        acceptance_jpsi=pd.read_parquet(acc_jpsi_path),
+        acceptance_phi=pd.read_parquet(acc_phi_path),
+        post_acceptance_5d=pd.read_parquet(pa5d_path),
+        source=maps_dir,
+        n_min_fine=n_min_fine,
+        n_min_coarse=n_min_coarse,
     )
 
 

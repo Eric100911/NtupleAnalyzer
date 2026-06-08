@@ -21,7 +21,9 @@ from .corrections import (
     STATUS_OK,
     EfficiencyCorrectionMap,
     FactorizedCorrectionMap,
+    HybridCorrectionMap,
     load_factorized_correction_map,
+    load_hybrid_correction_map,
 )
 from .io import ensure_dir, write_json
 
@@ -425,7 +427,7 @@ def build_weighted_mini_tree(
 def build_factorized_weighted_mini_tree(
     input_file: str | Path,
     output_file: str | Path,
-    correction_map: FactorizedCorrectionMap,
+    correction_map: FactorizedCorrectionMap | HybridCorrectionMap,
     *,
     tree_name: str = "selected",
     on_missing: Literal["error", "drop"] = "error",
@@ -490,7 +492,7 @@ def build_factorized_weighted_mini_tree(
 def write_factorized_corrected_root_tree(
     input_file: str | Path,
     output_file: str | Path,
-    correction_map: FactorizedCorrectionMap,
+    correction_map: FactorizedCorrectionMap | HybridCorrectionMap,
     *,
     tree_name: str = "selected",
     on_missing: Literal["error", "drop"] = "error",
@@ -621,7 +623,7 @@ def compute_efficiency_corrected_yield(
     map_type: str = DEFAULT_MAP_TYPE,
     denominator: Literal["absolute", "conditional"] = "absolute",
     min_total: int = 10,
-    correction_mode: Literal["factorized", "legacy-correlated"] = "factorized",
+    correction_mode: Literal["factorized", "legacy-correlated", "hybrid"] = "factorized",
     n_min_fine: int = 30,
     n_min_coarse: int = 50,
     on_missing: Literal["error", "drop"] = "error",
@@ -683,6 +685,22 @@ def compute_efficiency_corrected_yield(
                     data_input_file,
                     weighted_tree,
                     correction_map,
+                    on_missing=on_missing,
+                    status_callback=lambda message, sample=sample: status(f"[{sample}] {message}"),
+                )
+            elif correction_mode == "hybrid":
+                sample_dir = efficiency_dir / sample
+                status(f"[{sample}] loading hybrid correction maps: {sample_dir / 'maps'}")
+                hybrid_map = load_hybrid_correction_map(
+                    sample_dir,
+                    n_min_fine=n_min_fine,
+                    n_min_coarse=n_min_coarse,
+                )
+                status(f"[{sample}] building hybrid weighted mini tree: {weighted_tree}")
+                n_events, n_ok, n_missing, n_invalid, n_interpolated, mean_weight, mc_stat_unc = build_factorized_weighted_mini_tree(
+                    data_input_file,
+                    weighted_tree,
+                    hybrid_map,
                     on_missing=on_missing,
                     status_callback=lambda message, sample=sample: status(f"[{sample}] {message}"),
                 )

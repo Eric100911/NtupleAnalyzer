@@ -124,3 +124,46 @@ def test_closure_cli_requires_maps_without_build_maps(tmp_path) -> None:
 
     with pytest.raises(FileNotFoundError, match="Missing factorized correction map"):
         main(["--input-dir", str(tmp_path), "--samples", "JJP_A"])
+
+
+def test_closure_cli_hybrid_self(tmp_path) -> None:
+    """Hybrid closure: factorized acceptance x 5D post-acceptance."""
+    import pandas as pd
+    from efficiency_workflow.build_factorized_maps import build_post_acceptance_5d_map
+    from efficiency_workflow.build_factorized_maps import build_factorized_maps_for_sample
+
+    samples = ["JJP_A"]
+    for sample in samples:
+        _write_sample(tmp_path, sample)
+
+    # Build factorized maps and post-acceptance 5D maps
+    for sample in samples:
+        build_factorized_maps_for_sample(tmp_path / sample, tmp_path / sample / "maps")
+        build_post_acceptance_5d_map(tmp_path / sample, tmp_path / sample / "maps")
+
+    rc = main(
+        [
+            "--input-dir", str(tmp_path),
+            "--samples", *samples,
+            "--output-dir", str(tmp_path / "closure_hybrid"),
+            "--map-type", "hybrid",
+            "--self-only",
+            "--n-min-fine", "0",
+            "--n-min-coarse", "0",
+        ]
+    )
+
+    assert rc == 0
+    out = pd.read_parquet(tmp_path / "closure_hybrid" / "closure_results.parquet")
+    assert len(out) == 1  # self-only for 1 sample
+    assert set(out["closure_type"]) == {"self"}
+    assert out["n_failed_lookup"].iloc[0] == 0
+    # With all efficiencies = 1.0, ratio should be close to 1.0
+    assert abs(out["ratio"].iloc[0] - 1.0) < 0.01
+
+    csv_path = tmp_path / "closure_hybrid" / "closure_results.csv"
+    manifest_path = tmp_path / "closure_hybrid" / "closure_manifest.json"
+    assert csv_path.exists()
+    manifest = json.loads(manifest_path.read_text())
+    assert manifest["stage"] == "hybrid_closure"
+    assert manifest["n_rows"] == 1

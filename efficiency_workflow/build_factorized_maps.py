@@ -372,26 +372,225 @@ def build_factorized_maps(
     return outputs
 
 
+# ---------------------------------------------------------------------------
+# Post-acceptance 5D conditional efficiency map
+# ---------------------------------------------------------------------------
+#
+# This map gives ε(bin) = N(Pri_assocPVPass & triple_fiducial in bin)
+#                       / N(triple_fiducial in bin)
+# binned in 5D: (lead_pt, sublead_pt, phi_pt, |lead_y|, |sublead_y|).
+# It is the "post-acceptance" counterpart to the factorized acceptance maps,
+# used by HybridCorrectionMap to combine factorized acceptance × 5D efficiency.
+
+
+def build_post_acceptance_5d_map(
+    input_sample_dir: Path,
+    output_maps_dir: Path,
+    *,
+    binning: EfficiencyBinning | None = None,
+    event_end_step: str = DEFAULT_EVENT_END_STEP,
+) -> Path:
+    """Build a 5D post-acceptance conditional efficiency map.
+
+    Denominator: events passing *all three* fiducial acceptance cuts
+    (jpsi_lead_fiducial & jpsi_sublead_fiducial & phi_fiducial).
+
+    Numerator: events that additionally pass *event_end_step*
+    (default: Pri_assocPVPass).
+
+    Three fallback levels are produced:
+    - fine:   5D (lead_pt, sublead_pt, phi_pt, |lead_y|, |sublead_y|)
+    - coarse: 3D (lead_pt, sublead_pt, phi_pt) — pT only
+    - inclusive: single bin (no kinematic binning)
+    """
+    from .efficiency import _efficiency_row as _eff_row, _bin_label
+
+    binning = binning or EfficiencyBinning()
+
+    gen_path = input_sample_dir / "gen_systems.parquet"
+    event_path = input_sample_dir / "event_step_flags.parquet"
+    if not gen_path.exists() or not event_path.exists():
+        raise FileNotFoundError(f"Missing merged parquet inputs in {input_sample_dir}")
+
+    gen_df = pd.read_parquet(gen_path)
+    event_df = pd.read_parquet(event_path)
+    merged = _merged_gen_events(gen_df, event_df)
+    if merged.empty:
+        raise RuntimeError(f"No merged gen/event rows for {input_sample_dir}")
+    if event_end_step not in merged.columns:
+        raise RuntimeError(f"Requested event end step {event_end_step!r} is not present in {event_path}")
+
+    # Build denominator and numerator masks
+    triple_fiducial = (
+        merged["jpsi_lead_fiducial"].to_numpy(dtype=bool)
+        & merged["jpsi_sublead_fiducial"].to_numpy(dtype=bool)
+        & merged["phi_fiducial"].to_numpy(dtype=bool)
+    )
+    passed = triple_fiducial & merged[event_end_step].to_numpy(dtype=bool)
+
+    # Extract GEN kinematics for lead/sublead (ordering by pT)
+    jpsi1_pt = merged["jpsi_lead_pt"].to_numpy(dtype=float)
+    jpsi2_pt = merged["jpsi_sublead_pt"].to_numpy(dtype=float)
+    lead_pt = np.maximum(jpsi1_pt, jpsi2_pt)
+    sublead_pt = np.minimum(jpsi1_pt, jpsi2_pt)
+    jpsi1_is_lead = jpsi1_pt >= jpsi2_pt
+    lead_abs_y = np.where(jpsi1_is_lead, np.abs(merged["jpsi_lead_y"].to_numpy(dtype=float)), np.abs(merged["jpsi_sublead_y"].to_numpy(dtype=float)))
+    sublead_abs_y = np.where(jpsi1_is_lead, np.abs(merged["jpsi_sublead_y"].to_numpy(dtype=float)), np.abs(merged["jpsi_lead_y"].to_numpy(dtype=float)))
+    phi_pt = merged["phi_pt"].to_numpy(dtype=float)
+
+    jpsi_edges = np.asarray(binning.jpsi_pt_edges)
+    phi_edges = np.asarray(binning.phi_pt_edges)
+    y_edges = np.asarray(binning.object_abs_y_edges)
+
+    rows: list[dict] = []
+
+    # Helper: bin an array of values
+    def _digitize(values: np.ndarray, edges: np.ndarray) -> np.ndarray:
+        idx = np.searchsorted(edges, values, side="right") - 1
+        idx[(values < edges[0]) | (values >= edges[-1])] = -1
+        return idx.astype(np.int32)
+
+    lead_ibin = _digitize(lead_pt, jpsi_edges)
+    sublead_ibin = _digitize(sublead_pt, jpsi_edges)
+    phi_ibin = _digitize(phi_pt, phi_edges)
+    lead_y_ibin = _digitize(lead_abs_y, y_edges)
+    sublead_y_ibin = _digitize(sublead_abs_y, y_edges)
+
+    # --- fine (5D) ---
+    for ix in range(len(jpsi_edges) - 1):
+        for iy in range(len(jpsi_edges) - 1):
+            for iz in range(len(phi_edges) - 1):
+                for iu in range(len(y_edges) - 1):
+                    for iv in range(len(y_edges) - 1):
+                        in_bin = (lead_ibin == ix) & (sublead_ibin == iy) & (phi_ibin == iz) & (lead_y_ibin == iu) & (sublead_y_ibin == iv)
+                        denom = int(triple_fiducial[in_bin].sum())
+                        num = int(passed[in_bin].sum())
+                        rows.append(_eff_row({
+                            "map_type": "correlated_5d",
+                            "step": f"{event_end_step}_cond_fiducial",
+                            "object": "event",
+                            "fallback_level": "fine",
+                            "x_axis": "jpsi_lead_pt", "y_axis": "jpsi_sublead_pt", "z_axis": "phi_pt",
+                            "u_axis": "jpsi_lead_abs_y", "v_axis": "jpsi_sublead_abs_y",
+                            "x_bin": ix, "y_bin": iy, "z_bin": iz, "u_bin": iu, "v_bin": iv,
+                            "x_min": float(jpsi_edges[ix]), "x_max": float(jpsi_edges[ix + 1]),
+                            "y_min": float(jpsi_edges[iy]), "y_max": float(jpsi_edges[iy + 1]),
+                            "z_min": float(phi_edges[iz]), "z_max": float(phi_edges[iz + 1]),
+                            "u_min": float(y_edges[iu]), "u_max": float(y_edges[iu + 1]),
+                            "v_min": float(y_edges[iv]), "v_max": float(y_edges[iv + 1]),
+                            "x_label": _bin_label(binning.jpsi_pt_edges, ix),
+                            "y_label": _bin_label(binning.jpsi_pt_edges, iy),
+                            "z_label": _bin_label(binning.phi_pt_edges, iz),
+                            "u_label": _bin_label(binning.object_abs_y_edges, iu),
+                            "v_label": _bin_label(binning.object_abs_y_edges, iv),
+                        }, denom, num))
+
+    # --- coarse (3D pT only) ---
+    for ix in range(len(jpsi_edges) - 1):
+        for iy in range(len(jpsi_edges) - 1):
+            for iz in range(len(phi_edges) - 1):
+                in_bin = (lead_ibin == ix) & (sublead_ibin == iy) & (phi_ibin == iz)
+                denom = int(triple_fiducial[in_bin].sum())
+                num = int(passed[in_bin].sum())
+                rows.append(_eff_row({
+                    "map_type": "correlated_5d",
+                    "step": f"{event_end_step}_cond_fiducial",
+                    "object": "event",
+                    "fallback_level": "coarse",
+                    "x_axis": "jpsi_lead_pt", "y_axis": "jpsi_sublead_pt", "z_axis": "phi_pt",
+                    "u_axis": "", "v_axis": "",
+                    "x_bin": ix, "y_bin": iy, "z_bin": iz, "u_bin": -1, "v_bin": -1,
+                    "x_min": float(jpsi_edges[ix]), "x_max": float(jpsi_edges[ix + 1]),
+                    "y_min": float(jpsi_edges[iy]), "y_max": float(jpsi_edges[iy + 1]),
+                    "z_min": float(phi_edges[iz]), "z_max": float(phi_edges[iz + 1]),
+                    "u_min": np.nan, "u_max": np.nan,
+                    "v_min": np.nan, "v_max": np.nan,
+                    "x_label": _bin_label(binning.jpsi_pt_edges, ix),
+                    "y_label": _bin_label(binning.jpsi_pt_edges, iy),
+                    "z_label": _bin_label(binning.phi_pt_edges, iz),
+                    "u_label": "", "v_label": "",
+                }, denom, num))
+
+    # --- inclusive ---
+    denom = int(triple_fiducial.sum())
+    num = int(passed.sum())
+    rows.append(_eff_row({
+        "map_type": "correlated_5d",
+        "step": f"{event_end_step}_cond_fiducial",
+        "object": "event",
+        "fallback_level": "inclusive",
+        "x_axis": "", "y_axis": "", "z_axis": "", "u_axis": "", "v_axis": "",
+        "x_bin": -1, "y_bin": -1, "z_bin": -1, "u_bin": -1, "v_bin": -1,
+        "x_min": np.nan, "x_max": np.nan,
+        "y_min": np.nan, "y_max": np.nan,
+        "z_min": np.nan, "z_max": np.nan,
+        "u_min": np.nan, "u_max": np.nan,
+        "v_min": np.nan, "v_max": np.nan,
+        "x_label": "", "y_label": "", "z_label": "", "u_label": "", "v_label": "",
+    }, denom, num))
+
+    result = pd.DataFrame(rows)
+    ensure_dir(output_maps_dir)
+    out_path = output_maps_dir / "post_acceptance_5d.parquet"
+    write_parquet(result, out_path)
+    return out_path
+
+
+def build_post_acceptance_maps(
+    input_dir: Path,
+    *,
+    samples: Iterable[str],
+    event_end_step: str = DEFAULT_EVENT_END_STEP,
+) -> dict[str, Path]:
+    """Build post-acceptance 5D maps for multiple samples."""
+    outputs: dict[str, Path] = {}
+    for sample in samples:
+        outputs[sample] = build_post_acceptance_5d_map(
+            input_dir / sample,
+            input_dir / sample / "maps",
+            event_end_step=event_end_step,
+        )
+    return outputs
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build factorized efficiency correction maps from merged parquet products")
     parser.add_argument("--input-dir", required=True, help="Merged efficiency directory containing sample subdirectories")
     parser.add_argument("--samples", nargs="+", required=True, help="Sample directories to process")
     parser.add_argument("--event-end-step", default=DEFAULT_EVENT_END_STEP, help="Final event/PV numerator step")
+    parser.add_argument("--build-post-acceptance", action="store_true",
+                        help="Build post-acceptance 5D conditional maps instead of factorized maps")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     input_dir = Path(args.input_dir)
-    print(f"Building factorized maps in {input_dir}", flush=True)
-    for sample in args.samples:
-        print(f"[{sample}] start", flush=True)
-        written = build_factorized_maps_for_sample(
-            input_dir / sample,
-            input_dir / sample / "maps",
-            event_end_step=args.event_end_step,
-        )
-        print(f"[{sample}] wrote {len(written)} maps to {input_dir / sample / 'maps'}", flush=True)
+    if args.build_post_acceptance:
+        print(f"Building post-acceptance 5D maps in {input_dir}", flush=True)
+        for sample in args.samples:
+            print(f"[{sample}] start", flush=True)
+            out = build_post_acceptance_5d_map(
+                input_dir / sample,
+                input_dir / sample / "maps",
+                event_end_step=args.event_end_step,
+            )
+            print(f"[{sample}] wrote {out}", flush=True)
+    else:
+        print(f"Building factorized maps in {input_dir}", flush=True)
+        for sample in args.samples:
+            print(f"[{sample}] start", flush=True)
+            written = build_factorized_maps_for_sample(
+                input_dir / sample,
+                input_dir / sample / "maps",
+                event_end_step=args.event_end_step,
+            )
+            print(f"[{sample}] wrote {len(written)} maps to {input_dir / sample / 'maps'}", flush=True)
     return 0
 
 
