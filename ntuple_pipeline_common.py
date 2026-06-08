@@ -476,11 +476,16 @@ def _discover_refactor_data_files(
             if not os.path.isdir(task_dir):
                 continue
 
-            submit_dirs = sorted(glob.glob(os.path.join(task_dir, f"{submit_prefix}*")))
-            for submit_dir in submit_dirs:
-                if not os.path.isdir(submit_dir):
-                    continue
-                files.extend(sorted(glob.glob(os.path.join(submit_dir, "**", "*.root"), recursive=True)))
+            # Prefer hadd ntuple files when present (final merged products).
+            hadd_files = sorted(glob.glob(os.path.join(task_dir, "*haddNtuple*.root")))
+            if hadd_files:
+                files.extend(hadd_files)
+            else:
+                submit_dirs = sorted(glob.glob(os.path.join(task_dir, f"{submit_prefix}*")))
+                for submit_dir in submit_dirs:
+                    if not os.path.isdir(submit_dir):
+                        continue
+                    files.extend(sorted(glob.glob(os.path.join(submit_dir, "**", "*.root"), recursive=True)))
     return files
 
 

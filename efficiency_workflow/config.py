@@ -50,6 +50,7 @@ class OfflineSelectionConfig:
     ups_vtxprob_min: float | None = None
     phi_mass_window: tuple[float, float] = (0.99, 1.07)
     phi_pt_min: float = 4.0
+    phi_abs_y_max: float = 2.4
     phi_vtxprob_min: float = 0.01
 
 
@@ -68,7 +69,8 @@ class CmsPlotStyleConfig:
     caption: str | None = None
     energy_tev: float = 13.6
     lumi_fb: float | None = None
-    era: str | None = None
+    era: str | None = "Run 3"
+    subprocess_label: str | None = None
     is_data: bool = True
 
 

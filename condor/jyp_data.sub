@@ -25,22 +25,24 @@ arguments = "run_assoc_merge.sh --channel JYP --dataset data -j $(JOBS) -n $(MAX
 log_dir = logs/jyp_data
 output = $(log_dir)/jyp_data_$(Cluster)_$(Process).out
 error = $(log_dir)/jyp_data_$(Cluster)_$(Process).err
-log = $(log_dir)/jyp_data_$(Cluster)_$(Process).log
+log = $(log_dir)/jyp_data_$(Cluster).log
+
+# Job flavor (max runtime)
++JobFlavour = "workday"
 
 # Resource requests
 request_memory = 64000
 request_cpus = $(JOBS)
 request_disk = 20G
 
-# Job flavor (max runtime)
-+JobFlavour = "workday"
-
 # File transfer settings
-should_transfer_files = NO
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files = $(RUNTIME_TARBALL)
 
 # Environment and proxy
 getenv = False
-environment = "LCG_VIEW=/cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt"
+environment = "LCG_VIEW=/cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt RUNTIME_TARBALL=$(RUNTIME_TARBALL)"
 use_x509userproxy = True
 x509userproxy = /afs/cern.ch/user/c/chiw/condor/x509up
 

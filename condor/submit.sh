@@ -49,6 +49,7 @@ ${YELLOW}Analysis Types:${NC}
     jjp_mc      J/psi + J/psi + Phi MC analysis
     jjy_mc      J/psi + J/psi + Upsilon MC analysis
     jjp_efficiency  J/psi + J/psi + Phi efficiency from raw ntuples
+    jjp_efficiency_dag  Efficiency DAG (shards -> merge+plot per sample)
     jyp_data    J/psi + Upsilon + Phi data analysis
     jjp_data    J/psi + J/psi + Phi data analysis
 
@@ -71,6 +72,7 @@ ${YELLOW}Options:${NC}
     --worker-timeout N    Efficiency seconds per file read attempt (default: 180, 0 disables)
     --dry-run             Show command without submitting
     --flavor FLAVOR       Job flavor (espresso/microcentury/longlunch/workday/tomorrow)
+    --cleanup-shards      (DAG only) Remove shard directories after successful merge
 
 ${YELLOW}Management Commands:${NC}
     --status              Show job status (condor_q)
@@ -182,6 +184,7 @@ submit_job() {
     local COPY_TIMEOUT="180"
     local WORKER_TIMEOUT="180"
     local INPUT_FILE_MANIFEST=""
+    local CLEANUP_SHARDS=false
     local DRY_RUN=false
     local FLAVOR=""
     
@@ -203,12 +206,13 @@ submit_job() {
             --copy-timeout) COPY_TIMEOUT="$2"; shift 2;;
             --worker-timeout) WORKER_TIMEOUT="$2"; shift 2;;
             --input-file-manifest) INPUT_FILE_MANIFEST="$2"; shift 2;;
+            --cleanup-shards) CLEANUP_SHARDS=true; shift;;
             --dry-run) DRY_RUN=true; shift;;
             --flavor) FLAVOR="$2"; shift 2;;
             *) msg_error "Unknown option: $1"; exit 1;;
         esac
     done
-    
+
     # Determine submit file
     local SUB_FILE=""
     case "$ANALYSIS_TYPE" in
@@ -216,18 +220,21 @@ submit_job() {
         jjp_mc) SUB_FILE="jjp_mc.sub";;
         jjy_mc) SUB_FILE="jjy_mc.sub";;
         jjp_efficiency) SUB_FILE="jjp_efficiency.sub";;
+        jjp_efficiency_dag) SUB_FILE="";;  # DAG workflow, no single submit file
         jyp_data) SUB_FILE="jyp_data.sub";;
         jjp_data) SUB_FILE="jjp_data.sub";;
         *) msg_error "Unknown analysis type: $ANALYSIS_TYPE"; exit 1;;
     esac
-    
-    if [ ! -f "$SUB_FILE" ]; then
-        msg_error "Submit file not found: $SUB_FILE"
-        exit 1
-    fi
 
-    if [ "$DRY_RUN" != true ]; then
-        check_proxy || exit 1
+    if [ "$ANALYSIS_TYPE" != "jjp_efficiency_dag" ]; then
+        if [ ! -f "$SUB_FILE" ]; then
+            msg_error "Submit file not found: $SUB_FILE"
+            exit 1
+        fi
+
+        if [ "$DRY_RUN" != true ]; then
+            check_proxy || exit 1
+        fi
     fi
     
     # Create log directories
@@ -262,7 +269,7 @@ submit_job() {
         RUNTIME_TARBALL="$(bash "${SCRIPT_DIR}/build_runtime_tarball.sh" | tail -1)"
 
         local CMD_PARTS=("condor_submit")
-        CMD_PARTS+=("-append" "QUEUE_FILE = $QUEUE_FILE")
+        CMD_PARTS+=("-append" "SHARD_QUEUE = $QUEUE_FILE")
         CMD_PARTS+=("-append" "RUNTIME_TARBALL = $RUNTIME_TARBALL")
         CMD_PARTS+=("-append" "OUTPUT_DIR = $OUTPUT_DIR")
         CMD_PARTS+=("-append" "REMOTE_ACCESS_MODE = $REMOTE_ACCESS_MODE")
@@ -284,6 +291,73 @@ submit_job() {
             "${CMD_PARTS[@]}"
             msg_ok "Job submitted"
         fi
+        return
+    fi
+
+    if [ "$ANALYSIS_TYPE" = "jjp_efficiency_dag" ]; then
+        local PREPARE_CMD=("../prepare_efficiency_shards.py" "--samples" "$SAMPLE" "--files-per-job" "$FILES_PER_JOB" "--output-dir" "$OUTPUT_DIR")
+        [ -n "$INPUT_FILE_MANIFEST" ] && PREPARE_CMD+=("--input-file-manifest" "$INPUT_FILE_MANIFEST")
+        if [ -n "$MAX_FILES" ]; then
+            PREPARE_CMD+=("--max-files" "$MAX_FILES")
+        fi
+        msg_info "Preparing efficiency shards..."
+        local QUEUE_FILE
+        QUEUE_FILE="$("${PREPARE_CMD[@]}")"
+
+        msg_info "Building runtime tarball..."
+        local RUNTIME_TARBALL
+        RUNTIME_TARBALL="$(bash "${SCRIPT_DIR}/build_runtime_tarball.sh" | tail -1)"
+
+        # Parse sample list
+        IFS=',' read -ra SAMPLES <<< "$SAMPLE"
+        if [ "${SAMPLES[0]}" = "all" ]; then
+            SAMPLES=(JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G)
+        fi
+
+        local DAG_FILES=()
+        local DAG_DIR="logs/jjp_efficiency/dags"
+        local CLEANUP_FLAG=""
+        [ "$CLEANUP_SHARDS" = true ] && CLEANUP_FLAG="--cleanup-shards"
+
+        for s in "${SAMPLES[@]}"; do
+            msg_info "Generating DAG for $s ..."
+            local GEN_CMD=(
+                python3 "${SCRIPT_DIR}/generate_efficiency_dag.py"
+                --sample "$s"
+                --queue-file "$QUEUE_FILE"
+                --output-dir "$OUTPUT_DIR"
+                --runtime-tarball "$RUNTIME_TARBALL"
+                --dag-dir "$DAG_DIR"
+                --remote-access-mode "$REMOTE_ACCESS_MODE"
+                --efficiency-backend "$EFFICIENCY_BACKEND"
+                --stage-retries "$STAGE_RETRIES"
+                --copy-timeout "$COPY_TIMEOUT"
+                --worker-timeout "$WORKER_TIMEOUT"
+                $CLEANUP_FLAG
+            )
+            local DAG_PATH
+            DAG_PATH="$("${GEN_CMD[@]}" | grep 'Wrote DAG:' | awk '{print $NF}')"
+            DAG_FILES+=("$DAG_PATH")
+        done
+
+        echo ""
+        msg_info "Efficiency DAGs: ${#DAG_FILES[@]} sample(s)"
+        for dag in "${DAG_FILES[@]}"; do
+            echo "  $dag"
+        done
+        echo "Queue file: $QUEUE_FILE"
+        echo "Runtime tarball: $RUNTIME_TARBALL"
+
+        if [ "$DRY_RUN" = true ]; then
+            msg_warn "Dry run - not submitting DAG(s)"
+            return
+        fi
+
+        for dag in "${DAG_FILES[@]}"; do
+            msg_info "Submitting DAG: $dag"
+            condor_submit_dag -f "$dag"
+        done
+        msg_ok "All DAG(s) submitted"
         return
     fi
 
@@ -313,10 +387,16 @@ submit_job() {
         MODES_TO_SUBMIT=("")  # Use default
     fi
     
+    # Build runtime tarball for file transfer to worker nodes
+    msg_info "Building runtime tarball..."
+    local RUNTIME_TARBALL
+    RUNTIME_TARBALL="$(bash "${SCRIPT_DIR}/build_runtime_tarball.sh" | tail -1)"
+
     # Submit jobs
     for m in "${MODES_TO_SUBMIT[@]}"; do
         local CMD_PARTS=("condor_submit")
         [ -n "$m" ] && CMD_PARTS+=("-append" "MODE = $m")
+        CMD_PARTS+=("-append" "RUNTIME_TARBALL = $RUNTIME_TARBALL")
         CMD_PARTS+=("${SUBMIT_APPEND_ARGS[@]}")
         CMD_PARTS+=("$SUB_FILE")
         
@@ -365,7 +445,7 @@ main() {
             check_proxy
             exit $?
             ;;
-        jyp_mc|jjp_mc|jjy_mc|jjp_efficiency|jyp_data|jjp_data)
+        jyp_mc|jjp_mc|jjy_mc|jjp_efficiency|jjp_efficiency_dag|jyp_data|jjp_data)
             submit_job "$@"
             ;;
         *)

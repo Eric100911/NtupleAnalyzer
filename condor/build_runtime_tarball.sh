@@ -9,14 +9,15 @@
 
 set -e
 
-OUTPUT_DIR="${OUTPUT_DIR:-/tmp/$USER/ntuple_analyzer_condor}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/runtime}"
 mkdir -p "$OUTPUT_DIR"
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 TARBALL_NAME="NtupleAnalyzer_runtime_${TIMESTAMP}.tar.gz"
 RUNTIME_TARBALL="${OUTPUT_DIR}/${TARBALL_NAME}"
-
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd "$REPO_ROOT"
 

@@ -1,0 +1,43 @@
+# ==============================================================================
+# jjp_efficiency_cleanup.sub - HTCondor submit file for shard cleanup
+# ==============================================================================
+# Runs after successful merge+plot post-processing (via DAGMan).
+# Validates merged output exists, then removes shard directories.
+# Only included in the DAG when --cleanup-shards is passed.
+# ==============================================================================
+
+universe = vanilla
+executable = ./run_wrapper.sh
+
+SAMPLE = JJP_DPS2_CS
+SHARDS_DIR = /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency/shards
+MERGED_DIR = /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency
+
+arguments = "run_jjp_efficiency_cleanup.sh $(SAMPLE) $(SHARDS_DIR) $(MERGED_DIR)"
+
+log_dir = logs/jjp_efficiency
+output = $(log_dir)/cleanup_$(SAMPLE)_$(Cluster).out
+error  = $(log_dir)/cleanup_$(SAMPLE)_$(Cluster).err
+log    = $(log_dir)/cleanup_$(SAMPLE)_$(Cluster).log
+
++JobFlavour = "espresso"
+
+request_memory = 2000
+request_cpus = 1
+request_disk = 1G
+
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files = $(RUNTIME_TARBALL)
+
+getenv = False
+environment = "LCG_VIEW=/cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt RUNTIME_TARBALL=$(RUNTIME_TARBALL)"
+use_x509userproxy = True
+x509userproxy = /afs/cern.ch/user/c/chiw/condor/x509up
+
+notification = Error
+notify_user = chiw@cern.ch
+
+requirements = (OpSysAndVer =?= "AlmaLinux9")
+
+queue 1
