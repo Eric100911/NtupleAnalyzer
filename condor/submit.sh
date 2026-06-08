@@ -58,13 +58,13 @@ ${YELLOW}Options:${NC}
                           Use 'all' to submit all modes
     -j, --jobs N          Number of analyzer worker processes (JJY default: 1)
     -n, --max-events N    Maximum events to process (-1=all)
-    --max-files N         Maximum efficiency ntuples to shard
+    --max-files N         Maximum ntuples to shard for efficiency or sharded select-and-merge
     --muon-id TYPE        JJP muon ID (soft/medium/tight/loose/none)
     --jpsi-muon-id TYPE   JYP J/psi muon ID
     --ups-muon-id TYPE    JYP Upsilon muon ID
     --sample SAMPLE       Efficiency sample or comma-separated samples (default: all)
-    --files-per-job N     Efficiency ntuples per Condor job (default: 10)
-    --output-dir DIR      Efficiency output directory
+    --files-per-job N     Ntuples per Condor job (efficiency default: 10; select-and-merge opt-in)
+    --output-dir DIR      Efficiency output directory, or sharded select-and-merge output base
     --remote-access-mode MODE  Efficiency remote access mode (fallback/direct/stage)
     --efficiency-backend MODE  Efficiency backend (vectorized/python-loop)
     --stage-retries N     Efficiency copy retries per staged file
@@ -86,6 +86,7 @@ ${YELLOW}Examples:${NC}
     $0 jyp_mc -m all                    # Submit all JYP MC modes
     $0 jjy_mc -m all -j 1                # Submit both JJY MC samples single-core
     $0 jjp_data -n 100000               # Submit JJP data (100k events)
+    $0 jjp_mc -m DPS_2_CS --files-per-job 25 -j 2
     $0 --status                         # Check job status
 
 EOF
@@ -148,7 +149,7 @@ show_history() {
 clean_logs() {
     msg_info "Cleaning log files..."
     
-    LOG_DIRS=("logs/jyp_mc" "logs/jjp_mc" "logs/jjy_mc" "logs/jjp_efficiency" "logs/jyp_data" "logs/jjp_data")
+    LOG_DIRS=("logs/jyp_mc" "logs/jjp_mc" "logs/jjy_mc" "logs/jjp_efficiency" "logs/jyp_data" "logs/jjp_data" "logs/assoc_merge")
     
     for dir in "${LOG_DIRS[@]}"; do
         if [ -d "$dir" ]; then
@@ -176,8 +177,9 @@ submit_job() {
     local JPSI_MUON_ID=""
     local UPS_MUON_ID=""
     local SAMPLE="all"
-    local FILES_PER_JOB="10"
+    local FILES_PER_JOB=""
     local OUTPUT_DIR="/eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency"
+    local OUTPUT_DIR_SET=false
     local REMOTE_ACCESS_MODE="fallback"
     local EFFICIENCY_BACKEND="vectorized"
     local STAGE_RETRIES="3"
@@ -199,7 +201,7 @@ submit_job() {
             --ups-muon-id) UPS_MUON_ID="$2"; shift 2;;
             --sample) SAMPLE="$2"; shift 2;;
             --files-per-job) FILES_PER_JOB="$2"; shift 2;;
-            --output-dir) OUTPUT_DIR="$2"; shift 2;;
+            --output-dir) OUTPUT_DIR="$2"; OUTPUT_DIR_SET=true; shift 2;;
             --remote-access-mode) REMOTE_ACCESS_MODE="$2"; shift 2;;
             --efficiency-backend) EFFICIENCY_BACKEND="$2"; shift 2;;
             --stage-retries) STAGE_RETRIES="$2"; shift 2;;
@@ -238,7 +240,7 @@ submit_job() {
     fi
     
     # Create log directories
-    mkdir -p logs/jyp_mc logs/jjp_mc logs/jjy_mc logs/jjp_efficiency logs/jyp_data logs/jjp_data
+    mkdir -p logs/jyp_mc logs/jjp_mc logs/jjy_mc logs/jjp_efficiency logs/jyp_data logs/jjp_data logs/assoc_merge
     
     # Build condor_submit arguments
     local SUBMIT_APPEND_ARGS=()
@@ -251,7 +253,8 @@ submit_job() {
     [ -n "$FLAVOR" ] && SUBMIT_APPEND_ARGS+=("-append" "+JobFlavour = \"$FLAVOR\"")
 
     if [ "$ANALYSIS_TYPE" = "jjp_efficiency" ]; then
-        local PREPARE_CMD=("../prepare_efficiency_shards.py" "--samples" "$SAMPLE" "--files-per-job" "$FILES_PER_JOB" "--output-dir" "$OUTPUT_DIR")
+        local EFF_FILES_PER_JOB="${FILES_PER_JOB:-10}"
+        local PREPARE_CMD=("../prepare_efficiency_shards.py" "--samples" "$SAMPLE" "--files-per-job" "$EFF_FILES_PER_JOB" "--output-dir" "$OUTPUT_DIR")
         [ -n "$INPUT_FILE_MANIFEST" ] && PREPARE_CMD+=("--input-file-manifest" "$INPUT_FILE_MANIFEST")
         [ -n "$MAX_EVENTS" ] && msg_warn "--max-events is ignored for jjp_efficiency; use --max-files"
         if [ -n "$MODE" ]; then
@@ -281,7 +284,7 @@ submit_job() {
         CMD_PARTS+=("$SUB_FILE")
         local CMD="${CMD_PARTS[*]}"
         echo ""
-        msg_info "Submitting: $ANALYSIS_TYPE sample=${SAMPLE} files/job=${FILES_PER_JOB}"
+        msg_info "Submitting: $ANALYSIS_TYPE sample=${SAMPLE} files/job=${EFF_FILES_PER_JOB}"
         echo "Shard queue: $QUEUE_FILE"
         echo "Runtime tarball: $RUNTIME_TARBALL"
         echo "Command: $CMD"
@@ -295,7 +298,8 @@ submit_job() {
     fi
 
     if [ "$ANALYSIS_TYPE" = "jjp_efficiency_dag" ]; then
-        local PREPARE_CMD=("../prepare_efficiency_shards.py" "--samples" "$SAMPLE" "--files-per-job" "$FILES_PER_JOB" "--output-dir" "$OUTPUT_DIR")
+        local EFF_FILES_PER_JOB="${FILES_PER_JOB:-10}"
+        local PREPARE_CMD=("../prepare_efficiency_shards.py" "--samples" "$SAMPLE" "--files-per-job" "$EFF_FILES_PER_JOB" "--output-dir" "$OUTPUT_DIR")
         [ -n "$INPUT_FILE_MANIFEST" ] && PREPARE_CMD+=("--input-file-manifest" "$INPUT_FILE_MANIFEST")
         if [ -n "$MAX_FILES" ]; then
             PREPARE_CMD+=("--max-files" "$MAX_FILES")
@@ -385,6 +389,122 @@ submit_job() {
         MODES_TO_SUBMIT=("$MODE")
     else
         MODES_TO_SUBMIT=("")  # Use default
+    fi
+
+    if [ -n "$FILES_PER_JOB" ]; then
+        if [ -n "$MAX_EVENTS" ] && [ "$MAX_EVENTS" != "-1" ]; then
+            msg_error "--max-events is not supported with sharded select-and-merge; use --max-files for smoke tests"
+            exit 1
+        fi
+        if ! [[ "$FILES_PER_JOB" =~ ^[0-9]+$ ]] || [ "$FILES_PER_JOB" -le 0 ]; then
+            msg_error "--files-per-job must be positive"
+            exit 1
+        fi
+        if [ -n "$INPUT_FILE_MANIFEST" ] && [ "${MODE,,}" = "all" ]; then
+            msg_error "--input-file-manifest cannot be combined with --mode all for sharded select-and-merge"
+            exit 1
+        fi
+
+        local ASSOC_CHANNEL=""
+        local ASSOC_DATASET=""
+        local DEFAULT_MODE=""
+        local DEFAULT_FLAVOR="workday"
+        local DEFAULT_UPS_MUON_ID="soft"
+        case "$ANALYSIS_TYPE" in
+            jjp_mc) ASSOC_CHANNEL="JJP"; ASSOC_DATASET="mc"; DEFAULT_MODE="DPS_1";;
+            jyp_mc) ASSOC_CHANNEL="JYP"; ASSOC_DATASET="mc"; DEFAULT_MODE="DPS_1";;
+            jjy_mc) ASSOC_CHANNEL="JJY"; ASSOC_DATASET="mc"; DEFAULT_MODE="DPS_1"; DEFAULT_FLAVOR="tomorrow"; DEFAULT_UPS_MUON_ID="tight";;
+            jjp_data) ASSOC_CHANNEL="JJP"; ASSOC_DATASET="data";;
+            jyp_data) ASSOC_CHANNEL="JYP"; ASSOC_DATASET="data";;
+            *)
+                msg_error "--files-per-job is not supported for $ANALYSIS_TYPE"
+                exit 1
+                ;;
+        esac
+
+        local SHARD_JOBS="${JOBS:-2}"
+        local SHARD_MAX_EVENTS="${MAX_EVENTS:--1}"
+        local SHARD_MUON_ID="${MUON_ID:-soft}"
+        local SHARD_JPSI_MUON_ID="${JPSI_MUON_ID:-soft}"
+        local SHARD_UPS_MUON_ID="${UPS_MUON_ID:-$DEFAULT_UPS_MUON_ID}"
+        local SHARD_FLAVOR="${FLAVOR:-$DEFAULT_FLAVOR}"
+
+        msg_info "Building runtime tarball..."
+        local RUNTIME_TARBALL
+        RUNTIME_TARBALL="$(bash "${SCRIPT_DIR}/build_runtime_tarball.sh" | tail -1)"
+
+        local DAG_FILES=()
+        local DAG_DIR="logs/assoc_merge/dags"
+        for m in "${MODES_TO_SUBMIT[@]}"; do
+            local SAMPLE_ARG=()
+            local SAMPLE_LABEL="-"
+            if [ "$ASSOC_DATASET" = "mc" ]; then
+                local MODE_VALUE="${m:-$DEFAULT_MODE}"
+                SAMPLE_ARG=(--sample "$MODE_VALUE")
+                SAMPLE_LABEL="$MODE_VALUE"
+            fi
+
+            local PREPARE_CMD=(
+                "../prepare_assoc_merge_shards.py"
+                --channel "$ASSOC_CHANNEL"
+                --dataset "$ASSOC_DATASET"
+                "${SAMPLE_ARG[@]}"
+                --files-per-job "$FILES_PER_JOB"
+            )
+            if [ -n "$MAX_FILES" ]; then
+                PREPARE_CMD+=(--max-files "$MAX_FILES")
+            fi
+            if [ -n "$INPUT_FILE_MANIFEST" ]; then
+                PREPARE_CMD+=(--input-file-manifest "$INPUT_FILE_MANIFEST")
+            fi
+            if [ "$OUTPUT_DIR_SET" = true ]; then
+                PREPARE_CMD+=(--output-base "$OUTPUT_DIR")
+            fi
+
+            msg_info "Preparing assocPV merge shards: channel=${ASSOC_CHANNEL} dataset=${ASSOC_DATASET} sample=${SAMPLE_LABEL} files/job=${FILES_PER_JOB}"
+            local QUEUE_FILE
+            QUEUE_FILE="$("${PREPARE_CMD[@]}")"
+
+            msg_info "Generating assocPV merge DAG..."
+            local GEN_CMD=(
+                python3 "${SCRIPT_DIR}/generate_assoc_merge_dag.py"
+                --queue-file "$QUEUE_FILE"
+                --runtime-tarball "$RUNTIME_TARBALL"
+                --dag-dir "$DAG_DIR"
+                --jobs "$SHARD_JOBS"
+                --max-events "$SHARD_MAX_EVENTS"
+                --muon-id "$SHARD_MUON_ID"
+                --jpsi-muon-id "$SHARD_JPSI_MUON_ID"
+                --ups-muon-id "$SHARD_UPS_MUON_ID"
+                --flavor "$SHARD_FLAVOR"
+                --memory "6000"
+                --post-flavor "$SHARD_FLAVOR"
+                --post-jobs "$SHARD_JOBS"
+                --post-memory "6000"
+            )
+            local DAG_PATH
+            DAG_PATH="$("${GEN_CMD[@]}" | grep 'Wrote DAG:' | awk '{print $NF}')"
+            DAG_FILES+=("$DAG_PATH")
+        done
+
+        echo ""
+        msg_info "assocPV merge DAGs: ${#DAG_FILES[@]} target(s)"
+        for dag in "${DAG_FILES[@]}"; do
+            echo "  $dag"
+        done
+        echo "Runtime tarball: $RUNTIME_TARBALL"
+
+        if [ "$DRY_RUN" = true ]; then
+            msg_warn "Dry run - not submitting DAG(s)"
+            return
+        fi
+
+        for dag in "${DAG_FILES[@]}"; do
+            msg_info "Submitting DAG: $dag"
+            condor_submit_dag -f "$dag"
+        done
+        msg_ok "All assocPV merge DAG(s) submitted"
+        return
     fi
     
     # Build runtime tarball for file transfer to worker nodes
