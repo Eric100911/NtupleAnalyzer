@@ -30,15 +30,19 @@ This repository analyzes assocPV ntuples for three public channel names:
 Do not introduce `JUP` or `JJU` as CLI channel names. Those strings only appear
 in some external EOS/XRootD storage names.
 
+Ntuples are produced by the **TPS-Onia2MuMu v1.5** EDAnalyzer
+(`CMSSW_15_0_15/src/HeavyFlavorAnalysis/TPS-Onia2MuMu/`).  See
+`docs/Efficiency_Evaluation_Guideline.md` for the full branch-to-step mapping.
+
 There are two main analysis pipelines:
 
 1. Pre-efficiency kinematics:
-   `merge_apply_cuts.py` -> `fit_splot.py` -> `plot_weighted_distributions.py`
-   and `plot_kinematics_jjp.py`.
+   TPS-Onia2MuMu (EDAnalyzer) → post-process → `fit_splot.py` →
+   `plot_weighted_distributions.py` → `plot_kinematics_jjp.py`.
 2. JJP efficiency and yield correction:
-   `run_efficiency.py` / `cli_efficiency.py` -> `merge_efficiency_shards.py` ->
-   `build_derived_efficiency.py` -> `efficiency_workflow.build_factorized_maps`
-   -> `compute_efficiency_corrected_yield.py`.
+   `run_efficiency.py` / `cli_efficiency.py` → `merge_efficiency_shards.py` →
+   `build_derived_efficiency.py` → `efficiency_workflow.build_factorized_maps`
+   → `compute_efficiency_corrected_yield.py`.
 
 The shared configuration and selected-column helpers live in
 `ntuple_pipeline_common.py`. The efficiency core lives in
@@ -46,20 +50,54 @@ The shared configuration and selected-column helpers live in
 
 ## Data And Naming Conventions
 
-Selected ROOT trees use tree name `selected`. Selected scalar branches are
-prefixed with `sel_`.
+Ntuples are produced by TPS-Onia2MuMu v1.5.  The main TTree is `X_data`
+(no `TDirectoryFile` wrapper).  There is **no `sel_` prefix** on branch names.
 
-Important branch conventions:
+### Composite Candidates (full chain, Run B)
 
-- Candidates: `sel_Jpsi_1_*`, `sel_Jpsi_2_*`, `sel_Phi_*`, `sel_Pri_*`
-- Muons: `sel_Jpsi{1,2}_mu{1,2}_*`
-- Kaons: `sel_Phi_K_{1,2}_*`
-- Pair variables: `sel_abs_dy_{name}`, `sel_abs_dphi_{name}`, `sel_m_{name}`
-- Full three-body mass: `sel_m_all`
+- J/ψ₁ / J/ψ₂: `Jpsi_1_*`, `Jpsi_2_*` — mass, ctau, px/py/pz/pt/eta/phi, plus
+  `_pxErr`/`_pyErr`/`_pzErr`/`_ptErr`.  Muon indices: `Jpsi_1_mu_1_Idx`,
+  `Jpsi_1_mu_2_Idx`.
+- φ: `Phi_*` — same set.  Kaon indices: `Phi_K_1_RecoKaonTrackIdx`,
+  `Phi_K_2_RecoKaonTrackIdx` (indices into the `RecoKaonTrack_*` block).
+- DiOnia (4μ vtx): `DiOnia_fitValid`, `DiOnia_fitPass`, `DiOnia_commonRecVtxPass`, etc.
+- TriOnia (3-body vtx): `Pri_fitValid`, `Pri_fitPass`, `Pri_assocPVPass`,
+  `Pri_trackPVPass`, `Pri_passAny`.
+
+### Single-Object Candidates (MC, Run A + Run B)
+
+- `SingleJpsi_*`: mass, ctau, kinematics, `fitValid`/`fitPass`,
+  `mu1_Idx`/`mu2_Idx`, `mu1_genMatchIdx`/`mu2_genMatchIdx`.
+- `SinglePhi_*`: mass, ctau, kinematics, `fitValid`/`fitPass`,
+  `K1_RecoKaonTrackIdx`/`K2_RecoKaonTrackIdx`, `K*_genMatchIdx`.
+- Counters: `nSingleJpsiCand`, `nSinglePhiCand`.
+
+### RecoKaonTrack Block (MC)
+
+Flat per-track storage: `RecoKaonTrack_pt`, `_eta`, `_phi`, `_charge`,
+`_genMatchIdx`, `_usedInSinglePhi`, `_passDzPV`, `_passDxyPV`,
+`_passTrackPV`, `_fromPV`, etc.  Counter: `nRecoKaonTrack`.
+
+### GEN-Level Particles
+
+Flat vectors: `MC_GenPart_pdgId`, `_status`, `_motherPdgId`, `_px/py/pz/mass/pt/eta/phi`.
+Stores all relevant particles (μ=13, K=321, J/ψ=443, Υ=553, φ=333).
+
+### Trigger Branches
+
+Event-level: `TrigRes`, `TrigNames`, `MatchJpsiTriggerNames`, `MatchUpsTriggerNames`.
+Per-muon: `muIsJpsiTrigMatch`, `muJpsiMatchedTriggerIndices`, `muJpsiMatchedFilterIndices`.
+
+### Critical Note
+
+The analyzer stores `eta` but **not rapidity `y`** for composite candidates.
+Rapidity must be computed from `(px, py, pz, mass)` in post-processing.  J/ψ
+ordering in the composite slots (`Jpsi_1`, `Jpsi_2`) follows a best-candidate
+metric, not necessarily pT — re-order by pT in post-processing for efficiency maps.
 
 Ordering conventions:
 
-- `Jpsi_1` is leading pT and `Jpsi_2` is subleading pT.
+- `Jpsi_1` is leading pT and `Jpsi_2` is subleading pT (re-order if needed).
 - `Phi_K_1` is leading pT and `Phi_K_2` is subleading pT.
 - Some plotting code re-sorts kaons at read time; preserve that behavior unless
   changing the physics definition intentionally.
@@ -71,10 +109,6 @@ Weight branches:
 - `effcorr_w` / `effcorr_w_err`: efficiency correction weight and uncertainty.
 - `signal_effcorr_sw`: `signal_sw * effcorr_weight` for corrected sPlot plots.
 
-GEN-matched JJP/JYP MC selected files are all signal. For those files, MC weight
-`1.0` is physically valid. Some scripts still require a weight branch; use
-`add_mc_weights.py` to write `signal_sw=1.0`.
-
 ## Common Inputs
 
 Default output area:
@@ -82,6 +116,8 @@ Default output area:
 ```text
 /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV
 ```
+
+### Current (Old-Scheme) Files
 
 Local JJP data:
 
@@ -99,29 +135,53 @@ Local merged JJP MC selected samples:
 These files are already GEN-matched, use tree `selected`, contain `sel_*`
 branches, and do not contain sWeights.
 
+### Target (TPS-Onia2MuMu v1.5) Files
+
+New ntuples are produced by `HeavyFlavorAnalysis/TPS-Onia2MuMu` (CMSSW 15_0_15)
+with tree `X_data`.  See `docs/Efficiency_Evaluation_Guideline.md` for the
+required MC run configurations.
+
 Low-stat samples `DPS_2_G` and `SPS_G` can fluctuate strongly. Avoid treating
 them like high-stat reference samples in ratio-panel comparisons.
 
 ## Efficiency Workflow
 
-Per-object chains reset their denominator to total events:
+The efficiency pipeline (`run_efficiency.py` → `efficiency_workflow/efficiency.py`)
+reads **raw TPS-Onia2MuMu ntuples directly** (`tree_path = "mkcands/X_data"`).
+There is **no merge step** — the merge (`merge_apply_cuts.py`) is only used by
+Pipeline 1 (kinematics/sPlot), not Pipeline 2 (efficiency).
+
+**Current** ntuples use `TDirectoryFile("mkcands")` wrapping the `X_data` tree.
+**TPS-Onia2MuMu v1.5** drops the `mkcands` wrapper — the tree is `X_data` directly.
+
+Two MC runs are needed for the new scheme (see `docs/Efficiency_Evaluation_Guideline.md`):
+
+- **Run A** (singles-only): `keepAllSingleObjectCandsInMC=True skipCompositeCandBuildingWhenKeepingSingles=True`
+  → adds `SingleJpsi_*`, `SinglePhi_*`, `RecoKaonTrack_*` for per-object efficiency steps
+- **Run B** (full chain): `keepAllSingleObjectCandsInMC=True skipCompositeCandBuildingWhenKeepingSingles=False`
+  → all of Run A plus composite `Jpsi_1_*`, `Jpsi_2_*`, `Phi_*`, `DiOnia_*`, `Pri_*`, trigger branches
+
+The current code uses only composite branches (approximating per-object efficiency).
+The target is to use single-object branches for proper per-object maps.
+
+Per-object chains (from Run A, conditional on previous step):
 
 ```text
-jpsi_lead:    fiducial -> muonRECO -> muonID -> dimuon
-jpsi_sublead: fiducial -> muonRECO -> muonID -> dimuon
-phi:          fiducial -> kaonRECO -> kaonID -> dikaon
+jpsi_lead:    acceptance(MC_GenPart) -> muonRECO -> muonID -> dimuon
+jpsi_sublead: acceptance(MC_GenPart) -> muonRECO -> muonID -> dimuon
+phi:          acceptance(MC_GenPart) -> kaonRECO -> kaonID -> dikaon
 ```
 
-The event-level chain is sequential through `four_muon_vtx`, then the `Pri_*`
-steps are parallel and each is conditional on `four_muon_vtx`:
+Event-level chain (from Run B):
 
 ```text
-full_gen -> s_cand -> hlt_event -> hlt_muon_matched -> four_muon_vtx
-                                                       -> Pri_fitValid
-                                                       -> Pri_fitPass
-                                                       -> Pri_assocPVPass
-                                                       -> Pri_trackPVPass
+(from per-object) -> HLT -> four_muon_vtx (DiOnia_*) -> triOnia (Pri_*)
 ```
+
+The current step chain (`s_cand → hlt_event → hlt_muon_matched → four_muon_vtx → Pri_*`)
+is defined in `efficiency_workflow/efficiency.py` and uses composite-candidate-only
+information.  The new scheme will replace this with proper single-object-based
+efficiency maps.
 
 Map binning conventions:
 
@@ -239,6 +299,15 @@ For plotting or ROOT workflows, validate with a small input or a temporary
 output directory under `/tmp/chiw` before writing large output trees or plot
 directories.
 
+## Reference Docs
+
+| Document | Location | Content |
+|----------|----------|---------|
+| Efficiency Evaluation Guideline | `docs/Efficiency_Evaluation_Guideline.md` | Branch-to-step mapping, MC run configs, per-step recipe |
+| Efficiency Scheme (math) | `docs/Efficiency_scheme.md` | Formal definitions of factorized efficiency |
+| TPS-Onia2MuMu README | `../Full_MC_Production/external/TPS-Onia2MuMu/README.md` | Analyzer build/run/config instructions |
+| TPS-Onia2MuMu CLAUDE.md | `../Full_MC_Production/external/TPS-Onia2MuMu/CLAUDE.md` | Analyzer architecture, branch listing |
+
 ## Plotting Style
 
 Use `mplhep` as the single owner of CMS styling and CMS labels:
@@ -262,8 +331,15 @@ Use `mplhep` as the single owner of CMS styling and CMS labels:
 
 ## Development Guardrails
 
-- Keep physics channel names, branch names, and output schemas stable unless the
-  task explicitly asks for a schema migration.
+- Keep physics channel names (`JJP`, `JYP`, `JJY`) stable.  Do not introduce
+  `JUP` or `JJU` as CLI channel names.
+- The **new** ntuple scheme (TPS-Onia2MuMu v1.5) uses branch names without the
+  `sel_` prefix and tree name `X_data`.  The old scheme (`sel_` prefix, tree
+  `selected`) is legacy.  New code should target the TPS-Onia2MuMu v1.5 branch
+  names.  See `docs/Efficiency_Evaluation_Guideline.md`.
+- Rapidity `y` is **not** in the TTree — compute it from `(px, py, pz, mass)` in
+  post-processing.  Composite J/ψ candidates may not be pT-ordered; re-order by
+  pT before building per-object efficiency maps.
 - Do not overwrite existing merged parquet or ROOT products by default. Scripts
   such as `rebuild_efficiency_maps.py` are intentionally non-overwriting; prefer
   fresh output directories for regenerated products.

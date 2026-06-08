@@ -150,6 +150,154 @@ EFFICIENCY_BRANCHES = sorted(
     }
 )
 
+EFFICIENCY_BRANCHES_V16 = sorted(
+    (set(EFFICIENCY_BRANCHES) - {"Phi_K_1_Idx", "Phi_K_2_Idx"})
+    | {
+        "Jpsi_1_y",
+        "Jpsi_2_y",
+        "Phi_y",
+        "Pri_y",
+        "Phi_K_1_RecoKaonTrackIdx",
+        "Phi_K_2_RecoKaonTrackIdx",
+    }
+)
+
+SINGLES_BRANCHES_V16 = sorted(
+    {
+        "evtNum",
+        "runNum",
+        "lumiNum",
+        "TrigNames",
+        "TrigRes",
+        "MC_GenPart_pdgId",
+        "MC_GenPart_motherGenIdx",
+        "MC_GenPart_pt",
+        "MC_GenPart_eta",
+        "MC_GenPart_phi",
+        "MC_GenPart_mass",
+        "muGenMatchIdx",
+        "muIsPatSoftMuon",
+        "nSingleJpsiCand",
+        "SingleJpsi_mass",
+        "SingleJpsi_pt",
+        "SingleJpsi_px",
+        "SingleJpsi_py",
+        "SingleJpsi_pz",
+        "SingleJpsi_y",
+        "SingleJpsi_VtxProb",
+        "SingleJpsi_fitValid",
+        "SingleJpsi_fitPass",
+        "SingleJpsi_mu1_Idx",
+        "SingleJpsi_mu2_Idx",
+        "SingleJpsi_mu1_genMatchIdx",
+        "SingleJpsi_mu2_genMatchIdx",
+        "SingleJpsi_genMatchIdx",
+        "nSinglePhiCand",
+        "SinglePhi_mass",
+        "SinglePhi_pt",
+        "SinglePhi_px",
+        "SinglePhi_py",
+        "SinglePhi_pz",
+        "SinglePhi_y",
+        "SinglePhi_VtxProb",
+        "SinglePhi_fitValid",
+        "SinglePhi_fitPass",
+        "SinglePhi_K1_RecoKaonTrackIdx",
+        "SinglePhi_K2_RecoKaonTrackIdx",
+        "SinglePhi_K1_genMatchIdx",
+        "SinglePhi_K2_genMatchIdx",
+        "SinglePhi_K1_pt",
+        "SinglePhi_K1_eta",
+        "SinglePhi_K2_pt",
+        "SinglePhi_K2_eta",
+        "SinglePhi_genMatchIdx",
+        "nRecoKaonTrack",
+        "RecoKaonTrack_pt",
+        "RecoKaonTrack_eta",
+        "RecoKaonTrack_phi",
+        "RecoKaonTrack_charge",
+        "RecoKaonTrack_genMatchIdx",
+        "RecoKaonTrack_passDzPV",
+        "RecoKaonTrack_passDxyPV",
+        "RecoKaonTrack_passTrackPV",
+        "RecoKaonTrack_fromPV",
+        "RecoKaonTrack_dzPV",
+        "RecoKaonTrack_dxyPV",
+        "RecoKaonTrack_usedInSinglePhi",
+    }
+)
+
+COMPOSITE_BRANCHES = sorted(
+    {
+        "Jpsi_1_mass",
+        "Jpsi_1_pt",
+        "Jpsi_1_px",
+        "Jpsi_1_py",
+        "Jpsi_1_pz",
+        "Jpsi_1_VtxProb",
+        "Jpsi_1_mu_1_Idx",
+        "Jpsi_1_mu_2_Idx",
+        "Jpsi_2_mass",
+        "Jpsi_2_pt",
+        "Jpsi_2_px",
+        "Jpsi_2_py",
+        "Jpsi_2_pz",
+        "Jpsi_2_VtxProb",
+        "Jpsi_2_mu_1_Idx",
+        "Jpsi_2_mu_2_Idx",
+        "Phi_mass",
+        "Phi_pt",
+        "Phi_px",
+        "Phi_py",
+        "Phi_pz",
+        "Phi_VtxProb",
+        "Phi_K_1_pt",
+        "Phi_K_1_eta",
+        "Phi_K_1_vertexId",
+        "Phi_K_1_genMatchIdx",
+        "Phi_K_1_RecoKaonTrackIdx",
+        "Phi_K_2_pt",
+        "Phi_K_2_eta",
+        "Phi_K_2_vertexId",
+        "Phi_K_2_genMatchIdx",
+        "Phi_K_2_RecoKaonTrackIdx",
+        "muGenMatchIdx",
+        "muVertexId",
+        "muIsJpsiTrigMatch",
+        "muIsJpsiFilterMatch",
+        "muIsPatSoftMuon",
+        "Pri_fitValid",
+        "Pri_fitPass",
+        "Pri_assocPVPass",
+        "Pri_trackPVPass",
+        "Pri_passAny",
+        "TrigNames",
+        "TrigRes",
+    }
+)
+
+SINGLES_BRANCHES = SINGLES_BRANCHES_V16
+FULL_V16_BRANCHES = sorted(set(SINGLES_BRANCHES_V16) | set(EFFICIENCY_BRANCHES_V16))
+ALL_KNOWN_BRANCHES = sorted(set(EFFICIENCY_BRANCHES) | set(FULL_V16_BRANCHES) | set(COMPOSITE_BRANCHES))
+
+
+def _uproot_read_options(path: str) -> dict[str, Any]:
+    """Use uproot's direct local-file source for filesystem ROOT files."""
+    if "://" not in path and Path(path).exists():
+        return {"handler": uproot.source.file.MemmapSource}
+    return {}
+
+
+def _detect_ntuple_format(fields: set[str]) -> str:
+    has_singles = "SingleJpsi_mass" in fields
+    has_composites = "Jpsi_1_mass" in fields
+    if has_singles and has_composites:
+        return "v1.6-full"
+    if has_singles:
+        return "v1.6-singles"
+    return "v1.0"
+
+
 
 @dataclass(frozen=True)
 class EfficiencyBinning:
@@ -959,11 +1107,14 @@ def build_event_efficiency_row(
 
 
 def process_efficiency_file(path: str, sample: str, cfg: OfflineSelectionConfig, tree_path: str = "mkcands/X_data") -> dict[str, pd.DataFrame]:
-    with uproot.open(path) as root_file:
+    with uproot.open(path, **_uproot_read_options(path)) as root_file:
         tree = root_file[tree_path]
         available = set(tree.keys())
-        branches = [branch for branch in EFFICIENCY_BRANCHES if branch in available]
+        branches = [branch for branch in ALL_KNOWN_BRANCHES if branch in available]
         arrays = tree.arrays(branches, library="ak")
+
+    if _detect_ntuple_format(set(arrays.fields)) != "v1.0":
+        return _process_efficiency_chunk_vectorized(arrays, path, sample, cfg, 0)
 
     gen_rows: list[dict[str, Any]] = []
     event_rows: list[dict[str, Any]] = []
@@ -980,6 +1131,119 @@ def process_efficiency_file(path: str, sample: str, cfg: OfflineSelectionConfig,
     }
 
 
+def _event_trigger_path_or_array(arrays: ak.Array, like: ak.Array) -> ak.Array:
+    if "TrigNames" not in arrays.fields or "TrigRes" not in arrays.fields:
+        return ak.zeros_like(like, dtype=np.int8)
+    hlt_name_match = ak.str.find_substring(arrays["TrigNames"], "HLT_Dimuon0_Jpsi3p5_Muon2_v") >= 0
+    hlt_name_match = hlt_name_match | (ak.str.find_substring(arrays["TrigNames"], "HLT_DoubleMu4_3_LowMass_v") >= 0)
+    return ak.values_astype(ak.any(hlt_name_match & (arrays["TrigRes"] != 0), axis=1), np.int8)
+
+
+def _compute_per_object_flags_v16(
+    arrays: ak.Array,
+    pdg: ak.Array,
+    mother: ak.Array,
+    jpsi1_idx: ak.Array,
+    jpsi2_idx: ak.Array,
+    phi_idx: ak.Array,
+    cfg: OfflineSelectionConfig,
+    fiducial_jpsi_lead: ak.Array,
+    fiducial_jpsi_sublead: ak.Array,
+    fiducial_phi: ak.Array,
+) -> dict[str, ak.Array]:
+    zero = ak.values_astype(ak.zeros_like(jpsi1_idx), bool)
+    result: dict[str, ak.Array] = {
+        "jpsi_lead_fiducial": fiducial_jpsi_lead,
+        "jpsi_lead_muonRECO": zero,
+        "jpsi_lead_muonID": zero,
+        "jpsi_lead_dimuon": zero,
+        "jpsi_sublead_fiducial": fiducial_jpsi_sublead,
+        "jpsi_sublead_muonRECO": zero,
+        "jpsi_sublead_muonID": zero,
+        "jpsi_sublead_dimuon": zero,
+        "phi_fiducial": fiducial_phi,
+        "phi_kaonRECO": zero,
+        "phi_kaonID": zero,
+        "phi_dikaon": zero,
+    }
+
+    if {"SingleJpsi_mass", "SingleJpsi_mu1_Idx", "SingleJpsi_mu2_Idx"}.issubset(arrays.fields):
+        sj_mu1_idx = _as_index_array(arrays["SingleJpsi_mu1_Idx"])
+        sj_mu2_idx = _as_index_array(arrays["SingleJpsi_mu2_Idx"])
+        if {"SingleJpsi_mu1_genMatchIdx", "SingleJpsi_mu2_genMatchIdx"}.issubset(arrays.fields):
+            sj_mu1_gen = arrays["SingleJpsi_mu1_genMatchIdx"]
+            sj_mu2_gen = arrays["SingleJpsi_mu2_genMatchIdx"]
+        else:
+            sj_mu1_gen = _safe_take_jagged(arrays["muGenMatchIdx"], sj_mu1_idx, -1)
+            sj_mu2_gen = _safe_take_jagged(arrays["muGenMatchIdx"], sj_mu2_idx, -1)
+        sj_a1 = _ancestor_idx_to_pdg(sj_mu1_gen, pdg, mother, 443)
+        sj_a2 = _ancestor_idx_to_pdg(sj_mu2_gen, pdg, mother, 443)
+        sj_leg = ak.where((sj_a1 >= 0) & (sj_a1 == sj_a2), sj_a1, -1)
+
+        mu_id = ak.values_astype(arrays["muIsPatSoftMuon"], bool)
+        sj_mu1_id = _safe_take_jagged(mu_id, sj_mu1_idx, False)
+        sj_mu2_id = _safe_take_jagged(mu_id, sj_mu2_idx, False)
+        sj_both_id = sj_mu1_id & sj_mu2_id
+
+        if "SingleJpsi_y" in arrays.fields:
+            sj_y = abs(arrays["SingleJpsi_y"])
+        else:
+            sj_y = abs(_scalar_rapidity_array(arrays["SingleJpsi_px"], arrays["SingleJpsi_py"], arrays["SingleJpsi_pz"], arrays["SingleJpsi_mass"]))
+        sj_quality = (
+            (arrays["SingleJpsi_mass"] >= cfg.jpsi_mass_window[0])
+            & (arrays["SingleJpsi_mass"] <= cfg.jpsi_mass_window[1])
+            & (arrays["SingleJpsi_pt"] > cfg.jpsi_pt_min)
+            & (sj_y < cfg.jpsi_abs_y_max)
+            & (arrays["SingleJpsi_VtxProb"] > cfg.jpsi_vtxprob_min)
+            & (_as_index_array(arrays["SingleJpsi_fitValid"]) != 0)
+            & (_as_index_array(arrays["SingleJpsi_fitPass"]) != 0)
+        )
+
+        result["jpsi_lead_muonRECO"] = ak.any(sj_leg == jpsi1_idx, axis=1)
+        result["jpsi_lead_muonID"] = ak.any((sj_leg == jpsi1_idx) & sj_both_id, axis=1)
+        result["jpsi_lead_dimuon"] = ak.any((sj_leg == jpsi1_idx) & sj_both_id & sj_quality, axis=1)
+        result["jpsi_sublead_muonRECO"] = ak.any(sj_leg == jpsi2_idx, axis=1)
+        result["jpsi_sublead_muonID"] = ak.any((sj_leg == jpsi2_idx) & sj_both_id, axis=1)
+        result["jpsi_sublead_dimuon"] = ak.any((sj_leg == jpsi2_idx) & sj_both_id & sj_quality, axis=1)
+
+    if {"SinglePhi_mass", "SinglePhi_K1_RecoKaonTrackIdx", "SinglePhi_K2_RecoKaonTrackIdx"}.issubset(arrays.fields):
+        sp_k1_idx = _as_index_array(arrays["SinglePhi_K1_RecoKaonTrackIdx"])
+        sp_k2_idx = _as_index_array(arrays["SinglePhi_K2_RecoKaonTrackIdx"])
+        if {"SinglePhi_K1_genMatchIdx", "SinglePhi_K2_genMatchIdx"}.issubset(arrays.fields):
+            sp_k1_gen = arrays["SinglePhi_K1_genMatchIdx"]
+            sp_k2_gen = arrays["SinglePhi_K2_genMatchIdx"]
+        else:
+            sp_k1_gen = _safe_take_jagged(arrays["RecoKaonTrack_genMatchIdx"], sp_k1_idx, -1)
+            sp_k2_gen = _safe_take_jagged(arrays["RecoKaonTrack_genMatchIdx"], sp_k2_idx, -1)
+        sp_a1 = _ancestor_idx_to_pdg(sp_k1_gen, pdg, mother, 333)
+        sp_a2 = _ancestor_idx_to_pdg(sp_k2_gen, pdg, mother, 333)
+        sp_leg = ak.where((sp_a1 >= 0) & (sp_a1 == sp_a2), sp_a1, -1)
+
+        k1_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], sp_k1_idx, -1.0)
+        k2_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], sp_k2_idx, -1.0)
+        k1_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], sp_k1_idx, np.nan)
+        k2_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], sp_k2_idx, np.nan)
+        sp_track_pass = (
+            (k1_pt > cfg.track_pt_min)
+            & (k2_pt > cfg.track_pt_min)
+            & (abs(k1_eta) < cfg.track_abs_eta_max)
+            & (abs(k2_eta) < cfg.track_abs_eta_max)
+        )
+        sp_quality = (
+            (arrays["SinglePhi_mass"] >= cfg.phi_mass_window[0])
+            & (arrays["SinglePhi_mass"] <= cfg.phi_mass_window[1])
+            & (arrays["SinglePhi_pt"] > cfg.phi_pt_min)
+            & (arrays["SinglePhi_VtxProb"] > cfg.phi_vtxprob_min)
+            & (_as_index_array(arrays["SinglePhi_fitValid"]) != 0)
+            & (_as_index_array(arrays["SinglePhi_fitPass"]) != 0)
+        )
+        result["phi_kaonRECO"] = ak.any(sp_leg == phi_idx, axis=1)
+        result["phi_kaonID"] = ak.any((sp_leg == phi_idx) & sp_track_pass, axis=1)
+        result["phi_dikaon"] = ak.any((sp_leg == phi_idx) & sp_track_pass & sp_quality, axis=1)
+
+    return result
+
+
 def _process_efficiency_chunk_vectorized(
     arrays: ak.Array,
     source_file: str,
@@ -990,6 +1254,7 @@ def _process_efficiency_chunk_vectorized(
     n_events = len(_record_field(arrays, "evtNum"))
     if n_events == 0:
         return {"gen_systems": pd.DataFrame(), "event_step_flags": pd.DataFrame()}
+    ntuple_format = _detect_ntuple_format(set(arrays.fields))
 
     pdg = arrays["MC_GenPart_pdgId"]
     mother = _as_index_array(arrays["MC_GenPart_motherGenIdx"])
@@ -1080,6 +1345,104 @@ def _process_efficiency_chunk_vectorized(
     )
     fiducial_acceptance = fiducial_jpsi_lead & fiducial_jpsi_sublead & fiducial_phi
 
+    if ntuple_format == "v1.6-singles":
+        per_obj_raw = _compute_per_object_flags_v16(
+            arrays,
+            pdg,
+            mother,
+            jpsi1_idx,
+            jpsi2_idx,
+            phi_idx,
+            cfg,
+            fiducial_jpsi_lead,
+            fiducial_jpsi_sublead,
+            fiducial_phi,
+        )
+        s_cand = (
+            per_obj_raw["jpsi_lead_fiducial"] & per_obj_raw["jpsi_lead_muonRECO"]
+            & per_obj_raw["jpsi_lead_muonID"] & per_obj_raw["jpsi_lead_dimuon"]
+            & per_obj_raw["jpsi_sublead_fiducial"] & per_obj_raw["jpsi_sublead_muonRECO"]
+            & per_obj_raw["jpsi_sublead_muonID"] & per_obj_raw["jpsi_sublead_dimuon"]
+            & per_obj_raw["phi_fiducial"] & per_obj_raw["phi_kaonRECO"]
+            & per_obj_raw["phi_kaonID"] & per_obj_raw["phi_dikaon"]
+        )
+        hlt_event_path_or = _event_trigger_path_or_array(arrays, has_full_gen)
+        hlt_event = s_cand & (hlt_event_path_or != 0)
+        false_event = ak.values_astype(ak.zeros_like(has_full_gen), bool)
+        event_raw: dict[str, ak.Array] = {
+            "full_gen": has_full_gen,
+            "s_cand": s_cand,
+            "hlt_event": hlt_event,
+            "hlt_muon_matched": false_event,
+            "four_muon_vtx": false_event,
+            "four_muon_vtx_noTrigMatch": false_event,
+            "Pri_fitValid": false_event,
+            "Pri_fitValid_noTrigMatch": false_event,
+            "Pri_fitPass": false_event,
+            "Pri_fitPass_noTrigMatch": false_event,
+            "Pri_assocPVPass": false_event,
+            "Pri_assocPVPass_noTrigMatch": false_event,
+            "Pri_trackPVPass": false_event,
+            "Pri_trackPVPass_noTrigMatch": false_event,
+        }
+        gen_score = jpsi1_pt ** 2 + jpsi2_pt ** 2 + phi_pt ** 2
+        full_mask = ak.to_numpy(has_full_gen)
+        entries = np.arange(entry_start, entry_start + n_events, dtype=np.int64)
+        event_data: dict[str, Any] = {
+            "sample": np.full(np.count_nonzero(full_mask), sample, dtype=object),
+            "source_file": np.full(np.count_nonzero(full_mask), source_file, dtype=object),
+            "entry": entries[full_mask],
+            "run": _to_numpy(arrays["runNum"], has_full_gen, 0).astype(np.int64),
+            "lumi": _to_numpy(arrays["lumiNum"], has_full_gen, 0).astype(np.int64),
+            "event": _to_numpy(arrays["evtNum"], has_full_gen, 0).astype(np.int64),
+            "n_candidates": _to_numpy(ak.num(arrays["SingleJpsi_mass"], axis=1), has_full_gen, 0).astype(np.int64),
+            "n_gen_jpsi": ak.to_numpy(ak.num(jpsi_idx_sorted, axis=1)[has_full_gen]).astype(np.int64),
+            "n_gen_phi": ak.to_numpy(ak.num(phi_idx_sorted, axis=1)[has_full_gen]).astype(np.int64),
+            "n_triple_gen_matched_candidates": np.zeros(np.count_nonzero(full_mask), dtype=np.int64),
+            "hlt_event_path_or": _to_numpy(hlt_event_path_or, has_full_gen, 0).astype(np.int8),
+        }
+        for key in per_object_step_columns():
+            event_data[key] = _to_numpy(per_obj_raw[key], has_full_gen, 0).astype(np.int8)
+        for key, val in event_raw.items():
+            event_data[key] = _to_numpy(val, has_full_gen, 0).astype(np.int8)
+        event_data["reco_best_phi_pt"] = np.full(np.count_nonzero(full_mask), np.nan, dtype=np.float64)
+        event_data["reco_best_jpsi1_pt"] = np.full(np.count_nonzero(full_mask), np.nan, dtype=np.float64)
+        event_data["reco_best_jpsi2_pt"] = np.full(np.count_nonzero(full_mask), np.nan, dtype=np.float64)
+        event_data["reco_best_score"] = np.full(np.count_nonzero(full_mask), np.nan, dtype=np.float64)
+        event_data["reco_best_phi_gen_idx"] = np.full(np.count_nonzero(full_mask), -1, dtype=np.int64)
+        event_data["reco_best_phi_matches_gen"] = np.zeros(np.count_nonzero(full_mask), dtype=bool)
+        event_data["reco_best_is_gen_matched"] = np.zeros(np.count_nonzero(full_mask), dtype=bool)
+        event_data["n_quality_candidates"] = np.zeros(np.count_nonzero(full_mask), dtype=np.int64)
+
+        gen_data: dict[str, Any] = {
+            "sample": np.full(np.count_nonzero(full_mask), sample, dtype=object),
+            "source_file": np.full(np.count_nonzero(full_mask), source_file, dtype=object),
+            "entry": entries[full_mask],
+            "run": event_data["run"],
+            "lumi": event_data["lumi"],
+            "event": event_data["event"],
+            "jpsi_lead_gen_idx": _to_numpy(jpsi1_idx, has_full_gen, -1).astype(np.int64),
+            "jpsi_sublead_gen_idx": _to_numpy(jpsi2_idx, has_full_gen, -1).astype(np.int64),
+            "phi_gen_idx": _to_numpy(phi_idx, has_full_gen, -1).astype(np.int64),
+            "jpsi_lead_pt": _to_numpy(jpsi1_pt, has_full_gen, np.nan).astype(float),
+            "jpsi_lead_y": _to_numpy(jpsi1_y_gen, has_full_gen, np.nan).astype(float),
+            "jpsi_lead_abs_y": np.abs(_to_numpy(jpsi1_y_gen, has_full_gen, np.nan).astype(float)),
+            "jpsi_sublead_pt": _to_numpy(jpsi2_pt, has_full_gen, np.nan).astype(float),
+            "jpsi_sublead_y": _to_numpy(jpsi2_y_gen, has_full_gen, np.nan).astype(float),
+            "jpsi_sublead_abs_y": np.abs(_to_numpy(jpsi2_y_gen, has_full_gen, np.nan).astype(float)),
+            "phi_pt": _to_numpy(phi_pt, has_full_gen, np.nan).astype(float),
+            "phi_y": _to_numpy(phi_y_gen, has_full_gen, np.nan).astype(float),
+            "phi_abs_y": np.abs(_to_numpy(phi_y_gen, has_full_gen, np.nan).astype(float)),
+            "triple_pt": _to_numpy(triple_pt, has_full_gen, np.nan).astype(float),
+            "triple_abs_y": _to_numpy(triple_abs_y, has_full_gen, np.nan).astype(float),
+            "triple_mass": _to_numpy(triple_mass, has_full_gen, np.nan).astype(float),
+            "gen_score": _to_numpy(gen_score, has_full_gen, np.nan).astype(float),
+        }
+        return {
+            "gen_systems": pd.DataFrame(gen_data),
+            "event_step_flags": pd.DataFrame(event_data),
+        }
+
     j1_mu1_idx = _as_index_array(arrays["Jpsi_1_mu_1_Idx"])
     j1_mu2_idx = _as_index_array(arrays["Jpsi_1_mu_2_Idx"])
     j2_mu1_idx = _as_index_array(arrays["Jpsi_2_mu_1_Idx"])
@@ -1092,8 +1455,16 @@ def _process_efficiency_chunk_vectorized(
     jpsi1_leg = ak.where((j1_a1 >= 0) & (j1_a1 == j1_a2), j1_a1, -1)
     jpsi2_leg = ak.where((j2_a1 >= 0) & (j2_a1 == j2_a2), j2_a1, -1)
 
-    phi_a1 = _ancestor_idx_to_pdg(arrays["Phi_K_1_genMatchIdx"], pdg, mother, 333)
-    phi_a2 = _ancestor_idx_to_pdg(arrays["Phi_K_2_genMatchIdx"], pdg, mother, 333)
+    if {"Phi_K_1_genMatchIdx", "Phi_K_2_genMatchIdx"}.issubset(arrays.fields):
+        phi_k1_gen = arrays["Phi_K_1_genMatchIdx"]
+        phi_k2_gen = arrays["Phi_K_2_genMatchIdx"]
+    else:
+        phi_k1_rk_idx = _as_index_array(arrays["Phi_K_1_RecoKaonTrackIdx"])
+        phi_k2_rk_idx = _as_index_array(arrays["Phi_K_2_RecoKaonTrackIdx"])
+        phi_k1_gen = _safe_take_jagged(arrays["RecoKaonTrack_genMatchIdx"], phi_k1_rk_idx, -1)
+        phi_k2_gen = _safe_take_jagged(arrays["RecoKaonTrack_genMatchIdx"], phi_k2_rk_idx, -1)
+    phi_a1 = _ancestor_idx_to_pdg(phi_k1_gen, pdg, mother, 333)
+    phi_a2 = _ancestor_idx_to_pdg(phi_k2_gen, pdg, mother, 333)
     phi_leg = ak.where((phi_a1 >= 0) & (phi_a1 == phi_a2), phi_a1, -1)
 
     matched_candidate = (
@@ -1145,8 +1516,14 @@ def _process_efficiency_chunk_vectorized(
         | (j2_pair_trig & (n_trig_matched >= 3))
     )
 
-    jpsi1_y = abs(_scalar_rapidity_array(arrays["Jpsi_1_px"], arrays["Jpsi_1_py"], arrays["Jpsi_1_pz"], arrays["Jpsi_1_mass"]))
-    jpsi2_y = abs(_scalar_rapidity_array(arrays["Jpsi_2_px"], arrays["Jpsi_2_py"], arrays["Jpsi_2_pz"], arrays["Jpsi_2_mass"]))
+    if "Jpsi_1_y" in arrays.fields:
+        jpsi1_y = abs(arrays["Jpsi_1_y"])
+    else:
+        jpsi1_y = abs(_scalar_rapidity_array(arrays["Jpsi_1_px"], arrays["Jpsi_1_py"], arrays["Jpsi_1_pz"], arrays["Jpsi_1_mass"]))
+    if "Jpsi_2_y" in arrays.fields:
+        jpsi2_y = abs(arrays["Jpsi_2_y"])
+    else:
+        jpsi2_y = abs(_scalar_rapidity_array(arrays["Jpsi_2_px"], arrays["Jpsi_2_py"], arrays["Jpsi_2_pz"], arrays["Jpsi_2_mass"]))
 
     # Per-J/psi quality (split from old combined jpsi_quality)
     psi1_quality = (
@@ -1167,11 +1544,23 @@ def _process_efficiency_chunk_vectorized(
     jpsi_quality = psi1_quality & psi2_quality
 
     # Per-phi kaon ID (track pT/eta) and dikaon (+ phi mass/pt/VtxProb)
+    if {"Phi_K_1_pt", "Phi_K_2_pt", "Phi_K_1_eta", "Phi_K_2_eta"}.issubset(arrays.fields):
+        phi_k1_pt = arrays["Phi_K_1_pt"]
+        phi_k2_pt = arrays["Phi_K_2_pt"]
+        phi_k1_eta = arrays["Phi_K_1_eta"]
+        phi_k2_eta = arrays["Phi_K_2_eta"]
+    else:
+        phi_k1_rk_idx = _as_index_array(arrays["Phi_K_1_RecoKaonTrackIdx"])
+        phi_k2_rk_idx = _as_index_array(arrays["Phi_K_2_RecoKaonTrackIdx"])
+        phi_k1_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], phi_k1_rk_idx, -1.0)
+        phi_k2_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], phi_k2_rk_idx, -1.0)
+        phi_k1_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], phi_k1_rk_idx, np.nan)
+        phi_k2_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], phi_k2_rk_idx, np.nan)
     phi_kaonID_raw = (
-        (arrays["Phi_K_1_pt"] > cfg.track_pt_min)
-        & (arrays["Phi_K_2_pt"] > cfg.track_pt_min)
-        & (abs(arrays["Phi_K_1_eta"]) < cfg.track_abs_eta_max)
-        & (abs(arrays["Phi_K_2_eta"]) < cfg.track_abs_eta_max)
+        (phi_k1_pt > cfg.track_pt_min)
+        & (phi_k2_pt > cfg.track_pt_min)
+        & (abs(phi_k1_eta) < cfg.track_abs_eta_max)
+        & (abs(phi_k2_eta) < cfg.track_abs_eta_max)
     )
     phi_dikaon_raw = phi_kaonID_raw & (
         (arrays["Phi_mass"] >= cfg.phi_mass_window[0])
@@ -1226,19 +1615,18 @@ def _process_efficiency_chunk_vectorized(
     mu_v2 = _safe_take_jagged(arrays["muVertexId"], j1_mu2_idx, -1)
     mu_v3 = _safe_take_jagged(arrays["muVertexId"], j2_mu1_idx, -1)
     mu_v4 = _safe_take_jagged(arrays["muVertexId"], j2_mu2_idx, -1)
-    kv1 = _as_index_array(arrays["Phi_K_1_vertexId"])
-    kv2 = _as_index_array(arrays["Phi_K_2_vertexId"])
+    if {"Phi_K_1_vertexId", "Phi_K_2_vertexId"}.issubset(arrays.fields):
+        kv1 = _as_index_array(arrays["Phi_K_1_vertexId"])
+        kv2 = _as_index_array(arrays["Phi_K_2_vertexId"])
+    else:
+        kv1 = ak.full_like(mu_v1, -2)
+        kv2 = ak.full_like(mu_v1, -3)
     four_muon_same = (mu_v1 >= 0) & (mu_v1 == mu_v2) & (mu_v1 == mu_v3) & (mu_v1 == mu_v4)
     tri_onia_same = four_muon_same & (mu_v1 == kv1) & (mu_v1 == kv2)
     # Old alias
     same_vtx = tri_onia_same
 
-    if "TrigNames" in arrays.fields and "TrigRes" in arrays.fields:
-        hlt_name_match = ak.str.find_substring(arrays["TrigNames"], "HLT_Dimuon0_Jpsi3p5_Muon2_v") >= 0
-        hlt_name_match = hlt_name_match | (ak.str.find_substring(arrays["TrigNames"], "HLT_DoubleMu4_3_LowMass_v") >= 0)
-        hlt_event_path_or = ak.values_astype(ak.any(hlt_name_match & (arrays["TrigRes"] != 0), axis=1), np.int8)
-    else:
-        hlt_event_path_or = ak.zeros_like(has_full_gen, dtype=np.int8)
+    hlt_event_path_or = _event_trigger_path_or_array(arrays, has_full_gen)
 
     # ── Per-object step flags (Efficiency_scheme.md) ──
     # J/psi lead
@@ -1269,6 +1657,29 @@ def _process_efficiency_chunk_vectorized(
     phi_kaonRECO = ak.any(phi_leg == phi_idx, axis=1)
     phi_kaonID = ak.any((phi_leg == phi_idx) & phi_kaonID_raw, axis=1)
     phi_dikaon = ak.any((phi_leg == phi_idx) & phi_dikaon_raw, axis=1)
+
+    if ntuple_format == "v1.6-full":
+        per_obj_singles = _compute_per_object_flags_v16(
+            arrays,
+            pdg,
+            mother,
+            jpsi1_idx,
+            jpsi2_idx,
+            phi_idx,
+            cfg,
+            fiducial_jpsi_lead,
+            fiducial_jpsi_sublead,
+            fiducial_phi,
+        )
+        jpsi_lead_muonRECO = per_obj_singles["jpsi_lead_muonRECO"]
+        jpsi_lead_muonID = per_obj_singles["jpsi_lead_muonID"]
+        jpsi_lead_dimuon = per_obj_singles["jpsi_lead_dimuon"]
+        jpsi_sublead_muonRECO = per_obj_singles["jpsi_sublead_muonRECO"]
+        jpsi_sublead_muonID = per_obj_singles["jpsi_sublead_muonID"]
+        jpsi_sublead_dimuon = per_obj_singles["jpsi_sublead_dimuon"]
+        phi_kaonRECO = per_obj_singles["phi_kaonRECO"]
+        phi_kaonID = per_obj_singles["phi_kaonID"]
+        phi_dikaon = per_obj_singles["phi_dikaon"]
 
     # Derived flags
     s_cand = (
@@ -1411,10 +1822,11 @@ def process_efficiency_file_vectorized(
     event_parts: list[pd.DataFrame] = []
     iterator = uproot.iterate(
         f"{path}:{tree_path}",
-        filter_name=list(EFFICIENCY_BRANCHES),
+        filter_name=list(ALL_KNOWN_BRANCHES),
         library="ak",
         step_size=step_size,
         report=True,
+        **_uproot_read_options(path),
     )
     for arrays, report in iterator:
         chunk = _process_efficiency_chunk_vectorized(arrays, path, sample, cfg, int(report.start))

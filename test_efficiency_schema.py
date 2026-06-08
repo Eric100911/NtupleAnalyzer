@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 
+import awkward as ak
 import numpy as np
 import pandas as pd
 import pytest
@@ -23,13 +24,21 @@ from efficiency_workflow.efficiency import (
     PAIR_LEVEL_MAP_SPECS,
     per_object_step_columns,
     _process_efficiency_chunk_vectorized,
+    _compute_per_object_flags_v16,
+    _detect_ntuple_format,
+    process_efficiency_file_vectorized,
     process_efficiency_file,
-    EFFICIENCY_BRANCHES,
+    ALL_KNOWN_BRANCHES,
     EfficiencyBinning,
 )
 
 
 class TestStepDefinitions:
+    def test_detect_ntuple_format(self):
+        assert _detect_ntuple_format({"Jpsi_1_mass", "Phi_mass"}) == "v1.0"
+        assert _detect_ntuple_format({"SingleJpsi_mass", "SinglePhi_mass"}) == "v1.6-singles"
+        assert _detect_ntuple_format({"SingleJpsi_mass", "Jpsi_1_mass"}) == "v1.6-full"
+
     def test_per_object_step_columns_count(self):
         cols = per_object_step_columns()
         assert len(cols) == 12, f"Expected 12 per-object columns, got {len(cols)}: {cols}"
@@ -101,6 +110,8 @@ NTUPLE = (
     "JJP_DPS2_CS/0/output_ntuple.root:mkcands/X_data"
 )
 
+V16_NTUPLE = "test_data/test_JpsiJpsiPhi_composite_v1p6_numEvent50.root"
+
 
 def _load_chunk():
     """Load one chunk from the test ntuple. Returns empty dict on failure."""
@@ -108,7 +119,7 @@ def _load_chunk():
         return {}
     import uproot
     try:
-        arrays = uproot.iterate(NTUPLE, filter_name=list(EFFICIENCY_BRANCHES),
+        arrays = uproot.iterate(NTUPLE, filter_name=list(ALL_KNOWN_BRANCHES),
                                 library="ak", step_size="50 MB")
         for chunk, _report in arrays:
             return chunk
@@ -135,7 +146,7 @@ def python_loop_result():
         return {}
     try:
         import uproot
-        arrays = uproot.iterate(NTUPLE, filter_name=list(EFFICIENCY_BRANCHES),
+        arrays = uproot.iterate(NTUPLE, filter_name=list(ALL_KNOWN_BRANCHES),
                                 library="ak", step_size="50 MB")
         for chunk, _report in arrays:
             cfg = OfflineSelectionConfig()
@@ -248,6 +259,87 @@ class TestPerObjectData:
                      "Pri_fitValid", "Pri_fitPass",
                      "Pri_assocPVPass", "Pri_trackPVPass"):
             assert col in event_df.columns, f"Missing event column: {col}"
+
+
+def test_process_v16_ntuple_chunk():
+    if not os.path.exists(V16_NTUPLE):
+        pytest.skip(f"Missing v1.6 test ntuple: {V16_NTUPLE}")
+    cfg = OfflineSelectionConfig()
+    frames = process_efficiency_file_vectorized(V16_NTUPLE, "test_sample", cfg)
+    gen_df = frames["gen_systems"]
+    event_df = frames["event_step_flags"]
+    assert len(gen_df) > 0
+    assert len(event_df) == len(gen_df)
+    for col in ("jpsi_lead_fiducial", "jpsi_lead_muonRECO", "phi_dikaon"):
+        assert col in event_df.columns
+    for col in ("four_muon_vtx", "Pri_assocPVPass"):
+        assert col in event_df.columns
+
+
+class TestSinglesBasedPerObjectFlags:
+    def test_singles_flags(self):
+        arrays = ak.Array({
+            "muIsPatSoftMuon": [[1, 1], [1, 0], [], []],
+            "SingleJpsi_mass": [[3.10], [3.10], [], []],
+            "SingleJpsi_pt": [[10.0], [10.0], [], []],
+            "SingleJpsi_px": [[10.0], [10.0], [], []],
+            "SingleJpsi_py": [[0.0], [0.0], [], []],
+            "SingleJpsi_pz": [[0.0], [0.0], [], []],
+            "SingleJpsi_y": [[0.0], [0.0], [], []],
+            "SingleJpsi_VtxProb": [[0.20], [0.20], [], []],
+            "SingleJpsi_fitValid": [[1], [1], [], []],
+            "SingleJpsi_fitPass": [[1], [1], [], []],
+            "SingleJpsi_mu1_Idx": [[0], [0], [], []],
+            "SingleJpsi_mu2_Idx": [[1], [1], [], []],
+            "SingleJpsi_mu1_genMatchIdx": [[1], [1], [], []],
+            "SingleJpsi_mu2_genMatchIdx": [[2], [2], [], []],
+            "SinglePhi_mass": [[], [], [], [1.02]],
+            "SinglePhi_pt": [[], [], [], [5.0]],
+            "SinglePhi_px": [[], [], [], [5.0]],
+            "SinglePhi_py": [[], [], [], [0.0]],
+            "SinglePhi_pz": [[], [], [], [0.0]],
+            "SinglePhi_VtxProb": [[], [], [], [0.20]],
+            "SinglePhi_fitValid": [[], [], [], [1]],
+            "SinglePhi_fitPass": [[], [], [], [1]],
+            "SinglePhi_K1_RecoKaonTrackIdx": [[], [], [], [0]],
+            "SinglePhi_K2_RecoKaonTrackIdx": [[], [], [], [1]],
+            "SinglePhi_K1_genMatchIdx": [[], [], [], [7]],
+            "SinglePhi_K2_genMatchIdx": [[], [], [], [8]],
+            "RecoKaonTrack_pt": [[], [], [], [2.5, 2.7]],
+            "RecoKaonTrack_eta": [[], [], [], [0.1, -0.2]],
+        })
+        pdg = ak.Array([
+            [443, 13, -13, 443, 13, -13, 333, 321, -321],
+            [443, 13, -13, 443, 13, -13, 333, 321, -321],
+            [443, 13, -13, 443, 13, -13, 333, 321, -321],
+            [443, 13, -13, 443, 13, -13, 333, 321, -321],
+        ])
+        mother = ak.Array([
+            [-1, 0, 0, -1, 3, 3, -1, 6, 6],
+            [-1, 0, 0, -1, 3, 3, -1, 6, 6],
+            [-1, 0, 0, -1, 3, 3, -1, 6, 6],
+            [-1, 0, 0, -1, 3, 3, -1, 6, 6],
+        ])
+        cfg = OfflineSelectionConfig()
+        flags = _compute_per_object_flags_v16(
+            arrays,
+            pdg,
+            mother,
+            ak.Array([0, 0, 0, 0]),
+            ak.Array([3, 3, 3, 3]),
+            ak.Array([6, 6, 6, 6]),
+            cfg,
+            ak.Array([True, True, True, True]),
+            ak.Array([True, True, True, True]),
+            ak.Array([True, True, True, True]),
+        )
+
+        assert ak.to_list(flags["jpsi_lead_muonRECO"]) == [True, True, False, False]
+        assert ak.to_list(flags["jpsi_lead_muonID"]) == [True, False, False, False]
+        assert ak.to_list(flags["jpsi_lead_dimuon"]) == [True, False, False, False]
+        assert ak.to_list(flags["phi_kaonRECO"]) == [False, False, False, True]
+        assert ak.to_list(flags["phi_kaonID"]) == [False, False, False, True]
+        assert ak.to_list(flags["phi_dikaon"]) == [False, False, False, True]
 
 
 class TestBackendEquality:
