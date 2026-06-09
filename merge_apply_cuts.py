@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -251,6 +252,22 @@ def apply_snapshot_casts(rdf, cast_map):
     return rdf
 
 
+def load_file_manifest(path: str) -> list[str]:
+    with open(path, encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if isinstance(payload, dict):
+        files = payload.get("files")
+    elif isinstance(payload, list):
+        files = payload
+    else:
+        files = None
+    if not isinstance(files, list) or not all(isinstance(item, str) for item in files):
+        raise ValueError(f"Manifest must contain a list of file paths: {path}")
+    if not files:
+        raise ValueError(f"Manifest contains no files: {path}")
+    return files
+
+
 def run_merge_once(schema, files, args, output_file: str, snapshot_columns, cast_map):
     start = time.time()
     rdf_all = ROOT.RDataFrame(TREE_NAME, build_root_string_vector(files))
@@ -365,6 +382,7 @@ def parse_args():
     parser.add_argument("--dataset", default="data", choices=["data", "mc"], help="Input dataset type")
     parser.add_argument("--sample", default=None, help="MC sample tag (JJP: DPS_1/DPS_2_CS/DPS_2_G/SPS_CS/SPS_G/TPS, JYP: SPS/DPS_1/DPS_2/DPS_3/TPS, JJY: DPS_1/DPS_2)")
     parser.add_argument("-i", "--input-dir", default=None, help="Override input directory or ROOT file")
+    parser.add_argument("--input-file-manifest", default=None, help="JSON manifest with an exact list of ROOT input files")
     parser.add_argument("-o", "--output", default=None, help="Output ROOT file")
     parser.add_argument("-j", "--jobs", type=int, default=8, help="RDataFrame thread count")
     parser.add_argument("-n", "--max-events", type=int, default=-1, help="Limit number of events for quick tests")
@@ -387,7 +405,10 @@ def main():
     sample = normalize_sample(channel, args.sample) if dataset == "mc" else None
     schema = get_dataset_schema(channel, dataset)
 
-    input_dir = args.input_dir or default_input_dir(channel, dataset, sample)
+    if args.input_file_manifest:
+        input_dir = args.input_dir or args.input_file_manifest
+    else:
+        input_dir = args.input_dir or default_input_dir(channel, dataset, sample)
     output_file = args.output or default_merged_output(channel, dataset, sample)
     ensure_parent_dir(output_file)
 
@@ -397,7 +418,10 @@ def main():
     if args.stage_copy_jobs <= 0:
         args.stage_copy_jobs = max(1, min(4, args.jobs))
 
-    files = discover_root_files(input_dir, args.max_files)
+    if args.input_file_manifest:
+        files = load_file_manifest(args.input_file_manifest)
+    else:
+        files = discover_root_files(input_dir, args.max_files)
     stage_remote = should_stage_remote_files(args, files)
     snapshot_columns = None
     cast_map = None
@@ -416,6 +440,8 @@ def main():
     print(f"[INFO] dataset      : {dataset}")
     print(f"[INFO] sample       : {sample or '-'}")
     print(f"[INFO] input        : {input_dir}")
+    if args.input_file_manifest:
+        print(f"[INFO] manifest     : {args.input_file_manifest}")
     print(f"[INFO] files        : {len(files)}")
     print(f"[INFO] output       : {output_file}")
     print(f"[INFO] jobs         : {args.jobs}")

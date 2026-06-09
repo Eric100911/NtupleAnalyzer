@@ -7,12 +7,113 @@ from pathlib import Path
 import pandas as pd
 
 from efficiency_workflow.config import CmsPlotStyleConfig
+from efficiency_workflow.efficiency import (
+    EfficiencyBinning,
+    build_stacked_jpsi_acceptance_maps,
+    build_stacked_jpsi_efficiency_maps,
+)
 from efficiency_workflow.io import ensure_dir
 from efficiency_workflow.plotting import (
-    save_efficiency_heatmap_pair,
+    save_efficiency_heatmap,
+    subprocess_label_for_sample,
+    with_subprocess_label,
     write_per_object_acceptance_plots,
     write_stacked_jpsi_plots,
 )
+
+
+def test_default_plot_style_uses_run3() -> None:
+    assert CmsPlotStyleConfig().era == "Run 3"
+
+
+def test_subprocess_labels_are_known_for_current_samples() -> None:
+    assert subprocess_label_for_sample("JJP_DPS1") == r"DPS $J/\psi+(J/\psi+\phi)$"
+    assert subprocess_label_for_sample("JJP_SPS_G") == r"SPS $J/\psi+J/\psi+\phi$ @ CSM NLO$^{*}$"
+    assert subprocess_label_for_sample("unknown") is None
+
+
+def test_with_subprocess_label_preserves_explicit_label() -> None:
+    style = CmsPlotStyleConfig(subprocess_label="custom")
+    assert with_subprocess_label(style, "JJP_DPS1").subprocess_label == "custom"
+
+
+def test_stacked_jpsi_maps_use_pt_and_abs_y() -> None:
+    keys = {
+        "sample": "JJP_DPS1",
+        "source_file": "input.root",
+        "run": 1,
+        "lumi": 1,
+    }
+    gen_df = pd.DataFrame(
+        [
+            {
+                **keys,
+                "entry": 0,
+                "event": 10,
+                "jpsi_lead_pt": 8.0,
+                "jpsi_lead_y": -0.4,
+                "jpsi_lead_abs_y": 0.4,
+                "jpsi_sublead_pt": 12.0,
+                "jpsi_sublead_y": 1.4,
+                "jpsi_sublead_abs_y": 1.4,
+            },
+            {
+                **keys,
+                "entry": 1,
+                "event": 11,
+                "jpsi_lead_pt": 22.0,
+                "jpsi_lead_y": -2.0,
+                "jpsi_lead_abs_y": 2.0,
+                "jpsi_sublead_pt": 7.0,
+                "jpsi_sublead_y": 0.8,
+                "jpsi_sublead_abs_y": 0.8,
+            },
+        ]
+    )
+    event_df = pd.DataFrame(
+        [
+            {
+                **keys,
+                "entry": 0,
+                "event": 10,
+                "full_gen": 1,
+                "jpsi_lead_fiducial": 1,
+                "jpsi_lead_muonRECO": 1,
+                "jpsi_lead_muonID": 1,
+                "jpsi_lead_dimuon": 1,
+                "jpsi_sublead_fiducial": 1,
+                "jpsi_sublead_muonRECO": 1,
+                "jpsi_sublead_muonID": 0,
+                "jpsi_sublead_dimuon": 0,
+            },
+            {
+                **keys,
+                "entry": 1,
+                "event": 11,
+                "full_gen": 1,
+                "jpsi_lead_fiducial": 0,
+                "jpsi_lead_muonRECO": 0,
+                "jpsi_lead_muonID": 0,
+                "jpsi_lead_dimuon": 0,
+                "jpsi_sublead_fiducial": 1,
+                "jpsi_sublead_muonRECO": 1,
+                "jpsi_sublead_muonID": 1,
+                "jpsi_sublead_dimuon": 0,
+            },
+        ]
+    )
+
+    binning = EfficiencyBinning()
+    acc = build_stacked_jpsi_acceptance_maps(gen_df, event_df, binning)
+    eff = build_stacked_jpsi_efficiency_maps(gen_df, event_df, binning)
+
+    n_cells = (len(binning.jpsi_pt_edges) - 1) * (len(binning.object_abs_y_edges) - 1)
+    assert len(acc) == n_cells
+    assert len(eff) == n_cells * 3
+    assert set(acc["y_axis"]) == {"abs_y"}
+    assert set(eff["y_axis"]) == {"abs_y"}
+    assert acc["y_min"].min() >= 0.0
+    assert eff["y_max"].max() == binning.object_abs_y_edges[-1]
 
 
 def render_smoke_plots(derived_dir: Path, output_dir: Path, min_plot_total: int, with_uncertainty: bool) -> dict[str, Path]:
@@ -43,7 +144,7 @@ def render_smoke_plots(derived_dir: Path, output_dir: Path, min_plot_total: int,
             )
 
     if not stacked_acc_df.empty or not stacked_eff_df.empty:
-        eff_subset = stacked_eff_df.loc[stacked_eff_df["step"].isin(["hlt_muon_matched", "final_nominal"])].copy()
+        eff_subset = stacked_eff_df.loc[stacked_eff_df["step"].isin(["hlt_event", "Pri_fitPass"])].copy()
         written.update(
             {
                 f"stacked_jpsi.{key}": path
@@ -58,7 +159,7 @@ def render_smoke_plots(derived_dir: Path, output_dir: Path, min_plot_total: int,
         )
 
     if with_uncertainty and not stacked_acc_df.empty:
-        written["stacked_jpsi_acceptance_pair"] = save_efficiency_heatmap_pair(
+        written["stacked_jpsi_acceptance_pair"] = save_efficiency_heatmap(
             output_dir / "qa_stacked_jpsi_acceptance_pair.png",
             stacked_acc_df,
             title=r"Stacked $J/\psi$ fiducial acceptance",
@@ -67,6 +168,8 @@ def render_smoke_plots(derived_dir: Path, output_dir: Path, min_plot_total: int,
             plot_style_cfg=style,
             min_total=min_plot_total,
             zlabel="Acceptance",
+            include_uncertainty=True,
+            show_title=True,
         )
     return written
 
