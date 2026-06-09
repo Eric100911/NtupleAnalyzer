@@ -2513,6 +2513,16 @@ def build_stacked_jpsi_acceptance_maps(
 def build_stacked_jpsi_efficiency_maps(
     gen_df: pd.DataFrame, event_df: pd.DataFrame, binning: EfficiencyBinning
 ) -> pd.DataFrame:
+    """Build stacked J/psi per-object conditional efficiency maps in (pT, |y|).
+
+    Each step uses the *previous* step's passed count as denominator,
+    matching the chained conditional-efficiency definition used by
+    ``_chain_conditional_rows`` for the regular per-object maps:
+
+        muonRECO  = N(muonRECO)  / N(fiducial)
+        muonID    = N(muonID)    / N(muonRECO)
+        dimuon    = N(dimuon)    / N(muonID)
+    """
     stacked = _stacked_jpsi_frame(gen_df, event_df)
     if stacked.empty:
         return pd.DataFrame()
@@ -2527,31 +2537,43 @@ def build_stacked_jpsi_efficiency_maps(
                 & (stacked["jpsi_abs_y"] >= y_edges[iy])
                 & (stacked["jpsi_abs_y"] < y_edges[iy + 1])
             ]
-            total = int(len(subset))
-            for suffix in PER_JPSI_STEPS[1:]:  # skip fiducial (already in acceptance)
-                col = f"jpsi_{suffix}"
-                rows.append(
-                    _efficiency_row(
-                        {
-                            "map_type": "stacked_jpsi_efficiency_2d",
-                            "object": "jpsi",
-                            "step": suffix,
-                            "x_axis": "pt",
-                            "y_axis": "abs_y",
-                            "x_bin": ix,
-                            "y_bin": iy,
-                            "x_min": pt_edges[ix],
-                            "x_max": pt_edges[ix + 1],
-                            "y_min": y_edges[iy],
-                            "y_max": y_edges[iy + 1],
-                            "x_label": _bin_label(pt_edges, ix),
-                            "y_label": _bin_label(y_edges, iy),
-                            "quantity": "stacked_jpsi_efficiency",
-                        },
-                        total,
-                        int(subset[col].sum()) if total and col in subset.columns else 0,
-                    )
-                )
+            total_gen = int(len(subset))
+            if total_gen == 0:
+                continue
+            # Chain denominators: each step conditional on the previous one
+            n_fiducial = int(subset["jpsi_fiducial_acceptance"].sum())
+            n_muonRECO = int(subset["jpsi_muonRECO"].sum()) if "jpsi_muonRECO" in subset.columns else 0
+            n_muonID   = int(subset["jpsi_muonID"].sum())   if "jpsi_muonID"   in subset.columns else 0
+            n_dimuon   = int(subset["jpsi_dimuon"].sum())   if "jpsi_dimuon"   in subset.columns else 0
+
+            _base = {
+                "map_type": "stacked_jpsi_efficiency_2d",
+                "object": "jpsi",
+                "x_axis": "pt",
+                "y_axis": "abs_y",
+                "x_bin": ix,
+                "y_bin": iy,
+                "x_min": pt_edges[ix],
+                "x_max": pt_edges[ix + 1],
+                "y_min": y_edges[iy],
+                "y_max": y_edges[iy + 1],
+                "x_label": _bin_label(pt_edges, ix),
+                "y_label": _bin_label(y_edges, iy),
+                "quantity": "stacked_jpsi_efficiency",
+            }
+
+            rows.append(_efficiency_row(
+                {**_base, "step": "muonRECO"},
+                n_fiducial, n_muonRECO,
+            ))
+            rows.append(_efficiency_row(
+                {**_base, "step": "muonID"},
+                n_muonRECO, n_muonID,
+            ))
+            rows.append(_efficiency_row(
+                {**_base, "step": "dimuon"},
+                n_muonID, n_dimuon,
+            ))
     return pd.DataFrame(rows)
 
 
