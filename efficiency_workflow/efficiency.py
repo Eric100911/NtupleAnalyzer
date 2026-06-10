@@ -215,6 +215,9 @@ SINGLES_BRANCHES_V16 = sorted(
         "RecoKaonTrack_pt",
         "RecoKaonTrack_eta",
         "RecoKaonTrack_phi",
+        "RecoKaonTrack_normalizedChi2",
+        "RecoKaonTrack_numberOfHits",
+        "RecoKaonTrack_isHighPurity",
         "RecoKaonTrack_charge",
         "RecoKaonTrack_genMatchIdx",
         "RecoKaonTrack_passDzPV",
@@ -291,10 +294,11 @@ def _uproot_read_options(path: str) -> dict[str, Any]:
 def _detect_ntuple_format(fields: set[str]) -> str:
     has_singles = "SingleJpsi_mass" in fields
     has_composites = "Jpsi_1_mass" in fields
+    has_kaon_quality = "RecoKaonTrack_normalizedChi2" in fields
     if has_singles and has_composites:
-        return "v1.6-full"
+        return "v2.0-full" if has_kaon_quality else "v1.6-full"
     if has_singles:
-        return "v1.6-singles"
+        return "v2.0-singles" if has_kaon_quality else "v1.6-singles"
     return "v1.0"
 
 
@@ -1219,16 +1223,32 @@ def _compute_per_object_flags_v16(
         sp_a2 = _ancestor_idx_to_pdg(sp_k2_gen, pdg, mother, 333)
         sp_leg = ak.where((sp_a1 >= 0) & (sp_a1 == sp_a2), sp_a1, -1)
 
-        k1_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], sp_k1_idx, -1.0)
-        k2_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], sp_k2_idx, -1.0)
-        k1_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], sp_k1_idx, np.nan)
-        k2_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], sp_k2_idx, np.nan)
-        sp_track_pass = (
-            (k1_pt > cfg.track_pt_min)
-            & (k2_pt > cfg.track_pt_min)
-            & (abs(k1_eta) < cfg.track_abs_eta_max)
-            & (abs(k2_eta) < cfg.track_abs_eta_max)
-        )
+        if {"RecoKaonTrack_normalizedChi2", "RecoKaonTrack_numberOfHits", "RecoKaonTrack_isHighPurity"}.issubset(arrays.fields):
+            k1_chi2 = _safe_take_jagged(arrays["RecoKaonTrack_normalizedChi2"], sp_k1_idx, 999.0)
+            k2_chi2 = _safe_take_jagged(arrays["RecoKaonTrack_normalizedChi2"], sp_k2_idx, 999.0)
+            k1_nhits = _safe_take_jagged(arrays["RecoKaonTrack_numberOfHits"], sp_k1_idx, 0)
+            k2_nhits = _safe_take_jagged(arrays["RecoKaonTrack_numberOfHits"], sp_k2_idx, 0)
+            k1_hp = ak.values_astype(_safe_take_jagged(arrays["RecoKaonTrack_isHighPurity"], sp_k1_idx, 0), bool)
+            k2_hp = ak.values_astype(_safe_take_jagged(arrays["RecoKaonTrack_isHighPurity"], sp_k2_idx, 0), bool)
+            sp_track_pass = (
+                (k1_chi2 < cfg.kaon_chi2_max)
+                & (k2_chi2 < cfg.kaon_chi2_max)
+                & (k1_nhits > cfg.kaon_n_valid_hits_min)
+                & (k2_nhits > cfg.kaon_n_valid_hits_min)
+            )
+            if cfg.kaon_require_highpurity:
+                sp_track_pass = sp_track_pass & k1_hp & k2_hp
+        else:
+            k1_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], sp_k1_idx, -1.0)
+            k2_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], sp_k2_idx, -1.0)
+            k1_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], sp_k1_idx, np.nan)
+            k2_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], sp_k2_idx, np.nan)
+            sp_track_pass = (
+                (k1_pt > cfg.track_pt_min)
+                & (k2_pt > cfg.track_pt_min)
+                & (abs(k1_eta) < cfg.track_abs_eta_max)
+                & (abs(k2_eta) < cfg.track_abs_eta_max)
+            )
         sp_quality = (
             (arrays["SinglePhi_mass"] >= cfg.phi_mass_window[0])
             & (arrays["SinglePhi_mass"] <= cfg.phi_mass_window[1])
@@ -1345,7 +1365,7 @@ def _process_efficiency_chunk_vectorized(
     )
     fiducial_acceptance = fiducial_jpsi_lead & fiducial_jpsi_sublead & fiducial_phi
 
-    if ntuple_format == "v1.6-singles":
+    if ntuple_format in ("v1.6-singles", "v2.0-singles"):
         per_obj_raw = _compute_per_object_flags_v16(
             arrays,
             pdg,
@@ -1543,25 +1563,42 @@ def _process_efficiency_chunk_vectorized(
     # Old combined flag (used by reco_best_* and candidate_quality)
     jpsi_quality = psi1_quality & psi2_quality
 
-    # Per-phi kaon ID (track pT/eta) and dikaon (+ phi mass/pt/VtxProb)
-    if {"Phi_K_1_pt", "Phi_K_2_pt", "Phi_K_1_eta", "Phi_K_2_eta"}.issubset(arrays.fields):
-        phi_k1_pt = arrays["Phi_K_1_pt"]
-        phi_k2_pt = arrays["Phi_K_2_pt"]
-        phi_k1_eta = arrays["Phi_K_1_eta"]
-        phi_k2_eta = arrays["Phi_K_2_eta"]
+    # Per-phi kaon ID and dikaon (+ phi mass/pt/VtxProb)
+    # v2.0: kaonID uses track quality criteria; v1.6 fallback uses pT/eta
+    phi_k1_rk_idx = _as_index_array(arrays["Phi_K_1_RecoKaonTrackIdx"])
+    phi_k2_rk_idx = _as_index_array(arrays["Phi_K_2_RecoKaonTrackIdx"])
+    if {"RecoKaonTrack_normalizedChi2", "RecoKaonTrack_numberOfHits", "RecoKaonTrack_isHighPurity"}.issubset(arrays.fields):
+        k1_chi2 = _safe_take_jagged(arrays["RecoKaonTrack_normalizedChi2"], phi_k1_rk_idx, 999.0)
+        k2_chi2 = _safe_take_jagged(arrays["RecoKaonTrack_normalizedChi2"], phi_k2_rk_idx, 999.0)
+        k1_nhits = _safe_take_jagged(arrays["RecoKaonTrack_numberOfHits"], phi_k1_rk_idx, 0)
+        k2_nhits = _safe_take_jagged(arrays["RecoKaonTrack_numberOfHits"], phi_k2_rk_idx, 0)
+        k1_hp = ak.values_astype(_safe_take_jagged(arrays["RecoKaonTrack_isHighPurity"], phi_k1_rk_idx, 0), bool)
+        k2_hp = ak.values_astype(_safe_take_jagged(arrays["RecoKaonTrack_isHighPurity"], phi_k2_rk_idx, 0), bool)
+        phi_kaonID_raw = (
+            (k1_chi2 < cfg.kaon_chi2_max)
+            & (k2_chi2 < cfg.kaon_chi2_max)
+            & (k1_nhits > cfg.kaon_n_valid_hits_min)
+            & (k2_nhits > cfg.kaon_n_valid_hits_min)
+        )
+        if cfg.kaon_require_highpurity:
+            phi_kaonID_raw = phi_kaonID_raw & k1_hp & k2_hp
     else:
-        phi_k1_rk_idx = _as_index_array(arrays["Phi_K_1_RecoKaonTrackIdx"])
-        phi_k2_rk_idx = _as_index_array(arrays["Phi_K_2_RecoKaonTrackIdx"])
-        phi_k1_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], phi_k1_rk_idx, -1.0)
-        phi_k2_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], phi_k2_rk_idx, -1.0)
-        phi_k1_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], phi_k1_rk_idx, np.nan)
-        phi_k2_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], phi_k2_rk_idx, np.nan)
-    phi_kaonID_raw = (
-        (phi_k1_pt > cfg.track_pt_min)
-        & (phi_k2_pt > cfg.track_pt_min)
-        & (abs(phi_k1_eta) < cfg.track_abs_eta_max)
-        & (abs(phi_k2_eta) < cfg.track_abs_eta_max)
-    )
+        if {"Phi_K_1_pt", "Phi_K_2_pt", "Phi_K_1_eta", "Phi_K_2_eta"}.issubset(arrays.fields):
+            phi_k1_pt = arrays["Phi_K_1_pt"]
+            phi_k2_pt = arrays["Phi_K_2_pt"]
+            phi_k1_eta = arrays["Phi_K_1_eta"]
+            phi_k2_eta = arrays["Phi_K_2_eta"]
+        else:
+            phi_k1_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], phi_k1_rk_idx, -1.0)
+            phi_k2_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], phi_k2_rk_idx, -1.0)
+            phi_k1_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], phi_k1_rk_idx, np.nan)
+            phi_k2_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], phi_k2_rk_idx, np.nan)
+        phi_kaonID_raw = (
+            (phi_k1_pt > cfg.track_pt_min)
+            & (phi_k2_pt > cfg.track_pt_min)
+            & (abs(phi_k1_eta) < cfg.track_abs_eta_max)
+            & (abs(phi_k2_eta) < cfg.track_abs_eta_max)
+        )
     phi_dikaon_raw = phi_kaonID_raw & (
         (arrays["Phi_mass"] >= cfg.phi_mass_window[0])
         & (arrays["Phi_mass"] <= cfg.phi_mass_window[1])
@@ -1658,7 +1695,7 @@ def _process_efficiency_chunk_vectorized(
     phi_kaonID = ak.any((phi_leg == phi_idx) & phi_kaonID_raw, axis=1)
     phi_dikaon = ak.any((phi_leg == phi_idx) & phi_dikaon_raw, axis=1)
 
-    if ntuple_format == "v1.6-full":
+    if ntuple_format in ("v1.6-full", "v2.0-full"):
         per_obj_singles = _compute_per_object_flags_v16(
             arrays,
             pdg,

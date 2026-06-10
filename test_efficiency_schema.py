@@ -38,6 +38,8 @@ class TestStepDefinitions:
         assert _detect_ntuple_format({"Jpsi_1_mass", "Phi_mass"}) == "v1.0"
         assert _detect_ntuple_format({"SingleJpsi_mass", "SinglePhi_mass"}) == "v1.6-singles"
         assert _detect_ntuple_format({"SingleJpsi_mass", "Jpsi_1_mass"}) == "v1.6-full"
+        assert _detect_ntuple_format({"SingleJpsi_mass", "SinglePhi_mass", "RecoKaonTrack_normalizedChi2"}) == "v2.0-singles"
+        assert _detect_ntuple_format({"SingleJpsi_mass", "Jpsi_1_mass", "RecoKaonTrack_normalizedChi2"}) == "v2.0-full"
 
     def test_per_object_step_columns_count(self):
         cols = per_object_step_columns()
