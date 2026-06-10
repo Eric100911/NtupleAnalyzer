@@ -227,6 +227,8 @@ SINGLES_BRANCHES_V16 = sorted(
         "RecoKaonTrack_dzPV",
         "RecoKaonTrack_dxyPV",
         "RecoKaonTrack_usedInSinglePhi",
+        "muJpsiMatchedTriggerIndices",
+        "muJpsiMatchedFilterIndices",
     }
 )
 
@@ -268,6 +270,8 @@ COMPOSITE_BRANCHES = sorted(
         "muVertexId",
         "muIsJpsiTrigMatch",
         "muIsJpsiFilterMatch",
+        "muJpsiMatchedTriggerIndices",
+        "muJpsiMatchedFilterIndices",
         "muIsPatSoftMuon",
         "Pri_fitValid",
         "Pri_fitPass",
@@ -802,6 +806,39 @@ def _candidate_hlt_muon_matched(event: dict[str, Any], cand_idx: int) -> bool:
     return False
 
 
+def _python_loop_full_hlt_match(event: dict[str, Any], system: Any) -> bool:
+    """Per-path trigger+filter matching for the python-loop (v2.0+) path.
+
+    Uses hardcoded indices: 0=Dimuon0_Jpsi3p5_Muon2 (3-muon), 1=DoubleMu4_3_LowMass (2-muon).
+    Requires BOTH trigger index AND filter index for matched muons.
+    """
+    mu_indices = [
+        system.jpsi_lead.mu1_idx, system.jpsi_lead.mu2_idx,
+        system.jpsi_sublead.mu1_idx, system.jpsi_sublead.mu2_idx,
+    ]
+    trig_arr = event.get("muJpsiMatchedTriggerIndices", [])
+    filt_arr = event.get("muJpsiMatchedFilterIndices", [])
+
+    def _mu_has_both(mu_idx: int, trig_val: int, filt_val: int) -> bool:
+        if mu_idx < 0 or mu_idx >= len(trig_arr):
+            return False
+        return (trig_val in list(trig_arr[mu_idx])) and (filt_val in list(filt_arr[mu_idx]))
+
+    d0 = [_mu_has_both(i, 0, 0) for i in mu_indices]   # Dimuon0: trig=0, filt=0
+    dm = [_mu_has_both(i, 1, 1) for i in mu_indices]   # DoubleMu: trig=1, filt=1
+
+    # 3-muon: >=3 muons matched AND pair-level filter in >=1 J/psi pair
+    n_d0 = sum(d0)
+    j1_pair_d0 = d0[0] and d0[1]
+    j2_pair_d0 = d0[2] and d0[3]
+    match_dimuon0 = n_d0 >= 3 and (j1_pair_d0 or j2_pair_d0)
+
+    # 2-muon: both muons of >=1 J/psi pair matched
+    match_doublemu = (dm[0] and dm[1]) or (dm[2] and dm[3])
+
+    return match_dimuon0 or match_doublemu
+
+
 def _candidate_all6_same_rec_vtx(event: dict[str, Any], cand_idx: int) -> bool:
     muon_indices = [
         to_int_idx(_event_value(event, "Jpsi_1_mu_1_Idx", cand_idx, -1), -1),
@@ -1019,12 +1056,17 @@ def build_event_efficiency_row(
         and fiducial_jpsi_sublead and sublead_muonRECO and sublead_muonID and sublead_dimuon
         and fiducial_phi and phi_kaonRECO_flag and phi_kaonID_flag and phi_dikaon_flag
     )
-    # hlt_event = trigger OR (event-level TrigNames/TrigRes)
-    # hlt_muon_matched = trigger-object matching (per-muon muIsJpsi*Match flags)
+    # hlt_event = trigger OR + per-muon trigger+filter matching (when available)
     trigger_or = _event_path_or(event)
-    # Chain B: with trigger matching (default column names)
-    hlt_event = s_cand and trigger_or
-    hlt_muon_matched = hlt_event and hlt_raw
+    if "muJpsiMatchedTriggerIndices" in event:
+        # v2.0+: per-path matching folded into hlt_event; indices 0=Dimuon0, 1=DoubleMu
+        hlt_full = _python_loop_full_hlt_match(event, system)
+        hlt_event = s_cand and trigger_or and hlt_full
+        hlt_muon_matched = hlt_event
+    else:
+        # v1.0: heuristic trigger matching as separate step
+        hlt_event = s_cand and trigger_or
+        hlt_muon_matched = hlt_event and hlt_raw
     four_muon_vtx = hlt_muon_matched and four_muon_raw
     Pri_fitValid = four_muon_vtx and pri_valid_raw
     Pri_fitPass = four_muon_vtx and pri_pass_raw
@@ -1141,6 +1183,106 @@ def _event_trigger_path_or_array(arrays: ak.Array, like: ak.Array) -> ak.Array:
     hlt_name_match = ak.str.find_substring(arrays["TrigNames"], "HLT_Dimuon0_Jpsi3p5_Muon2_v") >= 0
     hlt_name_match = hlt_name_match | (ak.str.find_substring(arrays["TrigNames"], "HLT_DoubleMu4_3_LowMass_v") >= 0)
     return ak.values_astype(ak.any(hlt_name_match & (arrays["TrigRes"] != 0), axis=1), np.int8)
+
+
+def _read_trigger_filter_config(path: str) -> dict[str, int]:
+    """Read TriggersForJpsi and FiltersForJpsi from X_config tree.
+
+    Returns a dict mapping trigger pattern key → filter index, e.g.:
+    {"dimuon0": 0, "doublemu": 1}  where the int is the filter index
+    and also {"dimuon0_trig": 0, "doublemu_trig": 1} for trigger indices.
+    """
+    import uproot
+    config_path = path.split(":")[0]
+    config_tree = f"{config_path}:mkcands/X_config"
+    try:
+        with uproot.open(config_tree) as f:
+            triggers = f["TriggersForJpsi"].array()[0]
+            filters = f["FiltersForJpsi"].array()[0]
+    except Exception:
+        return {}
+
+    result: dict[str, int] = {}
+    for i, name in enumerate(triggers):
+        if "Dimuon0_Jpsi3p5_Muon2" in str(name):
+            result["dimuon0_trig"] = i
+        elif "DoubleMu4_3_LowMass" in str(name):
+            result["doublemu_trig"] = i
+    for i, name in enumerate(filters):
+        if "hltJpsiMuonL3Filtered3p5" in str(name):
+            result["dimuon0_filt"] = i
+        elif "hltDoubleMu43LowMassL3Filtered" in str(name):
+            result["doublemu_filt"] = i
+    return result
+
+
+def _compute_full_hlt_match_vectorized(
+    arrays: ak.Array,
+    j1_mu1_idx: ak.Array,
+    j1_mu2_idx: ak.Array,
+    j2_mu1_idx: ak.Array,
+    j2_mu2_idx: ak.Array,
+    trig_filt_map: dict[str, int],
+    like: ak.Array,
+) -> ak.Array:
+    """Per-event full HLT match: trigger path OR + per-muon trigger+filter matching.
+
+    Requires BOTH trigger index AND filter index present for each matched muon.
+    Filters are pair-level: both muons of at least one J/psi dimuon pair must match.
+
+    Returns boolean array (one per event).
+    """
+    zero = ak.values_astype(ak.zeros_like(like), bool)
+
+    if ("muJpsiMatchedTriggerIndices" not in arrays.fields
+        or "muJpsiMatchedFilterIndices" not in arrays.fields
+        or not trig_filt_map):
+        return zero
+
+    dimuon0_trig = trig_filt_map.get("dimuon0_trig")
+    dimuon0_filt = trig_filt_map.get("dimuon0_filt")
+    doublemu_trig = trig_filt_map.get("doublemu_trig")
+    doublemu_filt = trig_filt_map.get("doublemu_filt")
+
+    mu_trig_indices = arrays["muJpsiMatchedTriggerIndices"]
+    mu_filt_indices = arrays["muJpsiMatchedFilterIndices"]
+
+    def _mu_has_both(mu_idx: ak.Array, trig_val: int | None, filt_val: int | None) -> ak.Array:
+        """Check if muon at mu_idx has both trigger and filter indices."""
+        if trig_val is None or filt_val is None:
+            return ak.values_astype(ak.zeros_like(mu_idx), bool)
+        trig_match = ak.any(_safe_take_jagged(mu_trig_indices, mu_idx, -1) == trig_val, axis=-1)
+        filt_match = ak.any(_safe_take_jagged(mu_filt_indices, mu_idx, -1) == filt_val, axis=-1)
+        return trig_match & filt_match
+
+    # Per-muon match flags for each trigger path
+    j1_mu1_d0 = _mu_has_both(j1_mu1_idx, dimuon0_trig, dimuon0_filt)
+    j1_mu2_d0 = _mu_has_both(j1_mu2_idx, dimuon0_trig, dimuon0_filt)
+    j2_mu1_d0 = _mu_has_both(j2_mu1_idx, dimuon0_trig, dimuon0_filt)
+    j2_mu2_d0 = _mu_has_both(j2_mu2_idx, dimuon0_trig, dimuon0_filt)
+
+    j1_mu1_dm = _mu_has_both(j1_mu1_idx, doublemu_trig, doublemu_filt)
+    j1_mu2_dm = _mu_has_both(j1_mu2_idx, doublemu_trig, doublemu_filt)
+    j2_mu1_dm = _mu_has_both(j2_mu1_idx, doublemu_trig, doublemu_filt)
+    j2_mu2_dm = _mu_has_both(j2_mu2_idx, doublemu_trig, doublemu_filt)
+
+    # 3-muon trigger (Dimuon0): >=3 muons matched AND pair-level filter in >=1 J/psi pair
+    n_d0 = (
+        ak.values_astype(j1_mu1_d0, np.int8)
+        + ak.values_astype(j1_mu2_d0, np.int8)
+        + ak.values_astype(j2_mu1_d0, np.int8)
+        + ak.values_astype(j2_mu2_d0, np.int8)
+    )
+    j1_pair_d0 = j1_mu1_d0 & j1_mu2_d0
+    j2_pair_d0 = j2_mu1_d0 & j2_mu2_d0
+    match_dimuon0 = (n_d0 >= 3) & (j1_pair_d0 | j2_pair_d0)
+
+    # 2-muon trigger (DoubleMu): both muons of >=1 J/psi pair matched
+    j1_pair_dm = j1_mu1_dm & j1_mu2_dm
+    j2_pair_dm = j2_mu1_dm & j2_mu2_dm
+    match_doublemu = j1_pair_dm | j2_pair_dm
+
+    return match_dimuon0 | match_doublemu
 
 
 def _compute_per_object_flags_v16(
@@ -1270,6 +1412,7 @@ def _process_efficiency_chunk_vectorized(
     sample: str,
     cfg: OfflineSelectionConfig,
     entry_start: int,
+    trig_filt_map: dict[str, int] | None = None,
 ) -> dict[str, pd.DataFrame]:
     n_events = len(_record_field(arrays, "evtNum"))
     if n_events == 0:
@@ -1388,12 +1531,14 @@ def _process_efficiency_chunk_vectorized(
         )
         hlt_event_path_or = _event_trigger_path_or_array(arrays, has_full_gen)
         hlt_event = s_cand & (hlt_event_path_or != 0)
+        # hlt_muon_matched folded into hlt_event; singles-only ntuples lack
+        # composite candidates for per-muon trigger-object matching
         false_event = ak.values_astype(ak.zeros_like(has_full_gen), bool)
         event_raw: dict[str, ak.Array] = {
             "full_gen": has_full_gen,
             "s_cand": s_cand,
             "hlt_event": hlt_event,
-            "hlt_muon_matched": false_event,
+            "hlt_muon_matched": hlt_event,
             "four_muon_vtx": false_event,
             "four_muon_vtx_noTrigMatch": false_event,
             "Pri_fitValid": false_event,
@@ -1725,20 +1870,29 @@ def _process_efficiency_chunk_vectorized(
         & fiducial_phi & phi_kaonRECO & phi_kaonID & phi_dikaon
     )
 
-    # Event-level flags: sequential s_cand → hlt_event → hlt_muon_matched → four_muon_vtx
-    # hlt_event = trigger OR (event-level TrigNames/TrigRes)
-    # hlt_muon_matched = trigger-object matching (per-muon muIsJpsi*Match flags)
+    # Event-level flags: s_cand → hlt_event (inc. per-muon trigger+filter matching) → four_muon_vtx
     _trigger_or = hlt_event_path_or != 0
-    _hlt_trigger_match_raw = ak.any(matched_candidate & candidate_hlt, axis=1)
     _four_muon_raw = ak.any(matched_candidate & four_muon_same, axis=1)
     _pri_valid_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_fitValid"]) == 1), axis=1)
     _pri_pass_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_fitPass"]) == 1), axis=1)
     _pri_assoc_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_assocPVPass"]) == 1), axis=1)
     _pri_track_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_trackPVPass"]) == 1), axis=1)
 
-    # Chain B: with trigger matching (default column names)
-    hlt_event = s_cand & _trigger_or
-    hlt_muon_matched = hlt_event & _hlt_trigger_match_raw
+    _full_hlt_match = _compute_full_hlt_match_vectorized(
+        arrays, j1_mu1_idx, j1_mu2_idx, j2_mu1_idx, j2_mu2_idx,
+        trig_filt_map or {}, s_cand,
+    )
+    _has_trigger_indices = "muJpsiMatchedTriggerIndices" in arrays.fields
+    if _has_trigger_indices and trig_filt_map:
+        # v2.0+: per-path trigger+filter matching folded into hlt_event
+        hlt_event = s_cand & _trigger_or & _full_hlt_match
+        hlt_muon_matched = hlt_event
+    else:
+        # v1.6 fallback: heuristic trigger matching as separate step
+        _hlt_trigger_match_raw = ak.any(matched_candidate & candidate_hlt, axis=1)
+        hlt_event = s_cand & _trigger_or
+        hlt_muon_matched = hlt_event & _hlt_trigger_match_raw
+
     four_muon_vtx = hlt_muon_matched & _four_muon_raw
     # Pri_* flags are parallel: all conditioned on four_muon_vtx, not on each other
     Pri_fitValid = four_muon_vtx & _pri_valid_raw
@@ -1857,6 +2011,7 @@ def process_efficiency_file_vectorized(
 ) -> dict[str, pd.DataFrame]:
     gen_parts: list[pd.DataFrame] = []
     event_parts: list[pd.DataFrame] = []
+    trig_filt_map = _read_trigger_filter_config(path)
     iterator = uproot.iterate(
         f"{path}:{tree_path}",
         filter_name=list(ALL_KNOWN_BRANCHES),
@@ -1866,7 +2021,7 @@ def process_efficiency_file_vectorized(
         **_uproot_read_options(path),
     )
     for arrays, report in iterator:
-        chunk = _process_efficiency_chunk_vectorized(arrays, path, sample, cfg, int(report.start))
+        chunk = _process_efficiency_chunk_vectorized(arrays, path, sample, cfg, int(report.start), trig_filt_map)
         if not chunk["gen_systems"].empty:
             gen_parts.append(chunk["gen_systems"])
         if not chunk["event_step_flags"].empty:

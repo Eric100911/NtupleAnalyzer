@@ -42,7 +42,7 @@ Raw TPS-Onia2MuMu MC ntuples (EOS/xrootd)
   → run_efficiency.py / cli_efficiency.py
     [reads raw ntuples DIRECTLY — NO merge step, NO sel_ prefix]
     [per-object steps: fiducial→muonRECO→muonID→dimuon (J/ψ), fiducial→kaonRECO→kaonID→dikaon (φ)]
-    [event-level steps: s_cand→hlt_event→hlt_muon_matched→four_muon_vtx→Pri_* (parallel)]
+    [event-level steps: s_cand→hlt_event(inc. trig+filter)→four_muon_vtx→Pri_* (parallel)]
     → merged_efficiency_output/
       ├── JJP_{sample}/
       │   ├── gen_systems.parquet          [GEN-level kinematics per event]
@@ -177,6 +177,20 @@ Event-level: `TrigRes`, `TrigNames`, `MatchJpsiTriggerNames`, `MatchUpsTriggerNa
 Per-muon: `muIsJpsiTrigMatch`, `muIsJpsiFilterMatch`, `muJpsiMatchedTriggerIndices`,
 `muJpsiMatchedFilterIndices` (and Upsilon counterparts).
 
+**Per-path matching (v2.0+):** `muJpsiMatchedTriggerIndices` gives indices into
+`TriggersForJpsi` (from `X_config`) for each muon; `muJpsiMatchedFilterIndices`
+gives indices into `FiltersForJpsi`. The configured paths are:
+
+| Index | Trigger pattern | Filter label |
+|-------|----------------|--------------|
+| 0 | `HLT_Dimuon0_Jpsi3p5_Muon2_v` (3-muon) | `hltJpsiMuonL3Filtered3p5` |
+| 1 | `HLT_DoubleMu4_3_LowMass_v` (2-muon) | `hltDoubleMu43LowMassL3Filtered` |
+
+A full HLT match requires the HLT path to have fired AND
+per-muon trigger+filter matching for the specific path. The filter labels are
+pair-level: both muons of at least one J/ψ dimuon pair must have the filter
+index in their matched lists.
+
 ## Key Scripts
 
 ### Pre-Efficiency Pipeline
@@ -283,12 +297,16 @@ directly (no merge). Per-object steps are approximated from composite candidate
 information. The step chain is:
 
 ```
-full_gen → s_cand → hlt_event → hlt_muon_matched → four_muon_vtx
-                                                          ↓
-                          ┌───────────────────────────────┴───────────────────────┐
+full_gen → s_cand → hlt_event (inc. per-muon trigger+filter matching) → four_muon_vtx
+                                                                          ↓
+                          ┌───────────────────────────────────────────────┴───────────────────────┐
                           ↓               ↓                ↓                       ↓
                       Pri_fitValid    Pri_fitPass    Pri_assocPVPass    Pri_trackPVPass
 ```
+
+`hlt_muon_matched` is an alias for `hlt_event` (both include the per-muon
+trigger+filter matching). The separate `hlt_muon_matched` step is retained
+for backward compatibility.
 
 **Target** (TPS-Onia2MuMu v1.5, per `docs/Efficiency_Evaluation_Guideline.md`):
 Two MC runs provide single-object branches for proper per-object maps.
@@ -303,8 +321,11 @@ Two MC runs provide single-object branches for proper per-object maps.
 
 **Event-level chain** (from Run B — full chain ntuple):
 
+HLT now includes per-muon trigger+filter matching folded into `hlt_event`
+(see Trigger Branches for per-path index mapping).
+
 ```
-(from per-object) → HLT → four_muon_vtx (DiOnia_*) → triOnia
+(from per-object) → HLT (path OR + per-muon trig+filter match) → four_muon_vtx (DiOnia_*) → triOnia
                                                           ↓
                           ┌───────────────────────────────┴───────────────────────┐
                           ↓               ↓                ↓                       ↓
