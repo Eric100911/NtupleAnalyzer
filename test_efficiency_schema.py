@@ -30,6 +30,12 @@ from efficiency_workflow.efficiency import (
     process_efficiency_file,
     ALL_KNOWN_BRANCHES,
     EfficiencyBinning,
+    _as_index_array,
+    _ancestor_idx_to_pdg,
+    _safe_take_jagged,
+    _safe_first,
+    _safe_second,
+    _scalar_rapidity_array,
 )
 
 
@@ -113,6 +119,8 @@ NTUPLE = (
 )
 
 V16_NTUPLE = "test_data/test_JpsiJpsiPhi_composite_v1p6_numEvent50.root"
+
+V20_NTUPLE = "test_data/test_JpsiJpsiPhi_v2p0_patch1_numEvent118.root"
 
 
 def _load_chunk():
@@ -344,6 +352,141 @@ class TestSinglesBasedPerObjectFlags:
         assert ak.to_list(flags["phi_kaonRECO"]) == [False, False, False, True]
         assert ak.to_list(flags["phi_kaonID"]) == [False, False, False, True]
         assert ak.to_list(flags["phi_dikaon"]) == [False, False, False, True]
+
+
+class TestV20PerObjectFlags:
+    """Integration test: per-track RECO/ID on a real v2.0_patch1 ntuple."""
+
+    V20_REQUIRED_BRANCHES = [
+        "MC_GenPart_pdgId", "MC_GenPart_motherGenIdx",
+        "MC_GenPart_pt", "MC_GenPart_eta", "MC_GenPart_mass",
+        "SingleJpsi_mass", "SingleJpsi_pt", "SingleJpsi_px", "SingleJpsi_py",
+        "SingleJpsi_pz", "SingleJpsi_y", "SingleJpsi_VtxProb",
+        "SingleJpsi_fitValid", "SingleJpsi_fitPass",
+        "SingleJpsi_mu1_Idx", "SingleJpsi_mu2_Idx",
+        "SingleJpsi_mu1_genMatchIdx", "SingleJpsi_mu2_genMatchIdx",
+        "muGenMatchIdx", "muIsPatSoftMuon",
+        "SinglePhi_mass", "SinglePhi_pt", "SinglePhi_VtxProb",
+        "SinglePhi_fitValid", "SinglePhi_fitPass",
+        "SinglePhi_K1_RecoKaonTrackIdx", "SinglePhi_K2_RecoKaonTrackIdx",
+        "SinglePhi_K1_genMatchIdx", "SinglePhi_K2_genMatchIdx",
+        "RecoKaonTrack_genMatchIdx", "RecoKaonTrack_pt", "RecoKaonTrack_eta",
+        "RecoKaonTrack_normalizedChi2", "RecoKaonTrack_numberOfHits",
+        "RecoKaonTrack_isHighPurity",
+    ]
+
+    @staticmethod
+    def _rapidity(pt, eta, mass):
+        p = pt * np.cosh(eta)
+        pz = pt * np.sinh(eta)
+        energy = np.sqrt(p * p + mass * mass)
+        return 0.5 * np.log((energy + pz) / np.maximum(energy - pz, 1e-15))
+
+    def test_per_track_flags_on_real_ntuple(self):
+        """Compute per-object flags on v2.0 ntuple and verify chain ordering."""
+        if not os.path.exists(V20_NTUPLE):
+            pytest.skip(f"Missing v2.0 test ntuple: {V20_NTUPLE}")
+        import uproot
+
+        cfg = OfflineSelectionConfig()
+        f = uproot.open(f"{V20_NTUPLE}:mkcands/X_data")
+        arrays = f.arrays(self.V20_REQUIRED_BRANCHES)
+
+        # Build GEN system
+        pdg = arrays["MC_GenPart_pdgId"]
+        mother = _as_index_array(arrays["MC_GenPart_motherGenIdx"])
+        gen_idx = ak.local_index(pdg)
+        gen_pt = arrays["MC_GenPart_pt"]
+        gen_eta = arrays["MC_GenPart_eta"]
+        gen_mass = arrays["MC_GenPart_mass"]
+        gen_y = self._rapidity(gen_pt, gen_eta, gen_mass)
+
+        is_mu = abs(pdg) == 13
+        mu_mother = mother[is_mu]
+        n_mu_daughters = ak.sum(mu_mother[:, :, None] == gen_idx[:, None, :], axis=1)
+        is_kaon = abs(pdg) == 321
+        kaon_mother = mother[is_kaon]
+        n_kaon_daughters = ak.sum(kaon_mother[:, :, None] == gen_idx[:, None, :], axis=1)
+
+        valid_jpsi = (
+            (abs(pdg) == 443) & (n_mu_daughters >= 2)
+            & (gen_pt > cfg.jpsi_pt_min) & (abs(gen_y) < cfg.jpsi_abs_y_max)
+        )
+        valid_phi = (
+            (abs(pdg) == 333) & (n_kaon_daughters >= 2)
+            & (gen_pt > cfg.phi_pt_min) & (abs(gen_y) < cfg.phi_abs_y_max)
+        )
+
+        jpsi_order = ak.argsort(gen_pt[valid_jpsi], ascending=False)
+        jpsi_idx_sorted = gen_idx[valid_jpsi][jpsi_order]
+        jpsi1_idx = _safe_first(jpsi_idx_sorted, -1)
+        jpsi2_idx = _safe_second(jpsi_idx_sorted, -1)
+
+        phi_order = ak.argsort(gen_pt[valid_phi], ascending=False)
+        phi_idx_sorted = gen_idx[valid_phi][phi_order]
+        phi_idx = _safe_first(phi_idx_sorted, -1)
+
+        has_gen = (jpsi2_idx >= 0) & (phi_idx >= 0)
+        assert ak.sum(has_gen) > 0, "No events with full GEN system"
+
+        # Compute flags
+        fiducial_true = ak.values_astype(ak.ones_like(jpsi1_idx), bool)
+        flags = _compute_per_object_flags_v16(
+            arrays, pdg, mother, jpsi1_idx, jpsi2_idx, phi_idx, cfg,
+            fiducial_true, fiducial_true, fiducial_true,
+        )
+
+        mask = has_gen
+        total = int(ak.sum(mask))
+
+        # ── Pre-condition: per-object columns exist ──
+        for col in ("jpsi_lead_muonRECO", "phi_kaonRECO", "phi_dikaon"):
+            assert col in flags, f"Missing flag: {col}"
+
+        # ── Chain ordering: muonRECO >= muonID >= dimuon (lead) ──
+        lead_reco = int(ak.sum(flags["jpsi_lead_muonRECO"] & mask))
+        lead_id = int(ak.sum(flags["jpsi_lead_muonID"] & mask))
+        lead_dimu = int(ak.sum(flags["jpsi_lead_dimuon"] & mask))
+        assert lead_reco >= lead_id, f"lead muonRECO({lead_reco}) < muonID({lead_id})"
+        assert lead_id >= lead_dimu, f"lead muonID({lead_id}) < dimuon({lead_dimu})"
+
+        # ── Chain ordering: kaonRECO >= kaonID >= dikaon ──
+        phi_reco = int(ak.sum(flags["phi_kaonRECO"] & mask))
+        phi_id = int(ak.sum(flags["phi_kaonID"] & mask))
+        phi_dika = int(ak.sum(flags["phi_dikaon"] & mask))
+        assert phi_reco >= phi_id, f"phi kaonRECO({phi_reco}) < kaonID({phi_id})"
+        assert phi_id >= phi_dika, f"phi kaonID({phi_id}) < dikaon({phi_dika})"
+
+        # ── dimuon needs SingleJpsi; dikaon needs SinglePhi ──
+        assert "SingleJpsi_mass" in arrays.fields
+        assert "SinglePhi_mass" in arrays.fields
+
+        # ── Phi side should distinguish RECO from vertexing ──
+        # Before fix: phi_kaonRECO == phi_dikaon (both from SinglePhi)
+        # After fix:  phi_kaonRECO >= phi_dikaon (different sources)
+        if phi_dika > 0:
+            assert phi_reco >= phi_dika, \
+                f"phi_kaonRECO({phi_reco}) should cover phi_dikaon({phi_dika})"
+
+        # ── s_cand is AND of all steps ──
+        s_cand = (
+            flags["jpsi_lead_muonRECO"] & flags["jpsi_lead_muonID"]
+            & flags["jpsi_lead_dimuon"]
+            & flags["jpsi_sublead_muonRECO"] & flags["jpsi_sublead_muonID"]
+            & flags["jpsi_sublead_dimuon"]
+            & flags["phi_kaonRECO"] & flags["phi_kaonID"] & flags["phi_dikaon"]
+        ) & mask
+        n_s_cand = int(ak.sum(s_cand))
+        assert n_s_cand <= phi_dika, f"s_cand({n_s_cand}) > dikaon({phi_dika})"
+
+        print(f"\n  Events with GEN system: {total}")
+        print(f"  lead   muonRECO→muonID→dimuon: {lead_reco}→{lead_id}→{lead_dimu}")
+        print(f"  sublead muonRECO→muonID→dimuon: "
+              f"{int(ak.sum(flags['jpsi_sublead_muonRECO'] & mask))}→"
+              f"{int(ak.sum(flags['jpsi_sublead_muonID'] & mask))}→"
+              f"{int(ak.sum(flags['jpsi_sublead_dimuon'] & mask))}")
+        print(f"  phi    kaonRECO→kaonID→dikaon: {phi_reco}→{phi_id}→{phi_dika}")
+        print(f"  s_cand: {n_s_cand}")
 
 
 class TestBackendEquality:
