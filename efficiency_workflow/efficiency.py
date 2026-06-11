@@ -1336,6 +1336,22 @@ def _compute_per_object_flags_v16(
         "phi_dikaon": zero,
     }
 
+    # ── J/psi side ──
+    # muonRECO and muonID: direct from PAT muon block (muGenMatchIdx + muIsPatSoftMuon)
+    if {"muGenMatchIdx", "muIsPatSoftMuon"}.issubset(arrays.fields):
+        mu_gen_match = arrays["muGenMatchIdx"]
+        mu_soft = ak.values_astype(arrays["muIsPatSoftMuon"], bool)
+        mu_ancestor = _ancestor_idx_to_pdg(mu_gen_match, pdg, mother, 443)
+
+        j1_matches = mu_ancestor == jpsi1_idx[:, None]
+        j2_matches = mu_ancestor == jpsi2_idx[:, None]
+
+        result["jpsi_lead_muonRECO"] = ak.sum(j1_matches, axis=1) >= 2
+        result["jpsi_sublead_muonRECO"] = ak.sum(j2_matches, axis=1) >= 2
+        result["jpsi_lead_muonID"] = ak.sum(j1_matches & mu_soft, axis=1) >= 2
+        result["jpsi_sublead_muonID"] = ak.sum(j2_matches & mu_soft, axis=1) >= 2
+
+    # dimuon: requires SingleJpsi candidate (vertex fit, mass window)
     if {"SingleJpsi_mass", "SingleJpsi_mu1_Idx", "SingleJpsi_mu2_Idx"}.issubset(arrays.fields):
         sj_mu1_idx = _as_index_array(arrays["SingleJpsi_mu1_Idx"])
         sj_mu2_idx = _as_index_array(arrays["SingleJpsi_mu2_Idx"])
@@ -1368,13 +1384,33 @@ def _compute_per_object_flags_v16(
             & (_as_index_array(arrays["SingleJpsi_fitPass"]) != 0)
         )
 
-        result["jpsi_lead_muonRECO"] = ak.any(sj_leg == jpsi1_idx, axis=1)
-        result["jpsi_lead_muonID"] = ak.any((sj_leg == jpsi1_idx) & sj_both_id, axis=1)
         result["jpsi_lead_dimuon"] = ak.any((sj_leg == jpsi1_idx) & sj_both_id & sj_quality, axis=1)
-        result["jpsi_sublead_muonRECO"] = ak.any(sj_leg == jpsi2_idx, axis=1)
-        result["jpsi_sublead_muonID"] = ak.any((sj_leg == jpsi2_idx) & sj_both_id, axis=1)
         result["jpsi_sublead_dimuon"] = ak.any((sj_leg == jpsi2_idx) & sj_both_id & sj_quality, axis=1)
 
+    # ── φ side ──
+    # kaonRECO and kaonID: direct from RecoKaonTrack block (genMatchIdx + quality)
+    if "RecoKaonTrack_genMatchIdx" in arrays.fields:
+        rk_gen_match = arrays["RecoKaonTrack_genMatchIdx"]
+        rk_ancestor = _ancestor_idx_to_pdg(rk_gen_match, pdg, mother, 333)
+
+        phi_matches = rk_ancestor == phi_idx[:, None]
+        result["phi_kaonRECO"] = ak.sum(phi_matches, axis=1) >= 2
+
+        if {"RecoKaonTrack_normalizedChi2", "RecoKaonTrack_numberOfHits", "RecoKaonTrack_isHighPurity"}.issubset(arrays.fields):
+            rk_pass = (
+                (arrays["RecoKaonTrack_normalizedChi2"] < cfg.kaon_chi2_max)
+                & (arrays["RecoKaonTrack_numberOfHits"] > cfg.kaon_n_valid_hits_min)
+            )
+            if cfg.kaon_require_highpurity:
+                rk_pass = rk_pass & ak.values_astype(arrays["RecoKaonTrack_isHighPurity"], bool)
+        else:
+            rk_pass = (
+                (arrays["RecoKaonTrack_pt"] > cfg.track_pt_min)
+                & (abs(arrays["RecoKaonTrack_eta"]) < cfg.track_abs_eta_max)
+            )
+        result["phi_kaonID"] = ak.sum(phi_matches & rk_pass, axis=1) >= 2
+
+    # dikaon: requires SinglePhi candidate (vertex fit, mass window)
     if {"SinglePhi_mass", "SinglePhi_K1_RecoKaonTrackIdx", "SinglePhi_K2_RecoKaonTrackIdx"}.issubset(arrays.fields):
         sp_k1_idx = _as_index_array(arrays["SinglePhi_K1_RecoKaonTrackIdx"])
         sp_k2_idx = _as_index_array(arrays["SinglePhi_K2_RecoKaonTrackIdx"])
@@ -1388,32 +1424,6 @@ def _compute_per_object_flags_v16(
         sp_a2 = _ancestor_idx_to_pdg(sp_k2_gen, pdg, mother, 333)
         sp_leg = ak.where((sp_a1 >= 0) & (sp_a1 == sp_a2), sp_a1, -1)
 
-        if {"RecoKaonTrack_normalizedChi2", "RecoKaonTrack_numberOfHits", "RecoKaonTrack_isHighPurity"}.issubset(arrays.fields):
-            k1_chi2 = _safe_take_jagged(arrays["RecoKaonTrack_normalizedChi2"], sp_k1_idx, 999.0)
-            k2_chi2 = _safe_take_jagged(arrays["RecoKaonTrack_normalizedChi2"], sp_k2_idx, 999.0)
-            k1_nhits = _safe_take_jagged(arrays["RecoKaonTrack_numberOfHits"], sp_k1_idx, 0)
-            k2_nhits = _safe_take_jagged(arrays["RecoKaonTrack_numberOfHits"], sp_k2_idx, 0)
-            k1_hp = ak.values_astype(_safe_take_jagged(arrays["RecoKaonTrack_isHighPurity"], sp_k1_idx, 0), bool)
-            k2_hp = ak.values_astype(_safe_take_jagged(arrays["RecoKaonTrack_isHighPurity"], sp_k2_idx, 0), bool)
-            sp_track_pass = (
-                (k1_chi2 < cfg.kaon_chi2_max)
-                & (k2_chi2 < cfg.kaon_chi2_max)
-                & (k1_nhits > cfg.kaon_n_valid_hits_min)
-                & (k2_nhits > cfg.kaon_n_valid_hits_min)
-            )
-            if cfg.kaon_require_highpurity:
-                sp_track_pass = sp_track_pass & k1_hp & k2_hp
-        else:
-            k1_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], sp_k1_idx, -1.0)
-            k2_pt = _safe_take_jagged(arrays["RecoKaonTrack_pt"], sp_k2_idx, -1.0)
-            k1_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], sp_k1_idx, np.nan)
-            k2_eta = _safe_take_jagged(arrays["RecoKaonTrack_eta"], sp_k2_idx, np.nan)
-            sp_track_pass = (
-                (k1_pt > cfg.track_pt_min)
-                & (k2_pt > cfg.track_pt_min)
-                & (abs(k1_eta) < cfg.track_abs_eta_max)
-                & (abs(k2_eta) < cfg.track_abs_eta_max)
-            )
         sp_quality = (
             (arrays["SinglePhi_mass"] >= cfg.phi_mass_window[0])
             & (arrays["SinglePhi_mass"] <= cfg.phi_mass_window[1])
@@ -1422,9 +1432,7 @@ def _compute_per_object_flags_v16(
             & (_as_index_array(arrays["SinglePhi_fitValid"]) != 0)
             & (_as_index_array(arrays["SinglePhi_fitPass"]) != 0)
         )
-        result["phi_kaonRECO"] = ak.any(sp_leg == phi_idx, axis=1)
-        result["phi_kaonID"] = ak.any((sp_leg == phi_idx) & sp_track_pass, axis=1)
-        result["phi_dikaon"] = ak.any((sp_leg == phi_idx) & sp_track_pass & sp_quality, axis=1)
+        result["phi_dikaon"] = ak.any((sp_leg == phi_idx) & sp_quality, axis=1)
 
     return result
 
@@ -1834,23 +1842,38 @@ def _process_efficiency_chunk_vectorized(
     hlt_event_path_or = _event_trigger_path_or_array(arrays, has_full_gen)
 
     # ── Per-object step flags (Efficiency_scheme.md) ──
-    # J/psi lead
-    jpsi_lead_muonRECO = has_jpsi1_reco
-    jpsi_lead_muonID = ak.any(
-        ((jpsi1_leg == jpsi1_idx) & psi1_muonID)
-        | ((jpsi2_leg == jpsi1_idx) & psi2_muonID),
-        axis=1,
-    )
+    # muonRECO and muonID: prefer per-muon block; fall back to composite legs
+    if {"muGenMatchIdx", "muIsPatSoftMuon"}.issubset(arrays.fields):
+        mu_gen_match = arrays["muGenMatchIdx"]
+        mu_soft = ak.values_astype(arrays["muIsPatSoftMuon"], bool)
+        mu_ancestor = _ancestor_idx_to_pdg(mu_gen_match, pdg, mother, 443)
+
+        j1_matches = mu_ancestor == jpsi1_idx[:, None]
+        j2_matches = mu_ancestor == jpsi2_idx[:, None]
+
+        jpsi_lead_muonRECO = ak.sum(j1_matches, axis=1) >= 2
+        jpsi_sublead_muonRECO = ak.sum(j2_matches, axis=1) >= 2
+        jpsi_lead_muonID = ak.sum(j1_matches & mu_soft, axis=1) >= 2
+        jpsi_sublead_muonID = ak.sum(j2_matches & mu_soft, axis=1) >= 2
+    else:
+        # J/psi lead
+        jpsi_lead_muonRECO = has_jpsi1_reco
+        jpsi_lead_muonID = ak.any(
+            ((jpsi1_leg == jpsi1_idx) & psi1_muonID)
+            | ((jpsi2_leg == jpsi1_idx) & psi2_muonID),
+            axis=1,
+        )
+        # J/psi sublead
+        jpsi_sublead_muonRECO = has_jpsi2_reco
+        jpsi_sublead_muonID = ak.any(
+            ((jpsi1_leg == jpsi2_idx) & psi1_muonID)
+            | ((jpsi2_leg == jpsi2_idx) & psi2_muonID),
+            axis=1,
+        )
+    # dimuon: always from composite candidate legs (vertex fit required)
     jpsi_lead_dimuon = ak.any(
         ((jpsi1_leg == jpsi1_idx) & psi1_muonID & psi1_quality)
         | ((jpsi2_leg == jpsi1_idx) & psi2_muonID & psi2_quality),
-        axis=1,
-    )
-    # J/psi sublead
-    jpsi_sublead_muonRECO = has_jpsi2_reco
-    jpsi_sublead_muonID = ak.any(
-        ((jpsi1_leg == jpsi2_idx) & psi1_muonID)
-        | ((jpsi2_leg == jpsi2_idx) & psi2_muonID),
         axis=1,
     )
     jpsi_sublead_dimuon = ak.any(
@@ -1858,9 +1881,31 @@ def _process_efficiency_chunk_vectorized(
         | ((jpsi2_leg == jpsi2_idx) & psi2_muonID & psi2_quality),
         axis=1,
     )
-    # Phi
-    phi_kaonRECO = ak.any(phi_leg == phi_idx, axis=1)
-    phi_kaonID = ak.any((phi_leg == phi_idx) & phi_kaonID_raw, axis=1)
+    # Phi: prefer per-RecoKaonTrack; fall back to composite phi legs
+    if "RecoKaonTrack_genMatchIdx" in arrays.fields:
+        rk_gen_match = arrays["RecoKaonTrack_genMatchIdx"]
+        rk_ancestor = _ancestor_idx_to_pdg(rk_gen_match, pdg, mother, 333)
+
+        phi_matches = rk_ancestor == phi_idx[:, None]
+        phi_kaonRECO = ak.sum(phi_matches, axis=1) >= 2
+
+        if {"RecoKaonTrack_normalizedChi2", "RecoKaonTrack_numberOfHits", "RecoKaonTrack_isHighPurity"}.issubset(arrays.fields):
+            rk_pass = (
+                (arrays["RecoKaonTrack_normalizedChi2"] < cfg.kaon_chi2_max)
+                & (arrays["RecoKaonTrack_numberOfHits"] > cfg.kaon_n_valid_hits_min)
+            )
+            if cfg.kaon_require_highpurity:
+                rk_pass = rk_pass & ak.values_astype(arrays["RecoKaonTrack_isHighPurity"], bool)
+        else:
+            rk_pass = (
+                (arrays["RecoKaonTrack_pt"] > cfg.track_pt_min)
+                & (abs(arrays["RecoKaonTrack_eta"]) < cfg.track_abs_eta_max)
+            )
+        phi_kaonID = ak.sum(phi_matches & rk_pass, axis=1) >= 2
+    else:
+        phi_kaonRECO = ak.any(phi_leg == phi_idx, axis=1)
+        phi_kaonID = ak.any((phi_leg == phi_idx) & phi_kaonID_raw, axis=1)
+    # dikaon: always from composite phi candidate (vertex fit required)
     phi_dikaon = ak.any((phi_leg == phi_idx) & phi_dikaon_raw, axis=1)
 
     if ntuple_format in ("v1.6-full", "v2.0-full"):

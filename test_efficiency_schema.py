@@ -281,6 +281,7 @@ def test_process_v16_ntuple_chunk():
 class TestSinglesBasedPerObjectFlags:
     def test_singles_flags(self):
         arrays = ak.Array({
+            "muGenMatchIdx": [[1, 2], [1, 2], [], []],
             "muIsPatSoftMuon": [[1, 1], [1, 0], [], []],
             "SingleJpsi_mass": [[3.10], [3.10], [], []],
             "SingleJpsi_pt": [[10.0], [10.0], [], []],
@@ -309,6 +310,7 @@ class TestSinglesBasedPerObjectFlags:
             "SinglePhi_K2_genMatchIdx": [[], [], [], [8]],
             "RecoKaonTrack_pt": [[], [], [], [2.5, 2.7]],
             "RecoKaonTrack_eta": [[], [], [], [0.1, -0.2]],
+            "RecoKaonTrack_genMatchIdx": [[], [], [], [7, 8]],
         })
         pdg = ak.Array([
             [443, 13, -13, 443, 13, -13, 333, 321, -321],
