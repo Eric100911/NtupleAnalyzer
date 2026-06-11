@@ -42,7 +42,7 @@ Raw TPS-Onia2MuMu MC ntuples (EOS/xrootd)
   → run_efficiency.py / cli_efficiency.py
     [reads raw ntuples DIRECTLY — NO merge step, NO sel_ prefix]
     [per-object steps: fiducial→muonRECO→muonID→dimuon (J/ψ), fiducial→kaonRECO→kaonID→dikaon (φ)]
-    [event-level steps: s_cand→hlt_event→hlt_muon_matched→four_muon_vtx→Pri_* (parallel)]
+    [event-level steps: s_cand→hlt_event(inc. trig+filter)→four_muon_vtx→Pri_* (parallel)]
     → merged_efficiency_output/
       ├── JJP_{sample}/
       │   ├── gen_systems.parquet          [GEN-level kinematics per event]
@@ -123,11 +123,12 @@ There are three branch name "dialects" in play:
    — **no `sel_` prefix**.  This is what Pipeline 2 (efficiency) reads directly.
 2. **Pipeline 1 merged output** (`merge_apply_cuts.py`): `sel_Jpsi_1_*`, `sel_Phi_*`, etc.
    — scalarized copies with `sel_` prefix.  Used only by kinematics/sPlot, NOT by efficiency.
-3. **TPS-Onia2MuMu v1.5 additions**: `SingleJpsi_*`, `SinglePhi_*`, `RecoKaonTrack_*`
-   — new branches for proper per-object efficiency, not present in current ntuples.
+3. **TPS-Onia2MuMu v1.5+ additions**: `SingleJpsi_*`, `SinglePhi_*`, `RecoKaonTrack_*`
+   — new branches for proper per-object efficiency, not present in old ntuples.
+   v2.0 adds track quality branches: `RecoKaonTrack_normalizedChi2`, `_numberOfHits`, `_isHighPurity`.
 
-The current tree path is `TDirectoryFile("mkcands")/TTree("X_data")`.
-TPS-Onia2MuMu v1.5 drops the `mkcands` wrapper — the tree is `X_data` directly.
+The tree path is `TDirectoryFile("mkcands")/TTree("X_data")` — the `mkcands`
+wrapper persists through all TPS-Onia2MuMu versions including v2.0.
 
 The composite-candidate branch names relevant to Pipeline 2 are:
 
@@ -154,6 +155,7 @@ The composite-candidate branch names relevant to Pipeline 2 are:
 
 Flat per-track storage for kaon efficiency. Branches: `RecoKaonTrack_pt`, `RecoKaonTrack_eta`,
 `RecoKaonTrack_phi`, `RecoKaonTrack_charge`, `RecoKaonTrack_genMatchIdx`,
+`RecoKaonTrack_normalizedChi2`, `RecoKaonTrack_numberOfHits`, `RecoKaonTrack_isHighPurity` (v2.0),
 `RecoKaonTrack_usedInSinglePhi`, `RecoKaonTrack_passDzPV`, `RecoKaonTrack_passDxyPV`,
 `RecoKaonTrack_passTrackPV`, `RecoKaonTrack_fromPV`, etc.
 Counter: `nRecoKaonTrack`.
@@ -174,6 +176,20 @@ J/ψ candidates.
 Event-level: `TrigRes`, `TrigNames`, `MatchJpsiTriggerNames`, `MatchUpsTriggerNames`.
 Per-muon: `muIsJpsiTrigMatch`, `muIsJpsiFilterMatch`, `muJpsiMatchedTriggerIndices`,
 `muJpsiMatchedFilterIndices` (and Upsilon counterparts).
+
+**Per-path matching (v2.0+):** `muJpsiMatchedTriggerIndices` gives indices into
+`TriggersForJpsi` (from `X_config`) for each muon; `muJpsiMatchedFilterIndices`
+gives indices into `FiltersForJpsi`. The configured paths are:
+
+| Index | Trigger pattern | Filter label |
+|-------|----------------|--------------|
+| 0 | `HLT_Dimuon0_Jpsi3p5_Muon2_v` (3-muon) | `hltJpsiMuonL3Filtered3p5` |
+| 1 | `HLT_DoubleMu4_3_LowMass_v` (2-muon) | `hltDoubleMu43LowMassL3Filtered` |
+
+A full HLT match requires the HLT path to have fired AND
+per-muon trigger+filter matching for the specific path. The filter labels are
+pair-level: both muons of at least one J/ψ dimuon pair must have the filter
+index in their matched lists.
 
 ## Key Scripts
 
@@ -281,12 +297,16 @@ directly (no merge). Per-object steps are approximated from composite candidate
 information. The step chain is:
 
 ```
-full_gen → s_cand → hlt_event → hlt_muon_matched → four_muon_vtx
-                                                          ↓
-                          ┌───────────────────────────────┴───────────────────────┐
+full_gen → s_cand → hlt_event (inc. per-muon trigger+filter matching) → four_muon_vtx
+                                                                          ↓
+                          ┌───────────────────────────────────────────────┴───────────────────────┐
                           ↓               ↓                ↓                       ↓
                       Pri_fitValid    Pri_fitPass    Pri_assocPVPass    Pri_trackPVPass
 ```
+
+`hlt_muon_matched` is an alias for `hlt_event` (both include the per-muon
+trigger+filter matching). The separate `hlt_muon_matched` step is retained
+for backward compatibility.
 
 **Target** (TPS-Onia2MuMu v1.5, per `docs/Efficiency_Evaluation_Guideline.md`):
 Two MC runs provide single-object branches for proper per-object maps.
@@ -297,12 +317,15 @@ Two MC runs provide single-object branches for proper per-object maps.
 |--------|-------|-------------|
 | `jpsi_lead` | acceptance → muonRECO → muonID → dimuon | `MC_GenPart_*` (acceptance), `SingleJpsi_*` (rest) |
 | `jpsi_sublead` | acceptance → muonRECO → muonID → dimuon | same, lead/sublead ordering by GEN pT |
-| `phi` | acceptance → kaonRECO → kaonID → dikaon | `MC_GenPart_*` (acceptance), `SinglePhi_*` + `RecoKaonTrack_*` (rest) |
+| `phi` | acceptance → kaonRECO → kaonID → dikaon | `MC_GenPart_*` (acceptance: gen-level pT/eta), `SinglePhi_*` (kaonRECO: GEN-match), `RecoKaonTrack_*` quality branches (kaonID: normalizedChi2, numberOfHits, isHighPurity in v2.0; pT/eta fallback in v1.6) |
 
 **Event-level chain** (from Run B — full chain ntuple):
 
+HLT now includes per-muon trigger+filter matching folded into `hlt_event`
+(see Trigger Branches for per-path index mapping).
+
 ```
-(from per-object) → HLT → four_muon_vtx (DiOnia_*) → triOnia
+(from per-object) → HLT (path OR + per-muon trig+filter match) → four_muon_vtx (DiOnia_*) → triOnia
                                                           ↓
                           ┌───────────────────────────────┴───────────────────────┐
                           ↓               ↓                ↓                       ↓
@@ -538,12 +561,161 @@ CMSSW_15_0_15/src/HeavyFlavorAnalysis/TPS-Onia2MuMu/
 The analyzer outputs ntuples with tree `X_data` containing:
 - Composite candidates: `Jpsi_1_*`, `Jpsi_2_*`, `Phi_*`, `DiOnia_*`, `Pri_*`
 - Single-object candidates (MC, `keepAllSingleObjectCandsInMC=True`): `SingleJpsi_*`, `SinglePhi_*`
-- Kaon track block (MC): `RecoKaonTrack_*`
+- Kaon track block (MC): `RecoKaonTrack_*` (v2.0: includes `_normalizedChi2`, `_numberOfHits`, `_isHighPurity`)
 - GEN particles: `MC_GenPart_*`
-- Config tree: `X_Config_Tree` (records all runtime parameters)
+- Config tree: `X_Config_Tree` (records all runtime parameters; v2.0: includes `TrackQuality`, `RequireRecoKaonTrackHighPurity`)
 
 **Critical**: The analyzer does not store rapidity `y` for candidates — only `eta`.
 Rapidity must be computed in post-processing from `(px, py, pz, mass)`.
+
+## Condor Efficiency: New Ntuple Setup
+
+When starting from newly produced TPS-Onia2MuMu v1.6 ntuples, here is the
+end-to-end procedure to get efficiency parquet files computed.
+
+### 0. Produce Ntuples (CMSSW, outside this repo)
+
+Two MC runs per sample (see `docs/Efficiency_Evaluation_Guideline.md`):
+
+**Run A — Singles only:**
+```
+cmsRun ConfFile_cfg.py analysisMode=JpsiJpsiPhi inputFiles=file:myMC.root \
+    outputFile=eff_singles.root runOnMC=True era=Run2022 \
+    keepAllSingleObjectCandsInMC=True \
+    skipCompositeCandBuildingWhenKeepingSingles=True
+```
+Produces `SingleJpsi_*`, `SinglePhi_*`, `RecoKaonTrack_*`, `MC_GenPart_*`.
+
+**Run B — Full chain (required for event-level steps):**
+```
+cmsRun ConfFile_cfg.py ... skipCompositeCandBuildingWhenKeepingSingles=False
+```
+Produces everything from Run A plus `Jpsi_1_*`, `Jpsi_2_*`, `Phi_*`, `Pri_*`, HLT branches.
+
+### 1. Place Ntuples on Storage
+
+Files must follow this layout so `prepare_efficiency_shards.py` can discover them:
+
+```
+<sample_root>/<SAMPLE>/<integer_job_dir>/output_ntuple.root
+```
+
+Example:
+```
+/eos/ihep/cms/store/user/xcheng/MC_Production_v3/output/JJP_DPS2_CS/490/output_ntuple.root
+```
+
+Job directories must be integer-named (used for natural sort ordering).
+
+### 2. Configuration Points
+
+These are the defaults you may need to change. All can be overridden via CLI flags
+on `submit.sh` — see step 3.
+
+| Setting | Default | Where defined |
+|---------|---------|---------------|
+| `sample_root` | `/eos/ihep/cms/store/user/xcheng/MC_Production_v3/output` | `prepare_efficiency_shards.py:12` |
+| `xrootd_host` | `root://cceos.ihep.ac.cn:1094//` | `prepare_efficiency_shards.py:13` |
+| `samples` | `JJP_DPS1,JJP_DPS2_CS,JJP_DPS2_G,JJP_SPS_CS,JJP_SPS_G` | `prepare_efficiency_shards.py:14` |
+| `tree_path` | `mkcands/X_data` | `efficiency_workflow/efficiency.py:317`, `efficiency_workflow/config.py:12` |
+| `analysis_mode` | `JpsiJpsiPhi` | `efficiency_workflow/efficiency.py:316` |
+
+The default `--tree-path` is `mkcands/X_data` and applies to all ntuple versions.
+
+**Offline cuts** (mass windows, pT thresholds, eta): `efficiency_workflow/config.py:36-57`
+(`OfflineSelectionConfig`). These affect the step-flag computation. Changing them
+requires re-running the shards from scratch.
+
+**Kaon track quality** (v2.0): `kaon_chi2_max` (default 8.0), `kaon_n_valid_hits_min`
+(default 4), `kaon_require_highpurity` (default True) in `OfflineSelectionConfig`.
+These replace the pT/eta-based kaonID for v2.0 ntuples.
+
+**Binning edges** (pT, rapidity): `efficiency_workflow/efficiency.py:303-311`
+(`EfficiencyBinning`). Changing binning only requires rebuilding maps from existing
+parquet files (`rebuild_efficiency_maps.py`).
+
+### 3. VOMS Proxy
+
+Required for XRootD access from Condor workers:
+
+```bash
+voms-proxy-init --voms cms --valid 168:00
+```
+
+The proxy at `/afs/cern.ch/user/c/chiw/condor/x509up` is transferred to workers.
+
+### 4. Submit the DAG
+
+From the `condor/` directory, a single command orchestrates everything:
+
+```bash
+cd condor
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+
+./submit.sh jjp_efficiency_dag \
+    --sample JJP_DPS2_CS \
+    --files-per-job 10 \
+    --output-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2
+```
+
+Supports: `--sample all` or comma-separated list, `--xrootd-host`, `--sample-root`,
+`--tree-path`, `--max-files N` (smoke test), `--remote-access-mode fallback|direct|stage`,
+`--efficiency-backend vectorized|python-loop`.
+
+What happens automatically:
+1. `prepare_efficiency_shards.py` — discovers ntuple files, groups into shards, writes queue file
+2. `build_runtime_tarball.sh` — packages the git-tracked source tree into `condor/runtime/`
+3. `generate_efficiency_dag.py` — writes a DAG with N shard nodes + 1 POST node (+ optional CLEANUP)
+4. `condor_submit_dag` — submits the DAG
+
+### 5. Per-Shard Output
+
+Each shard job produces under `<output>/shards/<sample>/shard_XXXX/`:
+- `gen_systems.parquet` — one row per event with GEN-level J/ψ+J/ψ+φ system kinematics
+- `event_step_flags.parquet` — per-event per-object + event-level step boolean flags
+- `worker_manifest.json`
+
+### 6. POST Node (Merge + Derived)
+
+After all shards for a sample complete, the POST job runs:
+1. `merge_efficiency_shards.py` — concatenates shard parquets, rebuilds binned `efficiency_maps.parquet`
+2. `build_derived_efficiency.py` — produces acceptance, conditional, per-object, stacked-J/ψ maps + plots
+
+Final output under `<output>/<sample>/`:
+```
+gen_systems.parquet, event_step_flags.parquet, efficiency_maps.parquet,
+cutflow.csv, derived/ (maps + plots)
+```
+
+### 7. Explicit File Manifest (Alternative to XRootD Discovery)
+
+If ntuples are not on XRootD or don't follow the `<sample>/<job_dir>/output_ntuple.root`
+convention, provide a JSON manifest:
+
+```json
+{"JJP_DPS2_CS": ["root://host//path/to/file1.root", "root://host//path/to/file2.root"]}
+```
+
+Pass with `--input-file-manifest manifest.json` to `submit.sh`. This bypasses
+XRootD discovery entirely.
+
+### Ntuple Format Autodetection
+
+`_detect_ntuple_format()` in `efficiency_workflow/efficiency.py:291-298` checks the
+available branches:
+
+| Format | Has `SingleJpsi_mass` | Has `Jpsi_1_mass` | Has `RecoKaonTrack_normalizedChi2` |
+|--------|----------------------|-------------------|-----------------------------------|
+| `v1.0` (old) | No | Yes | No |
+| `v1.6-singles` (Run A only) | Yes | No | No |
+| `v1.6-full` (Run A+B combined) | Yes | Yes | No |
+| `v2.0-singles` (Run A, v1.7+) | Yes | No | Yes |
+| `v2.0-full` (Run A+B, v1.7+) | Yes | Yes | Yes |
+
+- `v2.0-full` / `v2.0-singles`: same paths as v1.6 counterparts; kaonID uses track quality criteria (normalizedChi2, numberOfHits, isHighPurity) with pT/eta fallback
+- `v1.6-full`: uses singles branches for per-object steps + composites for event-level steps
+- `v1.6-singles`: per-object steps only; all event-level flags beyond `s_cand`/`hlt_event` set to `False`
+- `v1.0`: falls back to event-by-event python-loop processing with composite-only branches
 
 ## Reference Docs
 
