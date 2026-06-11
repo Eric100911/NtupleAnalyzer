@@ -852,13 +852,35 @@ def _phi_quality(event: dict[str, Any], cand_idx: int, cfg: OfflineSelectionConf
 
 
 def _phi_kaonID(event: dict[str, Any], cand_idx: int, cfg: OfflineSelectionConfig) -> bool:
-    """Kaon track-level cuts only (no phi mass/pt/vtxProb)."""
-    return bool(
+    """Kaon track-level cuts (pT, eta) plus v1.7 track quality when available."""
+    if not (
         float(_event_value(event, "Phi_K_1_pt", cand_idx, -1.0)) > cfg.track_pt_min
         and float(_event_value(event, "Phi_K_2_pt", cand_idx, -1.0)) > cfg.track_pt_min
         and abs(float(_event_value(event, "Phi_K_1_eta", cand_idx, math.nan))) < cfg.track_abs_eta_max
         and abs(float(_event_value(event, "Phi_K_2_eta", cand_idx, math.nan))) < cfg.track_abs_eta_max
-    )
+    ):
+        return False
+    # v1.7+: track quality via RecoKaonTrackIdx → RecoKaonTrack_* block
+    if "RecoKaonTrack_isHighPurity" in event:
+        rk1 = to_int_idx(_event_value(event, "Phi_K_1_RecoKaonTrackIdx", cand_idx, -1), -1)
+        rk2 = to_int_idx(_event_value(event, "Phi_K_2_RecoKaonTrackIdx", cand_idx, -1), -1)
+        if rk1 < 0 or rk2 < 0:
+            return False
+        hp1 = to_int_idx(_event_value(event, "RecoKaonTrack_isHighPurity", rk1, 0), 0)
+        hp2 = to_int_idx(_event_value(event, "RecoKaonTrack_isHighPurity", rk2, 0), 0)
+        chi2_1 = float(_event_value(event, "RecoKaonTrack_normalizedChi2", rk1, -1.0))
+        chi2_2 = float(_event_value(event, "RecoKaonTrack_normalizedChi2", rk2, -1.0))
+        nhits1 = to_int_idx(_event_value(event, "RecoKaonTrack_numberOfHits", rk1, -1), -1)
+        nhits2 = to_int_idx(_event_value(event, "RecoKaonTrack_numberOfHits", rk2, -1), -1)
+        if not (
+            hp1 == 1 and hp2 == 1
+            and 0 < chi2_1 <= cfg.kaon_normalized_chi2_max
+            and 0 < chi2_2 <= cfg.kaon_normalized_chi2_max
+            and nhits1 >= cfg.kaon_number_of_hits_min
+            and nhits2 >= cfg.kaon_number_of_hits_min
+        ):
+            return False
+    return True
 
 
 def _candidate_four_muon_vtx(event: dict[str, Any], cand_idx: int) -> bool:
@@ -1229,6 +1251,20 @@ def _compute_per_object_flags_v16(
             & (abs(k1_eta) < cfg.track_abs_eta_max)
             & (abs(k2_eta) < cfg.track_abs_eta_max)
         )
+        if "RecoKaonTrack_isHighPurity" in arrays.fields:
+            k1_hp = _safe_take_jagged(arrays["RecoKaonTrack_isHighPurity"], sp_k1_idx, 0)
+            k2_hp = _safe_take_jagged(arrays["RecoKaonTrack_isHighPurity"], sp_k2_idx, 0)
+            k1_chi2 = _safe_take_jagged(arrays["RecoKaonTrack_normalizedChi2"], sp_k1_idx, -1.0)
+            k2_chi2 = _safe_take_jagged(arrays["RecoKaonTrack_normalizedChi2"], sp_k2_idx, -1.0)
+            k1_nhits = _safe_take_jagged(arrays["RecoKaonTrack_numberOfHits"], sp_k1_idx, -1)
+            k2_nhits = _safe_take_jagged(arrays["RecoKaonTrack_numberOfHits"], sp_k2_idx, -1)
+            sp_track_pass = sp_track_pass & (
+                (k1_hp == 1) & (k2_hp == 1)
+                & (k1_chi2 > 0) & (k1_chi2 <= cfg.kaon_normalized_chi2_max)
+                & (k2_chi2 > 0) & (k2_chi2 <= cfg.kaon_normalized_chi2_max)
+                & (k1_nhits >= cfg.kaon_number_of_hits_min)
+                & (k2_nhits >= cfg.kaon_number_of_hits_min)
+            )
         sp_quality = (
             (arrays["SinglePhi_mass"] >= cfg.phi_mass_window[0])
             & (arrays["SinglePhi_mass"] <= cfg.phi_mass_window[1])
@@ -1562,6 +1598,24 @@ def _process_efficiency_chunk_vectorized(
         & (abs(phi_k1_eta) < cfg.track_abs_eta_max)
         & (abs(phi_k2_eta) < cfg.track_abs_eta_max)
     )
+    # v1.7+: track quality (isHighPurity, normalizedChi2, numberOfHits)
+    if "RecoKaonTrack_isHighPurity" in arrays.fields:
+        if {"Phi_K_1_pt", "Phi_K_2_pt", "Phi_K_1_eta", "Phi_K_2_eta"}.issubset(arrays.fields):
+            phi_k1_rk_idx = _as_index_array(arrays["Phi_K_1_RecoKaonTrackIdx"])
+            phi_k2_rk_idx = _as_index_array(arrays["Phi_K_2_RecoKaonTrackIdx"])
+        phi_k1_hp = _safe_take_jagged(arrays["RecoKaonTrack_isHighPurity"], phi_k1_rk_idx, 0)
+        phi_k2_hp = _safe_take_jagged(arrays["RecoKaonTrack_isHighPurity"], phi_k2_rk_idx, 0)
+        phi_k1_chi2 = _safe_take_jagged(arrays["RecoKaonTrack_normalizedChi2"], phi_k1_rk_idx, -1.0)
+        phi_k2_chi2 = _safe_take_jagged(arrays["RecoKaonTrack_normalizedChi2"], phi_k2_rk_idx, -1.0)
+        phi_k1_nhits = _safe_take_jagged(arrays["RecoKaonTrack_numberOfHits"], phi_k1_rk_idx, -1)
+        phi_k2_nhits = _safe_take_jagged(arrays["RecoKaonTrack_numberOfHits"], phi_k2_rk_idx, -1)
+        phi_kaonID_raw = phi_kaonID_raw & (
+            (phi_k1_hp == 1) & (phi_k2_hp == 1)
+            & (phi_k1_chi2 > 0) & (phi_k1_chi2 <= cfg.kaon_normalized_chi2_max)
+            & (phi_k2_chi2 > 0) & (phi_k2_chi2 <= cfg.kaon_normalized_chi2_max)
+            & (phi_k1_nhits >= cfg.kaon_number_of_hits_min)
+            & (phi_k2_nhits >= cfg.kaon_number_of_hits_min)
+        )
     phi_dikaon_raw = phi_kaonID_raw & (
         (arrays["Phi_mass"] >= cfg.phi_mass_window[0])
         & (arrays["Phi_mass"] <= cfg.phi_mass_window[1])

@@ -40,6 +40,9 @@ class OfflineSelectionConfig:
     mu_abs_eta_max: float = 2.4
     track_pt_min: float = 2.0
     track_abs_eta_max: float = 2.5
+    kaon_normalized_chi2_max: float = 8.0
+    kaon_number_of_hits_min: int = 5  # >4 effective minimum
+    kaon_require_high_purity: bool = True
     jpsi_mass_window: tuple[float, float] = (2.9, 3.3)
     jpsi_pt_min: float = 6.0
     jpsi_abs_y_max: float = 2.5
