@@ -965,13 +965,13 @@ def write_efficiency_plot_bundle(
 ) -> dict[str, dict[str, str]]:
     plot_style_cfg = with_subprocess_label(plot_style_cfg, sample_dir.name)
     plot_paths = write_efficiency_plots(
-        sample_dir / "plots",
+        sample_dir / "plots" / "cumulative",
         counts_df,
         plot_style_cfg=plot_style_cfg,
         min_total=min_total,
     )
     qa_paths = write_efficiency_plots(
-        sample_dir / "plots_with_uncertainty",
+        sample_dir / "plots_with_uncertainty" / "cumulative",
         counts_df,
         plot_style_cfg=plot_style_cfg,
         min_total=min_total,

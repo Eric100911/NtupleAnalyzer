@@ -1193,8 +1193,7 @@ def _read_trigger_filter_config(path: str) -> dict[str, int]:
     and also {"dimuon0_trig": 0, "doublemu_trig": 1} for trigger indices.
     """
     import uproot
-    config_path = path.split(":")[0]
-    config_tree = f"{config_path}:mkcands/X_config"
+    config_tree = f"{path}:mkcands/X_config"
     try:
         with uproot.open(config_tree) as f:
             triggers = f["TriggersForJpsi"].array()[0]

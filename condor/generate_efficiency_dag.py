@@ -219,6 +219,7 @@ def build_dag(
             runtime_tarball_basename=tarball_basename,
         ))
         lines.append(f"JOB {name} {sub_path}")
+        lines.append(f"RETRY {name} 2")
         lines.append("")
 
     # POST submit file
