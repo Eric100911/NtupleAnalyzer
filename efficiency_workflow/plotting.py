@@ -830,6 +830,7 @@ def _write_2d_object_maps(
     include_uncertainty: bool = False,
     *,
     subdir: str | None = None,
+    prefix: str = "",
     zlabel_fn: Callable[[str], str] = _efficiency_zlabel,
 ) -> dict[str, Path]:
     target_dir = (output_dir / subdir) if subdir else output_dir
@@ -839,8 +840,8 @@ def _write_2d_object_maps(
     for (obj, step), frame in obj_df.groupby(["object", "step"], dropna=False):
         step_label = _step_display_name(step)
         obj_label = _object_math_label(obj)
-        path = target_dir / f"object2d_{obj}_{step}.png"
-        written[f"object2d.{obj}.{step}"] = save_efficiency_heatmap(
+        path = target_dir / f"{prefix}object2d_{obj}_{step}.png"
+        written[f"{prefix}object2d.{obj}.{step}"] = save_efficiency_heatmap(
             path, frame,
             title=f"{obj_label} {step_label}",
             xlabel=r"$p_{\mathrm{T}}$ [GeV]",
@@ -862,6 +863,7 @@ def _write_2d_object_maps_abs_y(
     include_uncertainty: bool = False,
     *,
     subdir: str | None = None,
+    prefix: str = "",
     zlabel_fn: Callable[[str], str] = _efficiency_zlabel,
 ) -> dict[str, Path]:
     """Write 2D efficiency heatmaps in (pT, |y|) by folding signed-y bins."""
@@ -879,8 +881,8 @@ def _write_2d_object_maps_abs_y(
     for (obj, step), frame in abs_df.groupby(["object", "step"], dropna=False):
         step_label = _step_display_name(step)
         obj_label = _object_math_label(obj)
-        path = target_dir / f"object2d_absy_{obj}_{step}.png"
-        written[f"object2d_absy.{obj}.{step}"] = save_efficiency_heatmap(
+        path = target_dir / f"{prefix}object2d_absy_{obj}_{step}.png"
+        written[f"{prefix}object2d_absy.{obj}.{step}"] = save_efficiency_heatmap(
             path, frame,
             title=f"{obj_label} {step_label}",
             xlabel=r"$p_{\mathrm{T}}$ [GeV]",
@@ -902,6 +904,7 @@ def _write_correlated_3d_maps(
     include_uncertainty: bool = False,
     *,
     subdir: str | None = None,
+    prefix: str = "",
     zlabel_fn: Callable[[str], str] = _efficiency_zlabel,
 ) -> dict[str, Path]:
     target_dir = (output_dir / subdir) if subdir else output_dir
@@ -912,8 +915,8 @@ def _write_correlated_3d_maps(
         z_label = str(frame["z_label"].dropna().iloc[0]) if not frame["z_label"].dropna().empty else str(z_bin)
         step_label = _step_display_name(step)
         phi_pt_label = rf"$p_{{\mathrm{{T}}}}(\phi)$ = {z_label} GeV"
-        path = target_dir / f"corr3d_{step}_phiPt_{z_bin}.png"
-        written[f"corr3d.{step}.{z_bin}"] = save_efficiency_heatmap(
+        path = target_dir / f"{prefix}corr3d_{step}_phiPt_{z_bin}.png"
+        written[f"{prefix}corr3d.{step}.{z_bin}"] = save_efficiency_heatmap(
             path, frame,
             title=step_label,
             xlabel=r"$p_{\mathrm{T}}(J/\psi_{\mathrm{lead}})$ [GeV]",
@@ -943,16 +946,19 @@ def write_efficiency_plots(
         output_dir, counts_df,
         plot_style_cfg=plot_style_cfg, min_total=min_total,
         include_uncertainty=include_uncertainty,
+        subdir="cumulative", prefix="cumulative_",
     ))
     written.update(_write_2d_object_maps_abs_y(
         output_dir, counts_df,
         plot_style_cfg=plot_style_cfg, min_total=min_total,
         include_uncertainty=include_uncertainty,
+        subdir="cumulative", prefix="cumulative_",
     ))
     written.update(_write_correlated_3d_maps(
         output_dir, counts_df,
         plot_style_cfg=plot_style_cfg, min_total=min_total,
         include_uncertainty=include_uncertainty,
+        subdir="cumulative", prefix="cumulative_",
     ))
     return written
 
@@ -1008,6 +1014,7 @@ def write_derived_plots(
     obj_acc = acc_df.loc[acc_df["map_type"] == "object_2d"].copy()
     for obj, frame in obj_acc.groupby("object", dropna=False):
         obj_label = _object_math_label(obj)
+        # signed y
         path = acc_plot_dir / f"object2d_{obj}_fiducial_acceptance.png"
         written[f"object2d.{obj}.fiducial_acceptance"] = save_efficiency_heatmap(
             path, frame,
@@ -1020,6 +1027,25 @@ def write_derived_plots(
             show_title=include_uncertainty,
             zlabel="Acceptance",
         )
+    # |y|-folded acceptance
+    if not obj_acc.empty:
+        from .efficiency import fold_object_2d_to_abs_y
+        folded = fold_object_2d_to_abs_y(obj_acc)
+        abs_acc = folded.loc[folded["map_type"] == "object_2d_abs_y"].copy()
+        for obj, frame in abs_acc.groupby("object", dropna=False):
+            obj_label = _object_math_label(obj)
+            path = acc_plot_dir / f"object2d_absy_{obj}_fiducial_acceptance.png"
+            written[f"object2d_absy.{obj}.fiducial_acceptance"] = save_efficiency_heatmap(
+                path, frame,
+                title=f"{obj_label} fiducial acceptance",
+                xlabel=r"$p_{\mathrm{T}}$ [GeV]",
+                ylabel=None,
+                plot_style_cfg=plot_style_cfg,
+                min_total=min_total,
+                include_uncertainty=include_uncertainty,
+                show_title=include_uncertainty,
+                zlabel="Acceptance",
+            )
 
     # Conditional: per-object and correlated 3D (exclude full_gen from object maps)
     cond_obj_df = cond_df.loc[
@@ -1030,6 +1056,13 @@ def write_derived_plots(
         plot_style_cfg=plot_style_cfg, min_total=min_total,
         include_uncertainty=include_uncertainty, subdir="conditional",
     ))
+    # |y|-folded conditional per-object
+    if not cond_obj_df.empty:
+        written.update(_write_2d_object_maps_abs_y(
+            output_dir, cond_obj_df,
+            plot_style_cfg=plot_style_cfg, min_total=min_total,
+            include_uncertainty=include_uncertainty, subdir="conditional",
+        ))
     written.update(_write_correlated_3d_maps(
         output_dir, cond_df,
         plot_style_cfg=plot_style_cfg, min_total=min_total,
