@@ -56,6 +56,14 @@ CTAU_RANGE = (-0.05, 0.1)
 
 @dataclass(frozen=True)
 class CutScenario:
+    """Defines a vertex-cut scenario for comparison.
+
+    Attributes:
+        key: Short identifier for the scenario (e.g. "no_vertex_cut").
+        label: Human-readable label for plot legends.
+        expression: RDataFrame filter expression for this cut.
+        required_branches: Set of branch names required by the expression.
+    """
     key: str
     label: str
     expression: str
@@ -64,6 +72,14 @@ class CutScenario:
 
 @dataclass(frozen=True)
 class PairSpec:
+    """Defines a pair of particles for delta-dz/delta-dxy comparisons.
+
+    Attributes:
+        key: Short identifier for the pair (e.g. "jpsi1_jpsi2").
+        label: LaTeX label for plot titles.
+        left: Name of the first particle in the pair.
+        right: Name of the second particle in the pair.
+    """
     key: str
     label: str
     left: str
@@ -72,6 +88,15 @@ class PairSpec:
 
 @dataclass(frozen=True)
 class PlotSpec:
+    """Specification for a single plot variable.
+
+    Attributes:
+        key: Short identifier used as the filename base.
+        branch: Tree branch to read.
+        title: Plot title string.
+        xlabel: X-axis label.
+        value_range: (min, max) tuple for histogram binning.
+    """
     key: str
     branch: str
     title: str
@@ -477,7 +502,7 @@ def save_overlay_plot(
 
     ref_counts, ref_errors = histograms["no_vertex_cut"]
 
-    fig, (ax, rax) = plt.subplots(
+    fig, (ax, ratio_ax) = plt.subplots(
         2,
         1,
         figsize=(8, 8),
@@ -531,7 +556,7 @@ def save_overlay_plot(
 
         ratio, ratio_err = ratio_to_reference(counts, errors, ref_counts, ref_errors)
         valid = np.isfinite(ratio)
-        rax.errorbar(
+        ratio_ax.errorbar(
             centers[valid],
             ratio[valid],
             yerr=ratio_err[valid],
@@ -558,12 +583,12 @@ def save_overlay_plot(
         ymax = max(np.max(np.concatenate([counts for counts, _ in histograms.values()])) * 10.0, 1.0)
         ax.set_ylim(ymin, ymax)
 
-    rax.axhline(1.0, color="black", linestyle="--", linewidth=1.0)
-    rax.set_ylabel("cut / no cut")
-    rax.set_xlabel(plot_spec.xlabel)
-    rax.set_ylim(*RATIO_Y_RANGE)
-    rax.set_yscale("log")
-    rax.grid(True, linestyle=":", linewidth=0.8, alpha=0.45)
+    ratio_ax.axhline(1.0, color="black", linestyle="--", linewidth=1.0)
+    ratio_ax.set_ylabel("cut / no cut")
+    ratio_ax.set_xlabel(plot_spec.xlabel)
+    ratio_ax.set_ylim(*RATIO_Y_RANGE)
+    ratio_ax.set_yscale("log")
+    ratio_ax.grid(True, linestyle=":", linewidth=0.8, alpha=0.45)
     fig.tight_layout()
 
     base = os.path.join(output_dir, plot_spec.key)

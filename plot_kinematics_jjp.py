@@ -585,7 +585,7 @@ def _histogram2d(x, y, weights, normalize: str):
     return counts
 
 
-def _plot_pull_panel(rax, edges, centers, mc_histos, data_counts, data_vars):
+def _plot_pull_panel(ratio_ax, edges, centers, mc_histos, data_counts, data_vars):
     sigma_data = np.sqrt(data_vars)
     finite_values = []
     for label, (counts, mc_err) in mc_histos.items():
@@ -599,14 +599,14 @@ def _plot_pull_panel(rax, edges, centers, mc_histos, data_counts, data_vars):
         if np.any(finite):
             color = MC_COLORS.get(label, "gray")
             display_label = MC_LABELS.get(label, label)
-            rax.stairs(
+            ratio_ax.stairs(
                 pull,
                 edges,
                 color=color,
                 linewidth=1.5,
                 label=display_label,
             )
-            rax.errorbar(
+            ratio_ax.errorbar(
                 centers[finite],
                 pull[finite],
                 yerr=pull_err[finite],
@@ -617,15 +617,15 @@ def _plot_pull_panel(rax, edges, centers, mc_histos, data_counts, data_vars):
                 capthick=1.0,
             )
 
-    rax.axhline(0.0, color="black", linestyle="--", linewidth=1)
-    rax.set_ylabel(r"$(\mathrm{MC}-\mathrm{Data})/\sigma_{\mathrm{Data}}$", fontsize=12)
+    ratio_ax.axhline(0.0, color="black", linestyle="--", linewidth=1)
+    ratio_ax.set_ylabel(r"$(\mathrm{MC}-\mathrm{Data})/\sigma_{\mathrm{Data}}$", fontsize=12)
     if finite_values:
         finite_array = np.asarray(finite_values, dtype=float)
         ymin, ymax = np.nanpercentile(finite_array, [2.0, 98.0])
         span = max(abs(ymin), abs(ymax), 2.0)
-        rax.set_ylim(-1.15 * span, 1.15 * span)
+        ratio_ax.set_ylim(-1.15 * span, 1.15 * span)
     else:
-        rax.set_ylim(-2.0, 2.0)
+        ratio_ax.set_ylim(-2.0, 2.0)
 
 
 # ---------------------------------------------------------------------------
@@ -723,7 +723,7 @@ def plot_comparison(
         mc_histos[label] = (norm_counts, np.sqrt(norm_sumw2))
 
     # ---- Plot ----
-    fig, (ax, rax) = plt.subplots(
+    fig, (ax, ratio_ax) = plt.subplots(
         2,
         1,
         figsize=(15.0, 8.8),
@@ -752,9 +752,9 @@ def plot_comparison(
     ax.tick_params(labelbottom=False)
     ax.legend(loc="upper right", fontsize=16, frameon=False)
 
-    _plot_pull_panel(rax, edges, centers, mc_histos, data_counts, data_sumw2)
-    rax.set_xlabel(xlabel)
-    rax.grid(True, axis="y", alpha=0.25)
+    _plot_pull_panel(ratio_ax, edges, centers, mc_histos, data_counts, data_sumw2)
+    ratio_ax.set_xlabel(xlabel)
+    ratio_ax.grid(True, axis="y", alpha=0.25)
 
     fig.subplots_adjust(left=0.10, right=0.96, top=0.84, bottom=0.10)
     _apply_cms_work_in_progress_label(ax, data=True)
@@ -808,6 +808,7 @@ def plot_correlation_heatmap(
 # Main
 # ---------------------------------------------------------------------------
 def main() -> int:
+    """Run the sPlot fit (if needed) and produce data-only kinematics and/or data-MC comparison plots."""
     args = parse_args()
 
     output_dir = args.output_dir or os.path.join(

@@ -36,13 +36,14 @@ from ntuple_pipeline_common import (
 
 
 OUTPUT_TREE = "selected"
-UNSUPPORTED_SNAPSHOT_TYPES = {
+SNAPSHOT_TYPE_CAST_MAP = {
     "Float16_t": "float",
     "Double32_t": "double",
 }
 
 
 def build_genmatch_expr(schema_key: str) -> str | None:
+    """Build the RDataFrame expression for GEN-level matching for the given schema."""
     if schema_key == "JJP_mc":
         return (
             "PassSelectedJJPGenMatch("
@@ -73,6 +74,7 @@ def build_genmatch_expr(schema_key: str) -> str | None:
 
 
 def build_best_index_expr(schema_key: str) -> str:
+    """Build the RDataFrame expression for best-candidate index selection."""
     if schema_key == "JJP_data" or schema_key == "JJP_mc":
         return (
             "BestCandIndexJJP("
@@ -216,12 +218,12 @@ def remove_paths(paths) -> None:
 
 
 def inspect_branch_types(file_name: str, tree_name: str):
-    tf = ROOT.TFile.Open(file_name)
-    if not tf or tf.IsZombie():
+    root_file = ROOT.TFile.Open(file_name)
+    if not root_file or root_file.IsZombie():
         raise RuntimeError(f"Failed to open {file_name} for branch inspection")
-    tree = tf.Get(tree_name)
+    tree = root_file.Get(tree_name)
     if tree is None:
-        tf.Close()
+        root_file.Close()
         raise RuntimeError(f"Tree {tree_name} not found in {file_name}")
 
     branch_types = {}
@@ -230,23 +232,25 @@ def inspect_branch_types(file_name: str, tree_name: str):
         for leaf in branch.GetListOfLeaves():
             branch_types[branch_name] = leaf.GetTypeName()
             break
-    tf.Close()
+    root_file.Close()
     return branch_types
 
 
 def prepare_snapshot_metadata(sample_file: str, schema):
+    """Determine the snapshot column list and type-cast map for unsupported branch types."""
     original_branches = get_tree_branches(sample_file, TREE_NAME)
     snapshot_columns = list(dict.fromkeys(original_branches + selected_extra_columns(schema)))
     branch_types = inspect_branch_types(sample_file, TREE_NAME)
     cast_map = {
-        name: UNSUPPORTED_SNAPSHOT_TYPES[type_name]
+        name: SNAPSHOT_TYPE_CAST_MAP[type_name]
         for name, type_name in branch_types.items()
-        if name in snapshot_columns and type_name in UNSUPPORTED_SNAPSHOT_TYPES
+        if name in snapshot_columns and type_name in SNAPSHOT_TYPE_CAST_MAP
     }
     return snapshot_columns, cast_map
 
 
 def apply_snapshot_casts(rdf, cast_map):
+    """Apply static_cast redefinitions for unsupported branch types (e.g. Float16_t -> float)."""
     for branch_name, target_type in cast_map.items():
         rdf = rdf.Redefine(branch_name, f"static_cast<{target_type}>({branch_name})")
     return rdf
@@ -269,6 +273,7 @@ def load_file_manifest(path: str) -> list[str]:
 
 
 def run_merge_once(schema, files, args, output_file: str, snapshot_columns, cast_map):
+    """Run a single RDataFrame merge pass over the input files with selections and snapshot."""
     start = time.time()
     rdf_all = ROOT.RDataFrame(TREE_NAME, build_root_string_vector(files))
     if args.max_events > 0:
@@ -293,6 +298,7 @@ def run_merge_once(schema, files, args, output_file: str, snapshot_columns, cast
 
 
 def merge_chunk_outputs(chunk_outputs, merged_output: str) -> None:
+    """Merge multiple chunk ROOT files into a single output file using TFileMerger."""
     if not chunk_outputs:
         raise RuntimeError("No chunk outputs were produced")
     ensure_parent_dir(merged_output)
@@ -318,6 +324,7 @@ def finalize_output(local_output: str, destination: str) -> None:
 
 
 def process_with_local_staging(schema, remote_files, args, output_file: str):
+    """Process remote files by staging them locally before merging and selection."""
     stage_parent = args.stage_dir or os.environ.get("TMPDIR") or tempfile.gettempdir()
     stage_parent = os.path.abspath(os.path.expanduser(stage_parent))
     os.makedirs(stage_parent, exist_ok=True)

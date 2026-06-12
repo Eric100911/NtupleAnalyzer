@@ -43,6 +43,14 @@ RATIO_Y_RANGE = (0.1, 10.0)
 
 @dataclass(frozen=True)
 class CutScenario:
+    """Defines a vertex-cut scenario for the DiOnia ctau shape study.
+
+    Attributes:
+        key: Short identifier for the scenario (e.g. "no_dionia_vtx_cut").
+        label: Human-readable label for plot legends.
+        expression: RDataFrame filter expression for this cut.
+        required_branches: Set of branch names required by the expression.
+    """
     key: str
     label: str
     expression: str
@@ -55,7 +63,7 @@ def parse_args():
     parser.add_argument("--dataset", default="data", choices=["data", "mc"])
     parser.add_argument("--sample", default=None, help="MC sample tag")
     parser.add_argument("-i", "--input", default=None, help="Input merged selected ROOT file")
-    parser.add_argument("-o", "--output-dir", default=None, help="Directory for final comparison plots")
+    parser.add_argument("-o", "--output-dir", default=None, help="Directory for input_file_varal comparison plots")
     parser.add_argument("--work-dir", default=None, help="Directory for filtered and weighted intermediate ROOT files")
     parser.add_argument("-j", "--jobs", type=int, default=8, help="RDataFrame/RooFit thread count")
     parser.add_argument("-n", "--max-events", type=int, default=-1, help="Limit events for quick tests")
@@ -160,10 +168,10 @@ def run_splot_fit(input_file: str, output_file: str, plot_dir: str, channel: str
 
     ROOT.gROOT.SetBatch(True)
     ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.WARNING)
-    fin = ROOT.TFile.Open(input_file)
-    tree = fin.Get(INPUT_TREE)
+    input_file_var = ROOT.TFile.Open(input_file)
+    tree = input_file_var.Get(INPUT_TREE)
     if not tree:
-        fin.Close()
+        input_file_var.Close()
         raise RuntimeError(f"Input tree '{INPUT_TREE}' not found in {input_file}")
 
     if channel == "JJP":
@@ -213,7 +221,7 @@ def run_splot_fit(input_file: str, output_file: str, plot_dir: str, channel: str
     fit_result.Write("fit_result")
     fit_core.save_significance_to_root(fit_out, signal_yield_name, significance)
     fit_out.Close()
-    fin.Close()
+    input_file_var.Close()
 
     return {
         "entries": n_entries,
@@ -227,7 +235,7 @@ def histogram_from_file(file_name: str, branch: str):
     arrays = uproot.open(file_name)[INPUT_TREE].arrays([branch, WEIGHT_BRANCH], library="np")
     values = np.asarray(arrays[branch], dtype=float)
     weights = np.asarray(arrays[WEIGHT_BRANCH], dtype=float)
-    mask = np.isfinite(values) & np.isfinite(weights)
+    mask = np.isinput_file_varite(values) & np.isinput_file_varite(weights)
     return values[mask], weights[mask]
 
 
@@ -291,7 +299,7 @@ def save_overlay_plot(
 
     ref_counts, ref_errors = histograms["no_dionia_vtx_cut"]
 
-    fig, (ax, rax) = plt.subplots(
+    fig, (ax, ratio_ax) = plt.subplots(
         2,
         1,
         figsize=(10.5, 9.0),
@@ -344,8 +352,8 @@ def save_overlay_plot(
         )
 
         ratio, ratio_err = ratio_to_reference(counts, errors, ref_counts, ref_errors)
-        valid = np.isfinite(ratio)
-        rax.errorbar(
+        valid = np.isinput_file_varite(ratio)
+        ratio_ax.errorbar(
             centers[valid],
             ratio[valid],
             yerr=ratio_err[valid],
@@ -369,12 +377,12 @@ def save_overlay_plot(
     ymax = max(np.max(np.concatenate([counts for counts, _ in histograms.values()])) * 10.0, 1.0)
     ax.set_ylim(ymin, ymax)
 
-    rax.axhline(1.0, color="black", linestyle="--", linewidth=1.0)
-    rax.set_ylabel("cut / no cut")
-    rax.set_xlabel(plot_spec.xlabel)
-    rax.set_ylim(*RATIO_Y_RANGE)
-    rax.set_yscale("log")
-    rax.grid(True, linestyle=":", linewidth=0.8, alpha=0.45)
+    ratio_ax.axhline(1.0, color="black", linestyle="--", linewidth=1.0)
+    ratio_ax.set_ylabel("cut / no cut")
+    ratio_ax.set_xlabel(plot_spec.xlabel)
+    ratio_ax.set_ylim(*RATIO_Y_RANGE)
+    ratio_ax.set_yscale("log")
+    ratio_ax.grid(True, linestyle=":", linewidth=0.8, alpha=0.45)
     fig.subplots_adjust(left=0.12, right=0.97, top=0.93, bottom=0.08, hspace=0.05)
 
     base = os.path.join(output_dir, plot_spec.key)

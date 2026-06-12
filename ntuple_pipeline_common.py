@@ -66,6 +66,10 @@ MUON_ID_BRANCHES = {
 }
 
 
+# ---------------------------------------------------------------------------
+#  Dataclasses
+# ---------------------------------------------------------------------------
+
 @dataclass(frozen=True)
 class ChannelConfig:
     channel: str
@@ -87,6 +91,10 @@ class DatasetSchema:
     selected_muon_specs: Tuple[Tuple[str, str], ...]
     selected_particle_prefixes: Tuple[str, ...]
 
+
+# ---------------------------------------------------------------------------
+#  Channel configuration registry
+# ---------------------------------------------------------------------------
 
 CHANNEL_CONFIGS: Dict[str, ChannelConfig] = {
     "JJP": ChannelConfig(
@@ -365,6 +373,11 @@ CHANNEL_CONFIGS: Dict[str, ChannelConfig] = {
 }
 
 
+# ---------------------------------------------------------------------------
+#  Input resolution & path utilities
+# ---------------------------------------------------------------------------
+
+
 def normalize_channel(channel: str) -> str:
     channel_up = channel.upper()
     if channel_up not in CHANNEL_CONFIGS:
@@ -408,6 +421,20 @@ def default_input_dir(channel: str, dataset: str, sample: str | None = None) -> 
 
 
 def make_tag(channel: str, dataset: str, sample: str | None = None) -> str:
+    """Build a filesystem tag string from channel, dataset, and optional MC sample.
+
+    Used by ``default_merged_output``, ``default_weighted_output``, and
+    ``default_plot_dir`` to derive output path components.  For MC datasets the
+    sample name (lowercased) is appended after the dataset slug.
+
+    Args:
+        channel: Analysis channel (``"JJP"``, ``"JYP"``, ``"JJY"``).
+        dataset: ``"data"`` or ``"mc"``.
+        sample: MC subprocess sample name (only meaningful when ``dataset="mc"``).
+
+    Returns:
+        Lowercase tag string such as ``"jjp_data"`` or ``"jjp_mc_dps_1"``.
+    """
     base = f"{channel.lower()}_{dataset}"
     if dataset == "mc" and sample:
         base = f"{base}_{sample.lower()}"
@@ -490,6 +517,24 @@ def _discover_refactor_data_files(
 
 
 def discover_root_files(input_path: str, max_files: int = -1) -> List[str]:
+    """Discover ROOT ntuple files from a local path, xrootd URL, or directory.
+
+    Resolves the input through several fallback strategies:
+    1. Direct ``.root`` file (local or xrootd).
+    2. xrootd host + remote directory listing via ``xrdfs ls``.
+    3. Local refactor-directory conventions for JJP / JYP / JJY data.
+    4. Globbing ``*.root`` in the resolved path.
+
+    Args:
+        input_path: Local path, ``/eos/...`` path, or ``root://...`` xrootd URL.
+        max_files: If positive, truncate the file list to this many entries.
+
+    Returns:
+        Sorted list of ROOT file paths (xrootd URLs or local paths).
+
+    Raises:
+        FileNotFoundError: If no ROOT files are found.
+    """
     resolved = to_xrootd_if_needed(input_path)
     files: List[str]
     if resolved.endswith(".root"):
@@ -546,6 +591,11 @@ def build_root_string_vector(items: Sequence[str]):
     for item in items:
         out.push_back(item)
     return out
+
+
+# ---------------------------------------------------------------------------
+#  Branch maps & schema registry
+# ---------------------------------------------------------------------------
 
 
 def _jjp_selected_branch_map() -> Tuple[Tuple[str, str], ...]:
@@ -814,10 +864,25 @@ def get_dataset_schema(channel: str, dataset: str) -> DatasetSchema:
     return DATASET_SCHEMAS[(channel, dataset)]
 
 
+# ---------------------------------------------------------------------------
+#  RDataFrame C++ helpers (declared in ROOT interpreter)
+# ---------------------------------------------------------------------------
+
 _RDF_HELPERS_DECLARED = False
 
 
 def declare_rdf_helpers() -> None:
+    """Declare C++ helper functions in the ROOT interpreter for RDataFrame.
+
+    Registers the following helpers (idempotent — declared only once per process):
+    * ``TakeAt`` / ``TakeAtInt`` — safe vector element access with bounds checking.
+    * ``PtFromPxPy`` / ``EtaFromPxyz`` / ``PhiFromPxPy`` — 4-vector kinematics.
+    * ``RapidityFromPtEtaM`` — rapidity from (pT, eta, mass).
+    * ``DeltaPhiAbs`` — absolute azimuthal difference wrapped to [0, π].
+    * ``Score3`` — candidate quality score = sqrt(jpsi1_pt² + jpsi2_pt² + phi_pt²).
+    * ``AllMuonIndicesDistinct`` — validate that 6 muon indices are pairwise unique.
+    * ``InvariantMass2`` / ``InvariantMass3`` — 2-body and 3-body invariant mass.
+    """
     global _RDF_HELPERS_DECLARED
     if _RDF_HELPERS_DECLARED:
         return
@@ -1407,7 +1472,27 @@ def declare_rdf_helpers() -> None:
     _RDF_HELPERS_DECLARED = True
 
 
+# ---------------------------------------------------------------------------
+#  Selected-column definitions (applied after best-candidate selection)
+# ---------------------------------------------------------------------------
+
+
 def define_selected_columns(rdf, schema: DatasetSchema):
+    """Add ``sel_*`` scalar branches to an RDataFrame via ``Define``.
+
+    For each branch in the schema's selected-branch map, a ``sel_<name>`` column
+    is created by taking the best-candidate index from the source array (using
+    ``TakeAt`` for float branches or ``TakeAtInt`` for index branches).  Muon
+    4-vectors, particle rapidities, pair kinematic differences (Δy, Δφ, invariant
+    mass), and the 3-body invariant mass are also computed.
+
+    Args:
+        rdf: An ``ROOT.RDataFrame`` reading from the merged input tree.
+        schema: The dataset schema describing which branches to scalarize.
+
+    Returns:
+        The modified ``RDataFrame`` with all ``sel_*`` columns defined.
+    """
     cfg = CHANNEL_CONFIGS[schema.channel]
     for out_name, in_name in schema.selected_branch_map:
         target = f"sel_{out_name}"
@@ -1427,8 +1512,7 @@ def define_selected_columns(rdf, schema: DatasetSchema):
     for prefix in schema.selected_particle_prefixes:
         rdf = rdf.Define(f"{prefix}_y", f"RapidityFromPtEtaM({prefix}_pt, {prefix}_eta, {prefix}_mass)")
 
-    for _, left, right in cfg.pair_specs:
-        name = _
+    for name, left, right in cfg.pair_specs:
         rdf = rdf.Define(f"sel_abs_dy_{name}", f"std::fabs({left}_y - {right}_y)")
         rdf = rdf.Define(f"sel_abs_dphi_{name}", f"DeltaPhiAbs({left}_phi, {right}_phi)")
         rdf = rdf.Define(

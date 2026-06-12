@@ -42,6 +42,15 @@ _VERTEX_HELPERS_DECLARED = False
 
 @dataclass(frozen=True)
 class Scenario:
+    """Defines a vertex-cut scenario for comparison.
+
+    Attributes:
+        key: Short identifier for the scenario (e.g. "no_cut").
+        label: Human-readable label for plot legends.
+        mask_branch: Name of the boolean column in the augmented ROOT file
+            that flags events passing this cut, or None for the reference
+            (no-cut) scenario.
+    """
     key: str
     label: str
     mask_branch: str | None
@@ -49,6 +58,18 @@ class Scenario:
 
 @dataclass(frozen=True)
 class Category:
+    """Defines a sample category for comparison (overall, signal, sideband).
+
+    Attributes:
+        key: Short identifier for the category.
+        label: Human-readable label for plot titles.
+        input_kind: "weighted" or "sideband" — determines which augmented
+            ROOT file to read from.
+        weight_branch: Name of the weight column (e.g. "signal_sw"), or
+            None for unweighted (sideband) categories.
+        output_subdir: Subdirectory under the plot output directory for
+            this category's plots.
+    """
     key: str
     label: str
     input_kind: str
@@ -58,6 +79,15 @@ class Category:
 
 @dataclass(frozen=True)
 class PlotSpec:
+    """Specification for a single plot variable.
+
+    Attributes:
+        key: Short identifier for the plot (used as filename base).
+        title: Plot title string.
+        xlabel: X-axis label.
+        bins: Number of bins (used with auto-range).
+        edges: Explicit bin edges as a tuple; takes precedence over bins.
+    """
     key: str
     title: str
     xlabel: str

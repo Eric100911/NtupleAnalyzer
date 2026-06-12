@@ -61,6 +61,15 @@ def setup_root():
 
 
 def delta_phi(phi1, phi2):
+    """Compute the absolute azimuthal angle difference wrapped to [-π, π].
+
+    Args:
+        phi1: First azimuthal angle in radians.
+        phi2: Second azimuthal angle in radians.
+
+    Returns:
+        Signed difference ``phi1 - phi2`` wrapped to the interval [-π, π].
+    """
     dphi = phi1 - phi2
     while dphi > math.pi:
         dphi -= 2 * math.pi
@@ -98,81 +107,92 @@ def build_vec_from_pxpypz(px, py, pz, mass):
 
 
 def create_histograms():
-    h = {}
+    """Create a dictionary of ROOT histograms for the JJP mass-window analysis.
+
+    Four window variants are defined:
+    * ``_main``  (no suffix) — primary window: 0.3 < Δφ < 0.7, 0 < Δy < 0.4
+    * ``_alt``   — alternative window: 0.7 < Δφ < 1.1, same Δy range
+    * ``_low``   — low-Δφ window: 0 < Δφ < 0.3, same Δy range
+    * ``_dyhi``  — high-Δy window: same Δφ as main, 0.4 < Δy < 0.8
+
+    Returns:
+        dict mapping histogram key strings to ``TH1F`` or ``TH2F`` objects.
+    """
+    histograms = {}
     # Jpsi/Phi kinematics in window
-    h['h_jpsi1_pt'] = TH1F('h_jpsi1_pt', 'J/#psi_{1} p_{T};p_{T} [GeV];Events', 18, 0, 40)
-    h['h_jpsi1_eta'] = TH1F('h_jpsi1_eta', 'J/#psi_{1} #eta;#eta;Events', 18, -3, 3)
-    h['h_jpsi1_phi'] = TH1F('h_jpsi1_phi', 'J/#psi_{1} #phi;#phi;Events', 18, -math.pi, math.pi)
+    histograms['h_jpsi1_pt'] = TH1F('h_jpsi1_pt', 'J/#psi_{1} p_{T};p_{T} [GeV];Events', 18, 0, 40)
+    histograms['h_jpsi1_eta'] = TH1F('h_jpsi1_eta', 'J/#psi_{1} #eta;#eta;Events', 18, -3, 3)
+    histograms['h_jpsi1_phi'] = TH1F('h_jpsi1_phi', 'J/#psi_{1} #phi;#phi;Events', 18, -math.pi, math.pi)
 
-    h['h_jpsi2_pt'] = TH1F('h_jpsi2_pt', 'J/#psi_{2} p_{T};p_{T} [GeV];Events', 18, 0, 40)
-    h['h_jpsi2_eta'] = TH1F('h_jpsi2_eta', 'J/#psi_{2} #eta;#eta;Events', 18, -3, 3)
-    h['h_jpsi2_phi'] = TH1F('h_jpsi2_phi', 'J/#psi_{2} #phi;#phi;Events', 18, -math.pi, math.pi)
+    histograms['h_jpsi2_pt'] = TH1F('h_jpsi2_pt', 'J/#psi_{2} p_{T};p_{T} [GeV];Events', 18, 0, 40)
+    histograms['h_jpsi2_eta'] = TH1F('h_jpsi2_eta', 'J/#psi_{2} #eta;#eta;Events', 18, -3, 3)
+    histograms['h_jpsi2_phi'] = TH1F('h_jpsi2_phi', 'J/#psi_{2} #phi;#phi;Events', 18, -math.pi, math.pi)
 
-    h['h_phi_pt'] = TH1F('h_phi_pt', '#phi p_{T};p_{T} [GeV];Events', 18, 0, 40)
-    h['h_phi_eta'] = TH1F('h_phi_eta', '#phi #eta;#eta;Events', 18, -3, 3)
-    h['h_phi_phi'] = TH1F('h_phi_phi', '#phi #phi;#phi;Events', 18, -math.pi, math.pi)
+    histograms['h_phi_pt'] = TH1F('h_phi_pt', '#phi p_{T};p_{T} [GeV];Events', 18, 0, 40)
+    histograms['h_phi_eta'] = TH1F('h_phi_eta', '#phi #eta;#eta;Events', 18, -3, 3)
+    histograms['h_phi_phi'] = TH1F('h_phi_phi', '#phi #phi;#phi;Events', 18, -math.pi, math.pi)
 
     # Muon kinematics (Jpsi1 mu1/mu2, Jpsi2 mu1/mu2)
-    h['h_mu_jpsi1_mu1_pt'] = TH1F('h_mu_jpsi1_mu1_pt', 'Muon (J/#psi_{1} #mu_{1}) p_{T};p_{T} [GeV];Events', 18, 0, 40)
-    h['h_mu_jpsi1_mu1_eta'] = TH1F('h_mu_jpsi1_mu1_eta', 'Muon (J/#psi_{1} #mu_{1}) #eta;#eta;Events', 18, -3, 3)
-    h['h_mu_jpsi1_mu1_phi'] = TH1F('h_mu_jpsi1_mu1_phi', 'Muon (J/#psi_{1} #mu_{1}) #phi;#phi;Events', 18, -math.pi, math.pi)
+    histograms['h_mu_jpsi1_mu1_pt'] = TH1F('h_mu_jpsi1_mu1_pt', 'Muon (J/#psi_{1} #mu_{1}) p_{T};p_{T} [GeV];Events', 18, 0, 40)
+    histograms['h_mu_jpsi1_mu1_eta'] = TH1F('h_mu_jpsi1_mu1_eta', 'Muon (J/#psi_{1} #mu_{1}) #eta;#eta;Events', 18, -3, 3)
+    histograms['h_mu_jpsi1_mu1_phi'] = TH1F('h_mu_jpsi1_mu1_phi', 'Muon (J/#psi_{1} #mu_{1}) #phi;#phi;Events', 18, -math.pi, math.pi)
 
-    h['h_mu_jpsi1_mu2_pt'] = TH1F('h_mu_jpsi1_mu2_pt', 'Muon (J/#psi_{1} #mu_{2}) p_{T};p_{T} [GeV];Events', 18, 0, 40)
-    h['h_mu_jpsi1_mu2_eta'] = TH1F('h_mu_jpsi1_mu2_eta', 'Muon (J/#psi_{1} #mu_{2}) #eta;#eta;Events', 18, -3, 3)
-    h['h_mu_jpsi1_mu2_phi'] = TH1F('h_mu_jpsi1_mu2_phi', 'Muon (J/#psi_{1} #mu_{2}) #phi;#phi;Events', 18, -math.pi, math.pi)
+    histograms['h_mu_jpsi1_mu2_pt'] = TH1F('h_mu_jpsi1_mu2_pt', 'Muon (J/#psi_{1} #mu_{2}) p_{T};p_{T} [GeV];Events', 18, 0, 40)
+    histograms['h_mu_jpsi1_mu2_eta'] = TH1F('h_mu_jpsi1_mu2_eta', 'Muon (J/#psi_{1} #mu_{2}) #eta;#eta;Events', 18, -3, 3)
+    histograms['h_mu_jpsi1_mu2_phi'] = TH1F('h_mu_jpsi1_mu2_phi', 'Muon (J/#psi_{1} #mu_{2}) #phi;#phi;Events', 18, -math.pi, math.pi)
 
-    h['h_mu_jpsi2_mu1_pt'] = TH1F('h_mu_jpsi2_mu1_pt', 'Muon (J/#psi_{2} #mu_{1}) p_{T};p_{T} [GeV];Events', 18, 0, 40)
-    h['h_mu_jpsi2_mu1_eta'] = TH1F('h_mu_jpsi2_mu1_eta', 'Muon (J/#psi_{2} #mu_{1}) #eta;#eta;Events', 18, -3, 3)
-    h['h_mu_jpsi2_mu1_phi'] = TH1F('h_mu_jpsi2_mu1_phi', 'Muon (J/#psi_{2} #mu_{1}) #phi;#phi;Events', 18, -math.pi, math.pi)
+    histograms['h_mu_jpsi2_mu1_pt'] = TH1F('h_mu_jpsi2_mu1_pt', 'Muon (J/#psi_{2} #mu_{1}) p_{T};p_{T} [GeV];Events', 18, 0, 40)
+    histograms['h_mu_jpsi2_mu1_eta'] = TH1F('h_mu_jpsi2_mu1_eta', 'Muon (J/#psi_{2} #mu_{1}) #eta;#eta;Events', 18, -3, 3)
+    histograms['h_mu_jpsi2_mu1_phi'] = TH1F('h_mu_jpsi2_mu1_phi', 'Muon (J/#psi_{2} #mu_{1}) #phi;#phi;Events', 18, -math.pi, math.pi)
 
-    h['h_mu_jpsi2_mu2_pt'] = TH1F('h_mu_jpsi2_mu2_pt', 'Muon (J/#psi_{2} #mu_{2}) p_{T};p_{T} [GeV];Events', 18, 0, 40)
-    h['h_mu_jpsi2_mu2_eta'] = TH1F('h_mu_jpsi2_mu2_eta', 'Muon (J/#psi_{2} #mu_{2}) #eta;#eta;Events', 18, -3, 3)
-    h['h_mu_jpsi2_mu2_phi'] = TH1F('h_mu_jpsi2_mu2_phi', 'Muon (J/#psi_{2} #mu_{2}) #phi;#phi;Events', 18, -math.pi, math.pi)
+    histograms['h_mu_jpsi2_mu2_pt'] = TH1F('h_mu_jpsi2_mu2_pt', 'Muon (J/#psi_{2} #mu_{2}) p_{T};p_{T} [GeV];Events', 18, 0, 40)
+    histograms['h_mu_jpsi2_mu2_eta'] = TH1F('h_mu_jpsi2_mu2_eta', 'Muon (J/#psi_{2} #mu_{2}) #eta;#eta;Events', 18, -3, 3)
+    histograms['h_mu_jpsi2_mu2_phi'] = TH1F('h_mu_jpsi2_mu2_phi', 'Muon (J/#psi_{2} #mu_{2}) #phi;#phi;Events', 18, -math.pi, math.pi)
 
     # Kaon kinematics
-    h['h_k1_pt'] = TH1F('h_k1_pt', 'K_{1} p_{T};p_{T} [GeV];Events', 18, 0, 40)
-    h['h_k1_eta'] = TH1F('h_k1_eta', 'K_{1} #eta;#eta;Events', 18, -3, 3)
-    h['h_k1_phi'] = TH1F('h_k1_phi', 'K_{1} #phi;#phi;Events', 18, -math.pi, math.pi)
+    histograms['h_k1_pt'] = TH1F('h_k1_pt', 'K_{1} p_{T};p_{T} [GeV];Events', 18, 0, 40)
+    histograms['h_k1_eta'] = TH1F('h_k1_eta', 'K_{1} #eta;#eta;Events', 18, -3, 3)
+    histograms['h_k1_phi'] = TH1F('h_k1_phi', 'K_{1} #phi;#phi;Events', 18, -math.pi, math.pi)
 
-    h['h_k2_pt'] = TH1F('h_k2_pt', 'K_{2} p_{T};p_{T} [GeV];Events', 18, 0, 40)
-    h['h_k2_eta'] = TH1F('h_k2_eta', 'K_{2} #eta;#eta;Events', 18, -3, 3)
-    h['h_k2_phi'] = TH1F('h_k2_phi', 'K_{2} #phi;#phi;Events', 18, -math.pi, math.pi)
+    histograms['h_k2_pt'] = TH1F('h_k2_pt', 'K_{2} p_{T};p_{T} [GeV];Events', 18, 0, 40)
+    histograms['h_k2_eta'] = TH1F('h_k2_eta', 'K_{2} #eta;#eta;Events', 18, -3, 3)
+    histograms['h_k2_phi'] = TH1F('h_k2_phi', 'K_{2} #phi;#phi;Events', 18, -math.pi, math.pi)
 
     # Delta y vs Delta phi (Jpsi2 vs Phi) inside window, zoom to window range
     # x: Delta y (6 bins), y: Delta phi (8 bins), both restricted to window range
-    h['h2_dy_dphi_jpsi2_phi'] = TH2F('h2_dy_dphi_jpsi2_phi',
+    histograms['h2_dy_dphi_jpsi2_phi'] = TH2F('h2_dy_dphi_jpsi2_phi',
         'J/#psi_{2} - #phi: #Delta y vs #Delta#phi;#Delta y;#Delta#phi',
         6, DY_MIN, DY_MAX, 8, DPHI_MIN, DPHI_MAX)
-    h['h2_dy_dphi_jpsi2_phi_alt'] = TH2F('h2_dy_dphi_jpsi2_phi_alt',
+    histograms['h2_dy_dphi_jpsi2_phi_alt'] = TH2F('h2_dy_dphi_jpsi2_phi_alt',
         'J/#psi_{2} - #phi: #Delta y vs #Delta#phi (0.7<#Delta#phi<1.1);#Delta y;#Delta#phi',
         6, DY_MIN, DY_MAX, 8, DPHI_ALT_MIN, DPHI_ALT_MAX)
-    h['h2_dy_dphi_jpsi2_phi_low'] = TH2F('h2_dy_dphi_jpsi2_phi_low',
+    histograms['h2_dy_dphi_jpsi2_phi_low'] = TH2F('h2_dy_dphi_jpsi2_phi_low',
         'J/#psi_{2} - #phi: #Delta y vs #Delta#phi (0<#Delta#phi<0.3);#Delta y;#Delta#phi',
         6, DY_MIN, DY_MAX, 8, DPHI_LOW_MIN, DPHI_LOW_MAX)
-    h['h2_dy_dphi_jpsi2_phi_dyhi'] = TH2F('h2_dy_dphi_jpsi2_phi_dyhi',
+    histograms['h2_dy_dphi_jpsi2_phi_dyhi'] = TH2F('h2_dy_dphi_jpsi2_phi_dyhi',
         'J/#psi_{2} - #phi: #Delta y vs #Delta#phi (0.3<#Delta#phi<0.7, 0.4<#Delta y<0.8);#Delta y;#Delta#phi',
         6, DY_HIGH_MIN, DY_HIGH_MAX, 8, DPHI_MIN, DPHI_MAX)
 
     # Min DeltaR and |pT difference| between Jpsi2 muons and Phi kaons (4 combos), take event-wise minimum
-    h['h_mu2k_min_dR'] = TH1F('h_mu2k_min_dR', 'min #DeltaR(#mu_{J/#psi2}, K_{#phi});min #DeltaR;Events', 18, 0, 3.6)
-    h['h_mu2k_min_abs_dpt'] = TH1F('h_mu2k_min_abs_dpt', 'min |p_{T}^{#mu_{J/#psi2}} - p_{T}^{K_{#phi}}|;min |#Delta p_{T}| [GeV];Events', 18, 0, 20)
+    histograms['h_mu2k_min_dR'] = TH1F('h_mu2k_min_dR', 'min #DeltaR(#mu_{J/#psi2}, K_{#phi});min #DeltaR;Events', 18, 0, 3.6)
+    histograms['h_mu2k_min_abs_dpt'] = TH1F('h_mu2k_min_abs_dpt', 'min |p_{T}^{#mu_{J/#psi2}} - p_{T}^{K_{#phi}}|;min |#Delta p_{T}| [GeV];Events', 18, 0, 20)
 
     # Duplicate 1D histograms for comparison windows (0.7<DeltaPhi<1.1 and 0<DeltaPhi<0.3) using the same binning
-    base_keys = [k for k in list(h.keys()) if not k.endswith('_alt') and not k.endswith('_low') and not k.endswith('_dyhi')
+    base_keys = [k for k in list(histograms.keys()) if not k.endswith('_alt') and not k.endswith('_low') and not k.endswith('_dyhi')
                  and not k.startswith('h2_dy_dphi_jpsi2_phi_alt') and not k.startswith('h2_dy_dphi_jpsi2_phi_low') and not k.startswith('h2_dy_dphi_jpsi2_phi_dyhi')]
     for key in base_keys:
-        if isinstance(h[key], TH1F):
+        if isinstance(histograms[key], TH1F):
             alt_name = f"{key}_alt"
             low_name = f"{key}_low"
             dyhi_name = f"{key}_dyhi"
-            h[alt_name] = h[key].Clone(alt_name)
-            h[low_name] = h[key].Clone(low_name)
-            h[dyhi_name] = h[key].Clone(dyhi_name)
+            histograms[alt_name] = histograms[key].Clone(alt_name)
+            histograms[low_name] = histograms[key].Clone(low_name)
+            histograms[dyhi_name] = histograms[key].Clone(dyhi_name)
     # Enable per-bin statistical uncertainties
-    for hist in h.values():
+    for hist in histograms.values():
         if isinstance(hist, TH1F):
             hist.Sumw2()
-    return h
+    return histograms
 
 
 def save_plots(histos, plot_dir):
@@ -269,7 +289,25 @@ def merge_histograms(dest, src):
 
 
 def process_file_batch(file_list, max_events, muon_id, tree_name):
-    """Worker: process a batch of files, return temp ROOT path and stats."""
+    """Process a batch of ROOT files in a single worker process.
+
+    Selects the best J/ψ J/ψ φ candidate per event by the ``Score3`` metric,
+    applies muon ID and kinematic cuts, and fills histograms for four
+    (Δy, Δφ) window variants.  Results are written to a temporary ROOT file.
+
+    Args:
+        file_list: List of ROOT file paths to process.
+        max_events: Maximum events to process (-1 = all).
+        muon_id: Muon identification string (``"soft"``, etc.).
+        tree_name: Name of the TTree inside each ROOT file.
+
+    Returns:
+        Tuple of ``(tmp_path, n_processed, n_window_main, n_window_alt,
+        n_window_low, n_window_dyhi, n_has_cand, n_pass_baseline,
+        n_fail_mass, n_fail_pt, n_fail_vtx, n_fail_kpt, n_fail_mu,
+        n_track_misuse, n_mu_fill_ok, n_mu_fill_fail, n_mu_size_zero,
+        mu_size_min, mu_size_max, mu_idx_max, mu_idx_neg, mu_idx_ge_size)``.
+    """
     chain = TChain(tree_name)
     for f in file_list:
         chain.Add(f)
@@ -415,27 +453,27 @@ def process_file_batch(file_list, max_events, muon_id, tree_name):
                 mu_size_min = mu_size
             if mu_size_max is None or mu_size > mu_size_max:
                 mu_size_max = mu_size
-            idxs = [int(best_cand['jpsi1_mu1_idx']), int(best_cand['jpsi1_mu2_idx']),
+            muon_indices = [int(best_cand['jpsi1_mu1_idx']), int(best_cand['jpsi1_mu2_idx']),
                     int(best_cand['jpsi2_mu1_idx']), int(best_cand['jpsi2_mu2_idx'])]
-            max_idx = max(idxs)
+            max_idx = max(muon_indices)
             if mu_idx_max_seen is None or max_idx > mu_idx_max_seen:
                 mu_idx_max_seen = max_idx
-            invalid_neg = any(idx < 0 for idx in idxs)
-            invalid_ge = any(idx >= mu_size for idx in idxs)
+            invalid_neg = any(idx < 0 for idx in muon_indices)
+            invalid_ge = any(idx >= mu_size for idx in muon_indices)
             mu_valid = not (invalid_neg or invalid_ge)
 
-            mu1_vec = mu2_vec = mu3_vec = mu4_vec = None
+            jpsi1_mu1_vec = jpsi1_mu2_vec = jpsi2_mu1_vec = jpsi2_mu2_vec = None
             if mu_valid:
-                mu1_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi1_mu1_idx']),
+                jpsi1_mu1_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi1_mu1_idx']),
                                                  chain.muPy.at(best_cand['jpsi1_mu1_idx']),
                                                  chain.muPz.at(best_cand['jpsi1_mu1_idx']), MUON_MASS)
-                mu2_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi1_mu2_idx']),
+                jpsi1_mu2_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi1_mu2_idx']),
                                                  chain.muPy.at(best_cand['jpsi1_mu2_idx']),
                                                  chain.muPz.at(best_cand['jpsi1_mu2_idx']), MUON_MASS)
-                mu3_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi2_mu1_idx']),
+                jpsi2_mu1_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi2_mu1_idx']),
                                                  chain.muPy.at(best_cand['jpsi2_mu1_idx']),
                                                  chain.muPz.at(best_cand['jpsi2_mu1_idx']), MUON_MASS)
-                mu4_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi2_mu2_idx']),
+                jpsi2_mu2_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi2_mu2_idx']),
                                                  chain.muPy.at(best_cand['jpsi2_mu2_idx']),
                                                  chain.muPz.at(best_cand['jpsi2_mu2_idx']), MUON_MASS)
             else:
@@ -446,7 +484,7 @@ def process_file_batch(file_list, max_events, muon_id, tree_name):
                 if invalid_ge:
                     n_mu_idx_ge_size += 1
                 if debug_fail_prints < 5:
-                    print(f"[DEBUG] Mu fill fail: idxs={idxs}, mu_size={mu_size}")
+                    print(f"[DEBUG] Mu fill fail: muon_indices={muon_indices}, mu_size={mu_size}")
                     debug_fail_prints += 1
 
         except Exception:
@@ -456,8 +494,8 @@ def process_file_batch(file_list, max_events, muon_id, tree_name):
                 debug_fail_prints += 1
 
         # Kaon 4-vectors
-        k1_vec = build_vec_from_pxpypz(best_cand['phi_k1_px'], best_cand['phi_k1_py'], best_cand['phi_k1_pz'], KAON_MASS)
-        k2_vec = build_vec_from_pxpypz(best_cand['phi_k2_px'], best_cand['phi_k2_py'], best_cand['phi_k2_pz'], KAON_MASS)
+        phi_kaon1_vec = build_vec_from_pxpypz(best_cand['phi_k1_px'], best_cand['phi_k1_py'], best_cand['phi_k1_pz'], KAON_MASS)
+        phi_kaon2_vec = build_vec_from_pxpypz(best_cand['phi_k2_px'], best_cand['phi_k2_py'], best_cand['phi_k2_pz'], KAON_MASS)
 
         # Compute min DeltaR and |pT difference| between Jpsi2 muons and Phi kaons
         # Also flag potential track misuse (muon reused as kaon) via tight geometric+pt match
@@ -465,7 +503,7 @@ def process_file_batch(file_list, max_events, muon_id, tree_name):
         min_abs_dpt = None
         track_misuse = False
         if mu_valid:
-            combos = [(mu3_vec, k1_vec), (mu3_vec, k2_vec), (mu4_vec, k1_vec), (mu4_vec, k2_vec)]
+            combos = [(jpsi2_mu1_vec, phi_kaon1_vec), (jpsi2_mu1_vec, phi_kaon2_vec), (jpsi2_mu2_vec, phi_kaon1_vec), (jpsi2_mu2_vec, phi_kaon2_vec)]
             for mu_vec, k_vec in combos:
                 deta = mu_vec.Eta() - k_vec.Eta()
                 dphi = delta_phi(mu_vec.Phi(), k_vec.Phi())
@@ -510,29 +548,29 @@ def process_file_batch(file_list, max_events, muon_id, tree_name):
             histos[f'h_phi_phi{suffix}'].Fill(phi_4vec.Phi())
 
             if mu_valid:
-                histos[f'h_mu_jpsi1_mu1_pt{suffix}'].Fill(mu1_vec.Pt())
-                histos[f'h_mu_jpsi1_mu1_eta{suffix}'].Fill(mu1_vec.Eta())
-                histos[f'h_mu_jpsi1_mu1_phi{suffix}'].Fill(mu1_vec.Phi())
-                histos[f'h_mu_jpsi1_mu2_pt{suffix}'].Fill(mu2_vec.Pt())
-                histos[f'h_mu_jpsi1_mu2_eta{suffix}'].Fill(mu2_vec.Eta())
-                histos[f'h_mu_jpsi1_mu2_phi{suffix}'].Fill(mu2_vec.Phi())
-                histos[f'h_mu_jpsi2_mu1_pt{suffix}'].Fill(mu3_vec.Pt())
-                histos[f'h_mu_jpsi2_mu1_eta{suffix}'].Fill(mu3_vec.Eta())
-                histos[f'h_mu_jpsi2_mu1_phi{suffix}'].Fill(mu3_vec.Phi())
-                histos[f'h_mu_jpsi2_mu2_pt{suffix}'].Fill(mu4_vec.Pt())
-                histos[f'h_mu_jpsi2_mu2_eta{suffix}'].Fill(mu4_vec.Eta())
-                histos[f'h_mu_jpsi2_mu2_phi{suffix}'].Fill(mu4_vec.Phi())
+                histos[f'h_mu_jpsi1_mu1_pt{suffix}'].Fill(jpsi1_mu1_vec.Pt())
+                histos[f'h_mu_jpsi1_mu1_eta{suffix}'].Fill(jpsi1_mu1_vec.Eta())
+                histos[f'h_mu_jpsi1_mu1_phi{suffix}'].Fill(jpsi1_mu1_vec.Phi())
+                histos[f'h_mu_jpsi1_mu2_pt{suffix}'].Fill(jpsi1_mu2_vec.Pt())
+                histos[f'h_mu_jpsi1_mu2_eta{suffix}'].Fill(jpsi1_mu2_vec.Eta())
+                histos[f'h_mu_jpsi1_mu2_phi{suffix}'].Fill(jpsi1_mu2_vec.Phi())
+                histos[f'h_mu_jpsi2_mu1_pt{suffix}'].Fill(jpsi2_mu1_vec.Pt())
+                histos[f'h_mu_jpsi2_mu1_eta{suffix}'].Fill(jpsi2_mu1_vec.Eta())
+                histos[f'h_mu_jpsi2_mu1_phi{suffix}'].Fill(jpsi2_mu1_vec.Phi())
+                histos[f'h_mu_jpsi2_mu2_pt{suffix}'].Fill(jpsi2_mu2_vec.Pt())
+                histos[f'h_mu_jpsi2_mu2_eta{suffix}'].Fill(jpsi2_mu2_vec.Eta())
+                histos[f'h_mu_jpsi2_mu2_phi{suffix}'].Fill(jpsi2_mu2_vec.Phi())
                 if min_dR is not None:
                     histos[f'h_mu2k_min_dR{suffix}'].Fill(min_dR)
                 if min_abs_dpt is not None:
                     histos[f'h_mu2k_min_abs_dpt{suffix}'].Fill(min_abs_dpt)
 
-            histos[f'h_k1_pt{suffix}'].Fill(k1_vec.Pt())
-            histos[f'h_k1_eta{suffix}'].Fill(k1_vec.Eta())
-            histos[f'h_k1_phi{suffix}'].Fill(k1_vec.Phi())
-            histos[f'h_k2_pt{suffix}'].Fill(k2_vec.Pt())
-            histos[f'h_k2_eta{suffix}'].Fill(k2_vec.Eta())
-            histos[f'h_k2_phi{suffix}'].Fill(k2_vec.Phi())
+            histos[f'h_k1_pt{suffix}'].Fill(phi_kaon1_vec.Pt())
+            histos[f'h_k1_eta{suffix}'].Fill(phi_kaon1_vec.Eta())
+            histos[f'h_k1_phi{suffix}'].Fill(phi_kaon1_vec.Phi())
+            histos[f'h_k2_pt{suffix}'].Fill(phi_kaon2_vec.Pt())
+            histos[f'h_k2_eta{suffix}'].Fill(phi_kaon2_vec.Eta())
+            histos[f'h_k2_phi{suffix}'].Fill(phi_kaon2_vec.Phi())
 
         if in_window_main:
             fill_window_histos('')
@@ -585,7 +623,7 @@ def analyze_jjp_window(max_events=-1, muon_id='soft', input_dir=None, output_fil
         for idx, f in enumerate(data_files):
             batch_files[idx % n_workers].append(f)
         batch_files = [b for b in batch_files if b]
-        n_workers = len(batch_files)
+        n_batches = len(batch_files)
 
     if max_events < 0:
         per_batch_events = -1
@@ -645,12 +683,12 @@ def analyze_jjp_window(max_events=-1, muon_id='soft', input_dir=None, output_fil
         total_mu_idx_ge_size = sum(r[21] for r in results)
 
     histos = create_histograms()
-    for tf in temp_files:
-        fin = TFile.Open(tf)
-        if fin and not fin.IsZombie():
-            merge_histograms(histos, fin)
-        fin.Close()
-        os.remove(tf)
+    for tmp_path in temp_files:
+        input_file = TFile.Open(tmp_path)
+        if input_file and not input_file.IsZombie():
+            merge_histograms(histos, input_file)
+        input_file.Close()
+        os.remove(tmp_path)
 
     # Normalize all 1D histograms to unit area for shape comparison
     for h in histos.values():

@@ -196,6 +196,19 @@ def create_histograms():
 
 
 def discover_jjp_input_files(data_path):
+    """Find JJP data ROOT files under a refactor-style directory tree.
+
+    Traverses the JJP dataset directories (``ParkingDoubleMuonLowMass0``-7),
+    looks for ``crab3_refactor*`` task dirs, then ``260411*`` submit dirs,
+    and collects all ``*.root`` files recursively.  Falls back to globbing
+    ``*.root`` in ``data_path`` if no files are found via the refactor tree.
+
+    Args:
+        data_path: Top-level directory containing dataset subdirectories.
+
+    Returns:
+        List of absolute paths to ROOT files.
+    """
     if os.path.isfile(data_path) and data_path.lower().endswith(".root"):
         return [data_path]
 
@@ -231,7 +244,23 @@ def merge_histograms(dest, src):
 
 
 def process_file_batch(file_list, max_events, muon_id, tree_name):
-    """Worker: process a list of files, return temp ROOT path and stats."""
+    """Process a batch of ROOT files in a single worker process.
+
+    Iterates through events, selects the best tri-meson candidate per event
+    by maximizing ``Score3 = sqrt(jpsi1_pt² + jpsi2_pt² + phi_pt²)``, applies
+    muon ID and kinematic cuts, and fills histograms.  Results are written to
+    a temporary ROOT file for later merging.
+
+    Args:
+        file_list: List of ROOT file paths to process.
+        max_events: Maximum events to process (-1 = all).
+        muon_id: Muon identification string (``"soft"``, ``"medium"``, etc.).
+        tree_name: Name of the TTree inside each ROOT file.
+
+    Returns:
+        Tuple of ``(tmp_path, n_processed, n_passed, n_track_misuse)`` where
+        ``tmp_path`` is the path to a temporary ROOT file containing histograms.
+    """
     chain = TChain(tree_name)
     for f in file_list:
         chain.Add(f)
@@ -324,21 +353,21 @@ def process_file_batch(file_list, max_events, muon_id, tree_name):
             # Validate muon indices for safety
             try:
                 mu_size = chain.muPx.size()
-                idxs = [best_cand['jpsi1_mu1_idx'], best_cand['jpsi1_mu2_idx'],
+                muon_indices = [best_cand['jpsi1_mu1_idx'], best_cand['jpsi1_mu2_idx'],
                         best_cand['jpsi2_mu1_idx'], best_cand['jpsi2_mu2_idx']]
-                if any(idx < 0 for idx in idxs) or any(idx >= mu_size for idx in idxs):
+                if any(idx < 0 for idx in muon_indices) or any(idx >= mu_size for idx in muon_indices):
                     continue
 
-                mu1_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi1_mu1_idx']),
+                jpsi1_mu1_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi1_mu1_idx']),
                                                 chain.muPy.at(best_cand['jpsi1_mu1_idx']),
                                                 chain.muPz.at(best_cand['jpsi1_mu1_idx']), MUON_MASS)
-                mu2_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi1_mu2_idx']),
+                jpsi1_mu2_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi1_mu2_idx']),
                                                 chain.muPy.at(best_cand['jpsi1_mu2_idx']),
                                                 chain.muPz.at(best_cand['jpsi1_mu2_idx']), MUON_MASS)
-                mu3_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi2_mu1_idx']),
+                jpsi2_mu1_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi2_mu1_idx']),
                                                 chain.muPy.at(best_cand['jpsi2_mu1_idx']),
                                                 chain.muPz.at(best_cand['jpsi2_mu1_idx']), MUON_MASS)
-                mu4_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi2_mu2_idx']),
+                jpsi2_mu2_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi2_mu2_idx']),
                                                 chain.muPy.at(best_cand['jpsi2_mu2_idx']),
                                                 chain.muPz.at(best_cand['jpsi2_mu2_idx']), MUON_MASS)
             except Exception:
@@ -349,7 +378,7 @@ def process_file_batch(file_list, max_events, muon_id, tree_name):
 
             # Track-misuse veto: all muons (Jpsi1 & Jpsi2) vs Phi kaons
             track_misuse = False
-            for mu_vec in (mu1_vec, mu2_vec, mu3_vec, mu4_vec):
+            for mu_vec in (jpsi1_mu1_vec, jpsi1_mu2_vec, jpsi2_mu1_vec, jpsi2_mu2_vec):
                 for k_vec in (k1_vec, k2_vec):
                     deta = mu_vec.Eta() - k_vec.Eta()
                     dphi = delta_phi(mu_vec.Phi(), k_vec.Phi())
@@ -451,6 +480,8 @@ def analyze_jjp_ntuple(max_events=-1, muon_id='soft', output_file=None, input_di
         output_file: 输出ROOT文件路径
     """
     global JPSI_MUON_ID
+    # NOTE: This global reassignment is vestigial — JPSI_MUON_ID is never
+    # read back in this file; muon_id is passed through function parameters.
     JPSI_MUON_ID = muon_id
     
     print("\n" + "="*60)
@@ -485,13 +516,13 @@ def analyze_jjp_ntuple(max_events=-1, muon_id='soft', output_file=None, input_di
 
         # 过滤空批次
         batches = [b for b in batches if b]
-        n_workers = len(batches)
+        n_batches = len(batches)
         if max_events < 0:
             per_batch_events = -1
         else:
-            per_batch_events = math.ceil(max_events / n_workers)
+            per_batch_events = math.ceil(max_events / n_batches)
 
-        with multiprocessing.Pool(processes=n_workers) as pool:
+        with multiprocessing.Pool(processes=n_batches) as pool:
             results = pool.starmap(process_file_batch,
                                    [(b, per_batch_events, muon_id, TREE_NAME) for b in batches])
         temp_files = [r[0] for r in results]
@@ -501,12 +532,12 @@ def analyze_jjp_ntuple(max_events=-1, muon_id='soft', output_file=None, input_di
 
     # 合并直方图
     histograms = create_histograms()
-    for tf in temp_files:
-        fin = TFile.Open(tf)
-        if fin and not fin.IsZombie():
-            merge_histograms(histograms, fin)
-        fin.Close()
-        os.remove(tf)
+    for tmp_path in temp_files:
+        input_file = TFile.Open(tmp_path)
+        if input_file and not input_file.IsZombie():
+            merge_histograms(histograms, input_file)
+        input_file.Close()
+        os.remove(tmp_path)
 
     elapsed = time.time() - start_time
     n_to_process = total_events if max_events < 0 else min(max_events, total_events)

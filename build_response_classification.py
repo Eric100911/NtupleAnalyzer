@@ -25,6 +25,8 @@ BIN_LABELS = [f"[{PHI_PT_EDGES[i]:.0f},{PHI_PT_EDGES[i+1]:.0f})" for i in range(
 
 
 def _discover_samples(input_dir: Path) -> list[Path]:
+    """Discover sample directories from a merge output directory via manifest.json."""
+
     manifest_path = input_dir / "manifest.json"
     if not manifest_path.exists():
         raise RuntimeError(f"No manifest.json found in {input_dir}")
@@ -82,8 +84,8 @@ def classify_response_events(
     if len(both) == 0:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-    gen_bin = np.digitize(both["phi_pt"].values, PHI_PT_EDGES) - 1
-    reco_bin = np.digitize(both["reco_best_phi_pt"].values, PHI_PT_EDGES) - 1
+    gen_bin = np.dgen_bin_idxitize(both["phi_pt"].values, PHI_PT_EDGES) - 1
+    reco_bin = np.dgen_bin_idxitize(both["reco_best_phi_pt"].values, PHI_PT_EDGES) - 1
 
     valid = (gen_bin >= 0) & (gen_bin < N_BINS) & (reco_bin >= 0) & (reco_bin < N_BINS)
 
@@ -119,35 +121,36 @@ def classify_response_events(
 
     n_total = int(valid.sum())
     n_diag = int(is_diagonal.sum())
-    n_off_m = int(offdiag_matched.sum())
-    n_off_w = int(offdiag_wrong_phi.sum())
-    n_off_n = int(offdiag_nomatch.sum())
+    n_offdiag_matched = int(offdiag_matched.sum())
+    n_offdiag_wrong_phi = int(offdiag_wrong_phi.sum())
+    n_offdiag_nomatch = int(offdiag_nomatch.sum())
 
     sample_name = both["sample"].iloc[0] if len(both) > 0 else ""
+
     summary_df = pd.DataFrame([{
         "sample": sample_name,
         "n_total": n_total,
         "n_diagonal": n_diag,
-        "n_offdiag_matched": n_off_m,
-        "n_offdiag_wrong_phi": n_off_w,
-        "n_offdiag_nomatch": n_off_n,
+        "n_offdiag_matched": n_offdiag_matched,
+        "n_offdiag_wrong_phi": n_offdiag_wrong_phi,
+        "n_offdiag_nomatch": n_offdiag_nomatch,
         "frac_diagonal": n_diag / n_total if n_total > 0 else float("nan"),
-        "frac_offdiag_matched": n_off_m / n_total if n_total > 0 else float("nan"),
-        "frac_offdiag_wrong_phi": n_off_w / n_total if n_total > 0 else float("nan"),
-        "frac_offdiag_nomatch": n_off_n / n_total if n_total > 0 else float("nan"),
+        "frac_offdiag_matched": n_offdiag_matched / n_total if n_total > 0 else float("nan"),
+        "frac_offdiag_wrong_phi": n_offdiag_wrong_phi / n_total if n_total > 0 else float("nan"),
+        "frac_offdiag_nomatch": n_offdiag_nomatch / n_total if n_total > 0 else float("nan"),
     }])
 
     rows = []
-    for ig in range(N_BINS):
-        gen_mask = valid & (gen_bin == ig)
+    for gen_bin_idx in range(N_BINS):
+        gen_mask = valid & (gen_bin == gen_bin_idx)
         n_gen = int(gen_mask.sum()) if gen_mask.any() else 0
-        for jr in range(N_BINS):
-            n = int((gen_mask & (reco_bin == jr)).sum()) if gen_mask.any() else 0
+        for reco_bin_idx in range(N_BINS):
+            n = int((gen_mask & (reco_bin == reco_bin_idx)).sum()) if gen_mask.any() else 0
             rows.append({
                 "sample": sample_name,
-                "gen_bin": ig, "reco_bin": jr,
-                "gen_bin_label": BIN_LABELS[ig],
-                "reco_bin_label": BIN_LABELS[jr],
+                "gen_bin": gen_bin_idx, "reco_bin": reco_bin_idx,
+                "gen_bin_label": BIN_LABELS[gen_bin_idx],
+                "reco_bin_label": BIN_LABELS[reco_bin_idx],
                 "count": n,
                 "fraction": n / n_gen if n_gen > 0 else 0.0,
             })
@@ -159,6 +162,7 @@ def classify_response_events(
 def build_response_for_sample(
     sample_dir: Path, output_dir: Path
 ) -> dict[str, object]:
+    """Build response classification matrices for a single MC sample."""
     sample = sample_dir.name
     gen_path = sample_dir / "gen_systems.parquet"
     event_path = sample_dir / "event_step_flags.parquet"

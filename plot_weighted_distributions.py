@@ -52,10 +52,12 @@ def parse_args():
 
 
 def apply_cms_style():
+    """Apply the CMS mplhep plotting style."""
     plt.style.use(hep.style.CMS)
 
 
 def cms_label(ax, dataset: str):
+    """Draw the CMS preliminary label on a matplotlib axis."""
     hep.cms.label(
         "Preliminary",
         data=(dataset == "data"),
@@ -171,6 +173,7 @@ def mass_label(branch: str, particle: str | None) -> str:
 
 
 def label_for_branch(name: str) -> str:
+    """Return a LaTeX-formatted axis label for a given branch name."""
     if name.startswith("sel_abs_dy_"):
         return rf"$|\Delta y({pair_label(name.removeprefix('sel_abs_dy_'))})|$"
     if name.startswith("sel_abs_dphi_"):
@@ -255,6 +258,7 @@ def infer_range(name: str):
 
 
 def bin_edges_for_branch(name: str) -> np.ndarray:
+    """Return the bin edges appropriate for a given branch variable."""
     if name.endswith("_pt"):
         return PT_BIN_EDGES
     xmin, xmax = infer_range(name)
@@ -262,6 +266,7 @@ def bin_edges_for_branch(name: str) -> np.ndarray:
 
 
 def discover_plot_columns(tree) -> list[str]:
+    """Discover all sel_* branches suitable for 1D histogramming."""
     columns: list[str] = []
     for name, typename in tree.typenames().items():
         if not name.startswith("sel_"):
@@ -276,6 +281,7 @@ def discover_plot_columns(tree) -> list[str]:
 
 
 def load_branch(tree, branch: str, weight_branch: str):
+    """Load branch values and corresponding sWeights from a ROOT tree, handling sorted-kaon logic."""
     sorted_kaon = sorted_kaon_coordinate(branch)
     if sorted_kaon is not None:
         rank, quantity = sorted_kaon
@@ -311,6 +317,7 @@ def load_branch(tree, branch: str, weight_branch: str):
 
 
 def weighted_histogram(values: np.ndarray, weights: np.ndarray, edges: np.ndarray):
+    """Compute weighted histogram counts and sum of squared weights."""
     counts, _ = np.histogram(values, bins=edges, weights=weights)
     sumw2, _ = np.histogram(values, bins=edges, weights=np.square(weights))
     return counts.astype(float), sumw2.astype(float)

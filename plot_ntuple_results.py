@@ -28,10 +28,10 @@ ROOT.gStyle.SetTitleOffset(1.4, "Y")
 ROOT.gStyle.SetPalette(ROOT.kViridis)
 
 
-def plot_1d_comparison(fin, hist_names, labels, colors, output_name, title, xlabel, ylabel="Events", logy=False):
+def plot_1d_comparison(input_file, hist_names, labels, colors, output_name, title, xlabel, ylabel="Events", logy=False):
     """在同一画布上绘制多个1D直方图"""
-    c = ROOT.TCanvas("c", "", 800, 600)
-    c.SetLogy(logy)
+    canvas = ROOT.TCanvas("c", "", 800, 600)
+    canvas.SetLogy(logy)
     
     legend = ROOT.TLegend(0.60, 0.70, 0.88, 0.88)
     legend.SetBorderSize(0)
@@ -42,7 +42,7 @@ def plot_1d_comparison(fin, hist_names, labels, colors, output_name, title, xlab
     hists = []
     
     for i, (hname, label, color) in enumerate(zip(hist_names, labels, colors)):
-        h = fin.Get(hname)
+        h = input_file.Get(hname)
         if not h:
             print(f"Warning: histogram {hname} not found")
             continue
@@ -59,39 +59,39 @@ def plot_1d_comparison(fin, hist_names, labels, colors, output_name, title, xlab
         return
     
     # 绘制
-    first = True
-    for h, label in hists:
+    is_first_hist = True
+    for hist, label in hists:
         if logy:
-            h.SetMaximum(max_val * 5)
-            h.SetMinimum(0.5)
+            hist.SetMaximum(max_val * 5)
+            hist.SetMinimum(0.5)
         else:
-            h.SetMaximum(max_val * 1.3)
-            h.SetMinimum(0)
-        h.GetXaxis().SetTitle(xlabel)
-        h.GetYaxis().SetTitle(ylabel)
-        h.SetTitle(title)
-        
-        if first:
-            h.Draw("HIST E")
-            first = False
+            hist.SetMaximum(max_val * 1.3)
+            hist.SetMinimum(0)
+        hist.GetXaxis().SetTitle(xlabel)
+        hist.GetYaxis().SetTitle(ylabel)
+        hist.SetTitle(title)
+
+        if is_first_hist:
+            hist.Draw("HIST E")
+            is_first_hist = False
         else:
-            h.Draw("HIST E SAME")
-        
-        legend.AddEntry(h, label, "l")
+            hist.Draw("HIST E SAME")
+
+        legend.AddEntry(hist, label, "l")
     
     legend.Draw()
     
-    c.SaveAs(output_name + ".pdf")
-    c.SaveAs(output_name + ".png")
+    canvas.SaveAs(output_name + ".pdf")
+    canvas.SaveAs(output_name + ".png")
     print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_2d(fin, hist_name, output_name, title):
+def plot_2d(input_file, hist_name, output_name, title):
     """绘制2D直方图"""
-    c = ROOT.TCanvas("c2d", "", 800, 700)
-    c.SetLogz(0)
+    canvas = ROOT.TCanvas("c2d", "", 800, 700)
+    canvas.SetLogz(0)
     
-    h = fin.Get(hist_name)
+    h = input_file.Get(hist_name)
     if not h:
         print(f"Warning: histogram {hist_name} not found")
         return
@@ -103,25 +103,25 @@ def plot_2d(fin, hist_name, output_name, title):
     
     h.Draw("COLZ")
     
-    c.SaveAs(output_name + ".pdf")
-    c.SaveAs(output_name + ".png")
+    canvas.SaveAs(output_name + ".pdf")
+    canvas.SaveAs(output_name + ".png")
     print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_2d_all_jjp(fin, output_dir, process):
+def plot_2d_all_jjp(input_file, output_dir, process):
     """绘制JJP的三个2D关联图"""
-    c = ROOT.TCanvas("c2d_all", "", 1800, 500)
-    c.Divide(3, 1)
+    canvas = ROOT.TCanvas("c2d_all", "", 1800, 500)
+    canvas.Divide(3, 1)
     
     hist_names = ["h2_dy_dphi_jpsi1_jpsi2", "h2_dy_dphi_jpsi1_phi", "h2_dy_dphi_jpsi2_phi"]
     titles = ["J/#psi_{1} - J/#psi_{2}", "J/#psi_{1} - #phi", "J/#psi_{2} - #phi"]
     
     for i, (hname, title) in enumerate(zip(hist_names, titles)):
-        c.cd(i + 1)
+        canvas.cd(i + 1)
         ROOT.gPad.SetRightMargin(0.15)
         ROOT.gPad.SetLeftMargin(0.12)
         
-        h = fin.Get(hname)
+        h = input_file.Get(hname)
         if not h:
             print(f"Warning: histogram {hname} not found")
             continue
@@ -132,25 +132,25 @@ def plot_2d_all_jjp(fin, output_dir, process):
         h.Draw("COLZ")
     
     output_name = os.path.join(output_dir, f"correlation_2d_all_{process}")
-    c.SaveAs(output_name + ".pdf")
-    c.SaveAs(output_name + ".png")
+    canvas.SaveAs(output_name + ".pdf")
+    canvas.SaveAs(output_name + ".png")
     print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_2d_all_jyp(fin, output_dir, process):
+def plot_2d_all_jyp(input_file, output_dir, process):
     """绘制JYP的三个2D关联图"""
-    c = ROOT.TCanvas("c2d_all", "", 1800, 500)
-    c.Divide(3, 1)
+    canvas = ROOT.TCanvas("c2d_all", "", 1800, 500)
+    canvas.Divide(3, 1)
     
     hist_names = ["h2_dy_dphi_jpsi_ups", "h2_dy_dphi_jpsi_phi", "h2_dy_dphi_ups_phi"]
     titles = ["J/#psi - #Upsilon", "J/#psi - #phi", "#Upsilon - #phi"]
     
     for i, (hname, title) in enumerate(zip(hist_names, titles)):
-        c.cd(i + 1)
+        canvas.cd(i + 1)
         ROOT.gPad.SetRightMargin(0.15)
         ROOT.gPad.SetLeftMargin(0.12)
         
-        h = fin.Get(hname)
+        h = input_file.Get(hname)
         if not h:
             print(f"Warning: histogram {hname} not found")
             continue
@@ -161,8 +161,8 @@ def plot_2d_all_jyp(fin, output_dir, process):
         h.Draw("COLZ")
     
     output_name = os.path.join(output_dir, f"correlation_2d_all_{process}")
-    c.SaveAs(output_name + ".pdf")
-    c.SaveAs(output_name + ".png")
+    canvas.SaveAs(output_name + ".pdf")
+    canvas.SaveAs(output_name + ".png")
     print(f"Saved: {output_name}.pdf/.png")
 
 
@@ -182,10 +182,10 @@ def jjy_h2(category, stem):
     return f"h2_{category}_{stem}"
 
 
-def plot_2d_all_jjy(fin, output_dir, process, category, category_title):
+def plot_2d_all_jjy(input_file, output_dir, process, category, category_title):
     """绘制JJY的三个2D关联图"""
-    c = ROOT.TCanvas(f"c2d_all_{category}", "", 1800, 500)
-    c.Divide(3, 1)
+    canvas = ROOT.TCanvas(f"c2d_all_{category}", "", 1800, 500)
+    canvas.Divide(3, 1)
 
     hist_names = [
         jjy_h2(category, "dy_dphi_jpsi1_jpsi2"),
@@ -195,11 +195,11 @@ def plot_2d_all_jjy(fin, output_dir, process, category, category_title):
     titles = ["J/#psi_{1} - J/#psi_{2}", "J/#psi_{1} - #Upsilon", "J/#psi_{2} - #Upsilon"]
 
     for i, (hname, title) in enumerate(zip(hist_names, titles)):
-        c.cd(i + 1)
+        canvas.cd(i + 1)
         ROOT.gPad.SetRightMargin(0.15)
         ROOT.gPad.SetLeftMargin(0.12)
 
-        h = fin.Get(hname)
+        h = input_file.Get(hname)
         if not h:
             print(f"Warning: histogram {hname} not found")
             continue
@@ -210,13 +210,14 @@ def plot_2d_all_jjy(fin, output_dir, process, category, category_title):
         h.Draw("COLZ")
 
     output_name = os.path.join(output_dir, f"correlation_2d_all_{process}_{category}")
-    c.SaveAs(output_name + ".pdf")
-    c.SaveAs(output_name + ".png")
+    canvas.SaveAs(output_name + ".pdf")
+    canvas.SaveAs(output_name + ".png")
     print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_jjy_kinematic_quantity(fin, output_dir, process, category, category_title, quantity, xlabel):
-    c = ROOT.TCanvas(f"c_{category}_{quantity}", "", 800, 600)
+def plot_jjy_kinematic_quantity(input_file, output_dir, process, category, category_title, quantity, xlabel):
+    """Plot a single kinematic quantity for J/psi1, J/psi2, and Upsilon on the same canvas."""
+    canvas = ROOT.TCanvas(f"c_{category}_{quantity}", "", 800, 600)
     legend = ROOT.TLegend(0.60, 0.70, 0.88, 0.88)
     legend.SetBorderSize(0)
     legend.SetFillStyle(0)
@@ -230,7 +231,7 @@ def plot_jjy_kinematic_quantity(fin, output_dir, process, category, category_tit
     hists = []
     max_val = 0
     for hname, label, color in specs:
-        h = fin.Get(hname)
+        h = input_file.Get(hname)
         if not h:
             print(f"Warning: histogram {hname} not found")
             continue
@@ -242,37 +243,38 @@ def plot_jjy_kinematic_quantity(fin, output_dir, process, category, category_tit
     if not hists:
         return
 
-    first = True
-    for h, label in hists:
-        h.SetMaximum(max_val * 1.3 if max_val > 0 else 1)
-        h.SetMinimum(0)
-        h.SetTitle(f"{xlabel} Distributions ({process}, {category_title})")
-        h.GetXaxis().SetTitle(xlabel)
-        h.GetYaxis().SetTitle("Events")
-        h.Draw("HIST" if first else "HIST SAME")
-        legend.AddEntry(h, label, "l")
-        first = False
+    is_first_hist = True
+    for hist, label in hists:
+        hist.SetMaximum(max_val * 1.3 if max_val > 0 else 1)
+        hist.SetMinimum(0)
+        hist.SetTitle(f"{xlabel} Distributions ({process}, {category_title})")
+        hist.GetXaxis().SetTitle(xlabel)
+        hist.GetYaxis().SetTitle("Events")
+        hist.Draw("HIST" if is_first_hist else "HIST SAME")
+        legend.AddEntry(hist, label, "l")
+        is_first_hist = False
 
     legend.Draw()
     output_name = os.path.join(output_dir, f"{quantity}_distributions_{process}_{category}")
-    c.SaveAs(output_name + ".pdf")
-    c.SaveAs(output_name + ".png")
+    canvas.SaveAs(output_name + ".pdf")
+    canvas.SaveAs(output_name + ".png")
     print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_kinematics_jjy(fin, output_dir, process, category, category_title):
-    plot_jjy_kinematic_quantity(fin, output_dir, process, category, category_title, "pt", "p_{T} [GeV]")
-    plot_jjy_kinematic_quantity(fin, output_dir, process, category, category_title, "eta", "#eta")
-    plot_jjy_kinematic_quantity(fin, output_dir, process, category, category_title, "y", "y")
-    plot_jjy_kinematic_quantity(fin, output_dir, process, category, category_title, "phi", "#phi")
+def plot_kinematics_jjy(input_file, output_dir, process, category, category_title):
+    """Plot all kinematic quantities (pT, eta, y, phi) for JJY category."""
+    plot_jjy_kinematic_quantity(input_file, output_dir, process, category, category_title, "pt", "p_{T} [GeV]")
+    plot_jjy_kinematic_quantity(input_file, output_dir, process, category, category_title, "eta", "#eta")
+    plot_jjy_kinematic_quantity(input_file, output_dir, process, category, category_title, "y", "y")
+    plot_jjy_kinematic_quantity(input_file, output_dir, process, category, category_title, "phi", "#phi")
 
 
-def plot_resonance_mass_jjy(fin, output_dir, process, category, category_title):
+def plot_resonance_mass_jjy(input_file, output_dir, process, category, category_title):
     """绘制JJY的m(mumu)共振质量谱。"""
-    c = ROOT.TCanvas(f"c_res_mass_{category}", "", 1200, 600)
-    c.Divide(2, 1)
+    canvas = ROOT.TCanvas(f"c_res_mass_{category}", "", 1200, 600)
+    canvas.Divide(2, 1)
 
-    c.cd(1)
+    canvas.cd(1)
     ROOT.gPad.SetLeftMargin(0.12)
     ROOT.gPad.SetRightMargin(0.05)
     legend = ROOT.TLegend(0.58, 0.70, 0.88, 0.88)
@@ -288,7 +290,7 @@ def plot_resonance_mass_jjy(fin, output_dir, process, category, category_title):
     jpsi_hists = []
     max_val = 0
     for hname, label, color in jpsi_specs:
-        h = fin.Get(hname)
+        h = input_file.Get(hname)
         if not h:
             print(f"Warning: histogram {hname} not found")
             continue
@@ -299,23 +301,23 @@ def plot_resonance_mass_jjy(fin, output_dir, process, category, category_title):
         max_val = max(max_val, h.GetMaximum())
         jpsi_hists.append((h, label))
 
-    first = True
-    for h, label in jpsi_hists:
-        h.SetMaximum(max_val * 1.3 if max_val > 0 else 1)
-        h.SetMinimum(0)
-        h.SetTitle(f"J/#psi m(#mu#mu) ({process}, {category_title})")
-        h.GetXaxis().SetTitle("m(#mu#mu) [GeV]")
-        h.GetYaxis().SetTitle("Candidates")
-        h.Draw("HIST" if first else "HIST SAME")
-        legend.AddEntry(h, label, "l")
-        first = False
+    is_first_hist = True
+    for hist, label in jpsi_hists:
+        hist.SetMaximum(max_val * 1.3 if max_val > 0 else 1)
+        hist.SetMinimum(0)
+        hist.SetTitle(f"J/#psi m(#mu#mu) ({process}, {category_title})")
+        hist.GetXaxis().SetTitle("m(#mu#mu) [GeV]")
+        hist.GetYaxis().SetTitle("Candidates")
+        hist.Draw("HIST" if is_first_hist else "HIST SAME")
+        legend.AddEntry(hist, label, "l")
+        is_first_hist = False
     if jpsi_hists:
         legend.Draw()
 
-    c.cd(2)
+    canvas.cd(2)
     ROOT.gPad.SetLeftMargin(0.12)
     ROOT.gPad.SetRightMargin(0.05)
-    h_ups = fin.Get(jjy_h(category, "ups_mass"))
+    h_ups = input_file.Get(jjy_h(category, "ups_mass"))
     if not h_ups:
         print(f"Warning: histogram {jjy_h(category, 'ups_mass')} not found")
     else:
@@ -329,14 +331,15 @@ def plot_resonance_mass_jjy(fin, output_dir, process, category, category_title):
         h_ups.Draw("HIST")
 
     output_name = os.path.join(output_dir, f"resonance_mass_{process}_{category}")
-    c.SaveAs(output_name + ".pdf")
-    c.SaveAs(output_name + ".png")
+    canvas.SaveAs(output_name + ".pdf")
+    canvas.SaveAs(output_name + ".png")
     print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_invariant_mass_jjy(fin, output_dir, process, category, category_title):
-    c = ROOT.TCanvas(f"c_mass_{category}", "", 1800, 800)
-    c.Divide(3, 2)
+def plot_invariant_mass_jjy(input_file, output_dir, process, category, category_title):
+    """Plot JJY invariant mass distributions (3-body and pair combinations)."""
+    canvas = ROOT.TCanvas(f"c_mass_{category}", "", 1800, 800)
+    canvas.Divide(3, 2)
 
     mass_hists = [
         (jjy_h(category, "mass_jpsi1_jpsi2"), "M(J/#psi_{1} + J/#psi_{2})"),
@@ -348,11 +351,11 @@ def plot_invariant_mass_jjy(fin, output_dir, process, category, category_title):
     ]
 
     for i, (hname, title) in enumerate(mass_hists):
-        c.cd(i + 1)
+        canvas.cd(i + 1)
         ROOT.gPad.SetLeftMargin(0.12)
         ROOT.gPad.SetRightMargin(0.05)
 
-        h = fin.Get(hname)
+        h = input_file.Get(hname)
         if not h:
             print(f"Warning: histogram {hname} not found")
             continue
@@ -365,17 +368,18 @@ def plot_invariant_mass_jjy(fin, output_dir, process, category, category_title):
         h.Draw("HIST")
 
     output_name = os.path.join(output_dir, f"invariant_mass_{process}_{category}")
-    c.SaveAs(output_name + ".pdf")
-    c.SaveAs(output_name + ".png")
+    canvas.SaveAs(output_name + ".pdf")
+    canvas.SaveAs(output_name + ".png")
     print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_jjy_category(fin, output_dir, process, category, category_title):
+def plot_jjy_category(input_file, output_dir, process, category, category_title):
+    """Plot all JJY plots (delta-y, delta-phi, 2D correlations, kinematics, masses) for one vertex category."""
     category_dir = os.path.join(output_dir, category)
     os.makedirs(category_dir, exist_ok=True)
 
     plot_1d_comparison(
-        fin,
+        input_file,
         [jjy_h(category, "dy_jpsi1_jpsi2"), jjy_h(category, "dy_jpsi1_ups"), jjy_h(category, "dy_jpsi2_ups")],
         ["J/#psi_{1} - J/#psi_{2}", "J/#psi_{1} - #Upsilon", "J/#psi_{2} - #Upsilon"],
         [ROOT.kRed, ROOT.kBlue, ROOT.kGreen + 2],
@@ -385,7 +389,7 @@ def plot_jjy_category(fin, output_dir, process, category, category_title):
     )
 
     plot_1d_comparison(
-        fin,
+        input_file,
         [jjy_h(category, "dphi_jpsi1_jpsi2"), jjy_h(category, "dphi_jpsi1_ups"), jjy_h(category, "dphi_jpsi2_ups")],
         ["J/#psi_{1} - J/#psi_{2}", "J/#psi_{1} - #Upsilon", "J/#psi_{2} - #Upsilon"],
         [ROOT.kRed, ROOT.kBlue, ROOT.kGreen + 2],
@@ -394,49 +398,49 @@ def plot_jjy_category(fin, output_dir, process, category, category_title):
         "|#Delta#phi|",
     )
 
-    plot_2d(fin, jjy_h2(category, "dy_dphi_jpsi1_jpsi2"),
+    plot_2d(input_file, jjy_h2(category, "dy_dphi_jpsi1_jpsi2"),
             os.path.join(category_dir, f"correlation_2d_jpsi1_jpsi2_{process}_{category}"),
             f"J/#psi_{{1}} - J/#psi_{{2}}: #Delta y vs #Delta#phi ({process}, {category_title})")
-    plot_2d(fin, jjy_h2(category, "dy_dphi_jpsi1_ups"),
+    plot_2d(input_file, jjy_h2(category, "dy_dphi_jpsi1_ups"),
             os.path.join(category_dir, f"correlation_2d_jpsi1_ups_{process}_{category}"),
             f"J/#psi_{{1}} - #Upsilon: #Delta y vs #Delta#phi ({process}, {category_title})")
-    plot_2d(fin, jjy_h2(category, "dy_dphi_jpsi2_ups"),
+    plot_2d(input_file, jjy_h2(category, "dy_dphi_jpsi2_ups"),
             os.path.join(category_dir, f"correlation_2d_jpsi2_ups_{process}_{category}"),
             f"J/#psi_{{2}} - #Upsilon: #Delta y vs #Delta#phi ({process}, {category_title})")
 
-    plot_2d_all_jjy(fin, category_dir, process, category, category_title)
-    plot_kinematics_jjy(fin, category_dir, process, category, category_title)
-    plot_resonance_mass_jjy(fin, category_dir, process, category, category_title)
-    plot_invariant_mass_jjy(fin, category_dir, process, category, category_title)
+    plot_2d_all_jjy(input_file, category_dir, process, category, category_title)
+    plot_kinematics_jjy(input_file, category_dir, process, category, category_title)
+    plot_resonance_mass_jjy(input_file, category_dir, process, category, category_title)
+    plot_invariant_mass_jjy(input_file, category_dir, process, category, category_title)
 
 
-def plot_jjy(fin, output_dir, process):
+def plot_jjy(input_file, output_dir, process):
     """绘制JJY四套vertexing选择图"""
     for category, category_title in JJY_VERTEX_CATEGORIES:
-        plot_jjy_category(fin, output_dir, process, category, category_title)
+        plot_jjy_category(input_file, output_dir, process, category, category_title)
 
 
-def plot_kinematics_jjp(fin, output_dir, process):
+def plot_kinematics_jjp(input_file, output_dir, process):
     """绘制JJP运动学分布"""
     # pT分布
-    c = ROOT.TCanvas("c_pt", "", 800, 600)
+    canvas = ROOT.TCanvas("c_pt", "", 800, 600)
     
     legend = ROOT.TLegend(0.60, 0.70, 0.88, 0.88)
     legend.SetBorderSize(0)
     legend.SetFillStyle(0)
     legend.SetTextSize(0.035)
     
-    h_jpsi1_pt = fin.Get("h_jpsi1_pt")
-    h_jpsi2_pt = fin.Get("h_jpsi2_pt")
-    h_phi_pt = fin.Get("h_phi_pt")
+    h_jpsi1_pt = input_file.Get("h_jpsi1_pt")
+    h_jpsi2_pt = input_file.Get("h_jpsi2_pt")
+    h_phi_pt = input_file.Get("h_phi_pt")
     
     if h_jpsi1_pt and h_jpsi2_pt and h_phi_pt:
         h_jpsi1_pt.SetLineColor(ROOT.kRed)
         h_jpsi2_pt.SetLineColor(ROOT.kBlue)
         h_phi_pt.SetLineColor(ROOT.kGreen + 2)
-        
-        for h in [h_jpsi1_pt, h_jpsi2_pt, h_phi_pt]:
-            h.SetLineWidth(2)
+
+        for hist in [h_jpsi1_pt, h_jpsi2_pt, h_phi_pt]:
+            hist.SetLineWidth(2)
         
         max_val = max(h_jpsi1_pt.GetMaximum(), h_jpsi2_pt.GetMaximum(), h_phi_pt.GetMaximum())
         h_jpsi1_pt.SetMaximum(max_val * 1.3)
@@ -455,28 +459,28 @@ def plot_kinematics_jjp(fin, output_dir, process):
         legend.Draw()
         
         output_name = os.path.join(output_dir, f"pt_distributions_{process}")
-        c.SaveAs(output_name + ".pdf")
-        c.SaveAs(output_name + ".png")
+        canvas.SaveAs(output_name + ".pdf")
+        canvas.SaveAs(output_name + ".png")
         print(f"Saved: {output_name}.pdf/.png")
     
     # η分布
-    c2 = ROOT.TCanvas("c_eta", "", 800, 600)
+    canvas2 = ROOT.TCanvas("c_eta", "", 800, 600)
     legend2 = ROOT.TLegend(0.60, 0.70, 0.88, 0.88)
     legend2.SetBorderSize(0)
     legend2.SetFillStyle(0)
     legend2.SetTextSize(0.035)
     
-    h_jpsi1_eta = fin.Get("h_jpsi1_eta")
-    h_jpsi2_eta = fin.Get("h_jpsi2_eta")
-    h_phi_eta = fin.Get("h_phi_eta")
+    h_jpsi1_eta = input_file.Get("h_jpsi1_eta")
+    h_jpsi2_eta = input_file.Get("h_jpsi2_eta")
+    h_phi_eta = input_file.Get("h_phi_eta")
     
     if h_jpsi1_eta and h_jpsi2_eta and h_phi_eta:
         h_jpsi1_eta.SetLineColor(ROOT.kRed)
         h_jpsi2_eta.SetLineColor(ROOT.kBlue)
         h_phi_eta.SetLineColor(ROOT.kGreen + 2)
-        
-        for h in [h_jpsi1_eta, h_jpsi2_eta, h_phi_eta]:
-            h.SetLineWidth(2)
+
+        for hist in [h_jpsi1_eta, h_jpsi2_eta, h_phi_eta]:
+            hist.SetLineWidth(2)
         
         max_val = max(h_jpsi1_eta.GetMaximum(), h_jpsi2_eta.GetMaximum(), h_phi_eta.GetMaximum())
         h_jpsi1_eta.SetMaximum(max_val * 1.3)
@@ -495,28 +499,28 @@ def plot_kinematics_jjp(fin, output_dir, process):
         legend2.Draw()
         
         output_name = os.path.join(output_dir, f"eta_distributions_{process}")
-        c2.SaveAs(output_name + ".pdf")
-        c2.SaveAs(output_name + ".png")
+        canvas2.SaveAs(output_name + ".pdf")
+        canvas2.SaveAs(output_name + ".png")
         print(f"Saved: {output_name}.pdf/.png")
     
     # 快度分布
-    c3 = ROOT.TCanvas("c_y", "", 800, 600)
+    canvas3 = ROOT.TCanvas("c_y", "", 800, 600)
     legend3 = ROOT.TLegend(0.60, 0.70, 0.88, 0.88)
     legend3.SetBorderSize(0)
     legend3.SetFillStyle(0)
     legend3.SetTextSize(0.035)
     
-    h_jpsi1_y = fin.Get("h_jpsi1_y")
-    h_jpsi2_y = fin.Get("h_jpsi2_y")
-    h_phi_y = fin.Get("h_phi_y")
+    h_jpsi1_y = input_file.Get("h_jpsi1_y")
+    h_jpsi2_y = input_file.Get("h_jpsi2_y")
+    h_phi_y = input_file.Get("h_phi_y")
     
     if h_jpsi1_y and h_jpsi2_y and h_phi_y:
         h_jpsi1_y.SetLineColor(ROOT.kRed)
         h_jpsi2_y.SetLineColor(ROOT.kBlue)
         h_phi_y.SetLineColor(ROOT.kGreen + 2)
-        
-        for h in [h_jpsi1_y, h_jpsi2_y, h_phi_y]:
-            h.SetLineWidth(2)
+
+        for hist in [h_jpsi1_y, h_jpsi2_y, h_phi_y]:
+            hist.SetLineWidth(2)
         
         max_val = max(h_jpsi1_y.GetMaximum(), h_jpsi2_y.GetMaximum(), h_phi_y.GetMaximum())
         h_jpsi1_y.SetMaximum(max_val * 1.3)
@@ -535,28 +539,28 @@ def plot_kinematics_jjp(fin, output_dir, process):
         legend3.Draw()
         
         output_name = os.path.join(output_dir, f"rapidity_distributions_{process}")
-        c3.SaveAs(output_name + ".pdf")
-        c3.SaveAs(output_name + ".png")
+        canvas3.SaveAs(output_name + ".pdf")
+        canvas3.SaveAs(output_name + ".png")
         print(f"Saved: {output_name}.pdf/.png")
     
     # φ (方位角) 分布
-    c4 = ROOT.TCanvas("c_phi", "", 800, 600)
+    canvas4 = ROOT.TCanvas("c_phi", "", 800, 600)
     legend4 = ROOT.TLegend(0.60, 0.70, 0.88, 0.88)
     legend4.SetBorderSize(0)
     legend4.SetFillStyle(0)
     legend4.SetTextSize(0.035)
     
-    h_jpsi1_phi = fin.Get("h_jpsi1_phi")
-    h_jpsi2_phi = fin.Get("h_jpsi2_phi")
-    h_phi_phi = fin.Get("h_phi_phi")
+    h_jpsi1_phi = input_file.Get("h_jpsi1_phi")
+    h_jpsi2_phi = input_file.Get("h_jpsi2_phi")
+    h_phi_phi = input_file.Get("h_phi_phi")
     
     if h_jpsi1_phi and h_jpsi2_phi and h_phi_phi:
         h_jpsi1_phi.SetLineColor(ROOT.kRed)
         h_jpsi2_phi.SetLineColor(ROOT.kBlue)
         h_phi_phi.SetLineColor(ROOT.kGreen + 2)
-        
-        for h in [h_jpsi1_phi, h_jpsi2_phi, h_phi_phi]:
-            h.SetLineWidth(2)
+
+        for hist in [h_jpsi1_phi, h_jpsi2_phi, h_phi_phi]:
+            hist.SetLineWidth(2)
         
         max_val = max(h_jpsi1_phi.GetMaximum(), h_jpsi2_phi.GetMaximum(), h_phi_phi.GetMaximum())
         h_jpsi1_phi.SetMaximum(max_val * 1.3)
@@ -575,32 +579,32 @@ def plot_kinematics_jjp(fin, output_dir, process):
         legend4.Draw()
         
         output_name = os.path.join(output_dir, f"phi_distributions_{process}")
-        c4.SaveAs(output_name + ".pdf")
-        c4.SaveAs(output_name + ".png")
+        canvas4.SaveAs(output_name + ".pdf")
+        canvas4.SaveAs(output_name + ".png")
         print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_kinematics_jyp(fin, output_dir, process):
+def plot_kinematics_jyp(input_file, output_dir, process):
     """绘制JYP运动学分布"""
     # pT分布
-    c = ROOT.TCanvas("c_pt", "", 800, 600)
+    canvas = ROOT.TCanvas("c_pt", "", 800, 600)
     
     legend = ROOT.TLegend(0.60, 0.70, 0.88, 0.88)
     legend.SetBorderSize(0)
     legend.SetFillStyle(0)
     legend.SetTextSize(0.035)
     
-    h_jpsi_pt = fin.Get("h_jpsi_pt")
-    h_ups_pt = fin.Get("h_ups_pt")
-    h_phi_pt = fin.Get("h_phi_pt")
+    h_jpsi_pt = input_file.Get("h_jpsi_pt")
+    h_ups_pt = input_file.Get("h_ups_pt")
+    h_phi_pt = input_file.Get("h_phi_pt")
     
     if h_jpsi_pt and h_ups_pt and h_phi_pt:
         h_jpsi_pt.SetLineColor(ROOT.kRed)
         h_ups_pt.SetLineColor(ROOT.kBlue)
         h_phi_pt.SetLineColor(ROOT.kGreen + 2)
-        
-        for h in [h_jpsi_pt, h_ups_pt, h_phi_pt]:
-            h.SetLineWidth(2)
+
+        for hist in [h_jpsi_pt, h_ups_pt, h_phi_pt]:
+            hist.SetLineWidth(2)
         
         max_val = max(h_jpsi_pt.GetMaximum(), h_ups_pt.GetMaximum(), h_phi_pt.GetMaximum())
         h_jpsi_pt.SetMaximum(max_val * 1.3)
@@ -619,28 +623,28 @@ def plot_kinematics_jyp(fin, output_dir, process):
         legend.Draw()
         
         output_name = os.path.join(output_dir, f"pt_distributions_{process}")
-        c.SaveAs(output_name + ".pdf")
-        c.SaveAs(output_name + ".png")
+        canvas.SaveAs(output_name + ".pdf")
+        canvas.SaveAs(output_name + ".png")
         print(f"Saved: {output_name}.pdf/.png")
     
     # η分布
-    c2 = ROOT.TCanvas("c_eta", "", 800, 600)
+    canvas2 = ROOT.TCanvas("c_eta", "", 800, 600)
     legend2 = ROOT.TLegend(0.60, 0.70, 0.88, 0.88)
     legend2.SetBorderSize(0)
     legend2.SetFillStyle(0)
     legend2.SetTextSize(0.035)
     
-    h_jpsi_eta = fin.Get("h_jpsi_eta")
-    h_ups_eta = fin.Get("h_ups_eta")
-    h_phi_eta = fin.Get("h_phi_eta")
+    h_jpsi_eta = input_file.Get("h_jpsi_eta")
+    h_ups_eta = input_file.Get("h_ups_eta")
+    h_phi_eta = input_file.Get("h_phi_eta")
     
     if h_jpsi_eta and h_ups_eta and h_phi_eta:
         h_jpsi_eta.SetLineColor(ROOT.kRed)
         h_ups_eta.SetLineColor(ROOT.kBlue)
         h_phi_eta.SetLineColor(ROOT.kGreen + 2)
-        
-        for h in [h_jpsi_eta, h_ups_eta, h_phi_eta]:
-            h.SetLineWidth(2)
+
+        for hist in [h_jpsi_eta, h_ups_eta, h_phi_eta]:
+            hist.SetLineWidth(2)
         
         max_val = max(h_jpsi_eta.GetMaximum(), h_ups_eta.GetMaximum(), h_phi_eta.GetMaximum())
         h_jpsi_eta.SetMaximum(max_val * 1.3)
@@ -659,28 +663,28 @@ def plot_kinematics_jyp(fin, output_dir, process):
         legend2.Draw()
         
         output_name = os.path.join(output_dir, f"eta_distributions_{process}")
-        c2.SaveAs(output_name + ".pdf")
-        c2.SaveAs(output_name + ".png")
+        canvas2.SaveAs(output_name + ".pdf")
+        canvas2.SaveAs(output_name + ".png")
         print(f"Saved: {output_name}.pdf/.png")
     
     # 快度分布
-    c3 = ROOT.TCanvas("c_y", "", 800, 600)
+    canvas3 = ROOT.TCanvas("c_y", "", 800, 600)
     legend3 = ROOT.TLegend(0.60, 0.70, 0.88, 0.88)
     legend3.SetBorderSize(0)
     legend3.SetFillStyle(0)
     legend3.SetTextSize(0.035)
     
-    h_jpsi_y = fin.Get("h_jpsi_y")
-    h_ups_y = fin.Get("h_ups_y")
-    h_phi_y = fin.Get("h_phi_y")
+    h_jpsi_y = input_file.Get("h_jpsi_y")
+    h_ups_y = input_file.Get("h_ups_y")
+    h_phi_y = input_file.Get("h_phi_y")
     
     if h_jpsi_y and h_ups_y and h_phi_y:
         h_jpsi_y.SetLineColor(ROOT.kRed)
         h_ups_y.SetLineColor(ROOT.kBlue)
         h_phi_y.SetLineColor(ROOT.kGreen + 2)
-        
-        for h in [h_jpsi_y, h_ups_y, h_phi_y]:
-            h.SetLineWidth(2)
+
+        for hist in [h_jpsi_y, h_ups_y, h_phi_y]:
+            hist.SetLineWidth(2)
         
         max_val = max(h_jpsi_y.GetMaximum(), h_ups_y.GetMaximum(), h_phi_y.GetMaximum())
         h_jpsi_y.SetMaximum(max_val * 1.3)
@@ -699,28 +703,28 @@ def plot_kinematics_jyp(fin, output_dir, process):
         legend3.Draw()
         
         output_name = os.path.join(output_dir, f"rapidity_distributions_{process}")
-        c3.SaveAs(output_name + ".pdf")
-        c3.SaveAs(output_name + ".png")
+        canvas3.SaveAs(output_name + ".pdf")
+        canvas3.SaveAs(output_name + ".png")
         print(f"Saved: {output_name}.pdf/.png")
     
     # φ (方位角) 分布
-    c4 = ROOT.TCanvas("c_phi", "", 800, 600)
+    canvas4 = ROOT.TCanvas("c_phi", "", 800, 600)
     legend4 = ROOT.TLegend(0.60, 0.70, 0.88, 0.88)
     legend4.SetBorderSize(0)
     legend4.SetFillStyle(0)
     legend4.SetTextSize(0.035)
     
-    h_jpsi_phi = fin.Get("h_jpsi_phi")
-    h_ups_phi = fin.Get("h_ups_phi")
-    h_phi_phi = fin.Get("h_phi_phi")
+    h_jpsi_phi = input_file.Get("h_jpsi_phi")
+    h_ups_phi = input_file.Get("h_ups_phi")
+    h_phi_phi = input_file.Get("h_phi_phi")
     
     if h_jpsi_phi and h_ups_phi and h_phi_phi:
         h_jpsi_phi.SetLineColor(ROOT.kRed)
         h_ups_phi.SetLineColor(ROOT.kBlue)
         h_phi_phi.SetLineColor(ROOT.kGreen + 2)
-        
-        for h in [h_jpsi_phi, h_ups_phi, h_phi_phi]:
-            h.SetLineWidth(2)
+
+        for hist in [h_jpsi_phi, h_ups_phi, h_phi_phi]:
+            hist.SetLineWidth(2)
         
         max_val = max(h_jpsi_phi.GetMaximum(), h_ups_phi.GetMaximum(), h_phi_phi.GetMaximum())
         h_jpsi_phi.SetMaximum(max_val * 1.3)
@@ -739,15 +743,15 @@ def plot_kinematics_jyp(fin, output_dir, process):
         legend4.Draw()
         
         output_name = os.path.join(output_dir, f"phi_distributions_{process}")
-        c4.SaveAs(output_name + ".pdf")
-        c4.SaveAs(output_name + ".png")
+        canvas4.SaveAs(output_name + ".pdf")
+        canvas4.SaveAs(output_name + ".png")
         print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_invariant_mass_jjp(fin, output_dir, process):
+def plot_invariant_mass_jjp(input_file, output_dir, process):
     """绘制JJP不变质量分布"""
-    c = ROOT.TCanvas("c_mass", "", 1600, 500)
-    c.Divide(4, 1)
+    canvas = ROOT.TCanvas("c_mass", "", 1600, 500)
+    canvas.Divide(4, 1)
     
     mass_hists = [
         ("h_mass_jpsi1_jpsi2", "M(J/#psi_{1} + J/#psi_{2})"),
@@ -757,11 +761,11 @@ def plot_invariant_mass_jjp(fin, output_dir, process):
     ]
     
     for i, (hname, title) in enumerate(mass_hists):
-        c.cd(i + 1)
+        canvas.cd(i + 1)
         ROOT.gPad.SetLeftMargin(0.12)
         ROOT.gPad.SetRightMargin(0.05)
         
-        h = fin.Get(hname)
+        h = input_file.Get(hname)
         if not h:
             print(f"Warning: histogram {hname} not found")
             continue
@@ -775,15 +779,15 @@ def plot_invariant_mass_jjp(fin, output_dir, process):
         h.Draw("HIST")
     
     output_name = os.path.join(output_dir, f"invariant_mass_{process}")
-    c.SaveAs(output_name + ".pdf")
-    c.SaveAs(output_name + ".png")
+    canvas.SaveAs(output_name + ".pdf")
+    canvas.SaveAs(output_name + ".png")
     print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_invariant_mass_jyp(fin, output_dir, process):
+def plot_invariant_mass_jyp(input_file, output_dir, process):
     """绘制JYP不变质量分布"""
-    c = ROOT.TCanvas("c_mass", "", 1600, 500)
-    c.Divide(4, 1)
+    canvas = ROOT.TCanvas("c_mass", "", 1600, 500)
+    canvas.Divide(4, 1)
     
     mass_hists = [
         ("h_mass_jpsi_ups", "M(J/#psi + #Upsilon)"),
@@ -793,11 +797,11 @@ def plot_invariant_mass_jyp(fin, output_dir, process):
     ]
     
     for i, (hname, title) in enumerate(mass_hists):
-        c.cd(i + 1)
+        canvas.cd(i + 1)
         ROOT.gPad.SetLeftMargin(0.12)
         ROOT.gPad.SetRightMargin(0.05)
         
-        h = fin.Get(hname)
+        h = input_file.Get(hname)
         if not h:
             print(f"Warning: histogram {hname} not found")
             continue
@@ -811,16 +815,16 @@ def plot_invariant_mass_jyp(fin, output_dir, process):
         h.Draw("HIST")
     
     output_name = os.path.join(output_dir, f"invariant_mass_{process}")
-    c.SaveAs(output_name + ".pdf")
-    c.SaveAs(output_name + ".png")
+    canvas.SaveAs(output_name + ".pdf")
+    canvas.SaveAs(output_name + ".png")
     print(f"Saved: {output_name}.pdf/.png")
 
 
-def plot_jjp(fin, output_dir, process):
+def plot_jjp(input_file, output_dir, process):
     """绘制JJP所有图"""
     # Δy比较图
     plot_1d_comparison(
-        fin,
+        input_file,
         ["h_dy_jpsi1_jpsi2", "h_dy_jpsi1_phi", "h_dy_jpsi2_phi"],
         ["J/#psi_{1} - J/#psi_{2}", "J/#psi_{1} - #phi", "J/#psi_{2} - #phi"],
         [ROOT.kRed, ROOT.kBlue, ROOT.kGreen + 2],
@@ -831,7 +835,7 @@ def plot_jjp(fin, output_dir, process):
     
     # Δφ比较图
     plot_1d_comparison(
-        fin,
+        input_file,
         ["h_dphi_jpsi1_jpsi2", "h_dphi_jpsi1_phi", "h_dphi_jpsi2_phi"],
         ["J/#psi_{1} - J/#psi_{2}", "J/#psi_{1} - #phi", "J/#psi_{2} - #phi"],
         [ROOT.kRed, ROOT.kBlue, ROOT.kGreen + 2],
@@ -841,33 +845,33 @@ def plot_jjp(fin, output_dir, process):
     )
     
     # 2D关联图
-    plot_2d(fin, "h2_dy_dphi_jpsi1_jpsi2",
+    plot_2d(input_file, "h2_dy_dphi_jpsi1_jpsi2",
             os.path.join(output_dir, f"correlation_2d_jpsi1_jpsi2_{process}"),
             f"J/#psi_{{1}} - J/#psi_{{2}}: #Delta y vs #Delta#phi ({process})")
     
-    plot_2d(fin, "h2_dy_dphi_jpsi1_phi",
+    plot_2d(input_file, "h2_dy_dphi_jpsi1_phi",
             os.path.join(output_dir, f"correlation_2d_jpsi1_phi_{process}"),
             f"J/#psi_{{1}} - #phi: #Delta y vs #Delta#phi ({process})")
     
-    plot_2d(fin, "h2_dy_dphi_jpsi2_phi",
+    plot_2d(input_file, "h2_dy_dphi_jpsi2_phi",
             os.path.join(output_dir, f"correlation_2d_jpsi2_phi_{process}"),
             f"J/#psi_{{2}} - #phi: #Delta y vs #Delta#phi ({process})")
     
     # 组合2D图
-    plot_2d_all_jjp(fin, output_dir, process)
+    plot_2d_all_jjp(input_file, output_dir, process)
     
     # 运动学分布
-    plot_kinematics_jjp(fin, output_dir, process)
+    plot_kinematics_jjp(input_file, output_dir, process)
     
     # 不变质量分布
-    plot_invariant_mass_jjp(fin, output_dir, process)
+    plot_invariant_mass_jjp(input_file, output_dir, process)
 
 
-def plot_jyp(fin, output_dir, process):
+def plot_jyp(input_file, output_dir, process):
     """绘制JYP所有图"""
     # Δy比较图
     plot_1d_comparison(
-        fin,
+        input_file,
         ["h_dy_jpsi_ups", "h_dy_jpsi_phi", "h_dy_ups_phi"],
         ["J/#psi - #Upsilon", "J/#psi - #phi", "#Upsilon - #phi"],
         [ROOT.kRed, ROOT.kBlue, ROOT.kGreen + 2],
@@ -878,7 +882,7 @@ def plot_jyp(fin, output_dir, process):
     
     # Δφ比较图
     plot_1d_comparison(
-        fin,
+        input_file,
         ["h_dphi_jpsi_ups", "h_dphi_jpsi_phi", "h_dphi_ups_phi"],
         ["J/#psi - #Upsilon", "J/#psi - #phi", "#Upsilon - #phi"],
         [ROOT.kRed, ROOT.kBlue, ROOT.kGreen + 2],
@@ -888,26 +892,26 @@ def plot_jyp(fin, output_dir, process):
     )
     
     # 2D关联图
-    plot_2d(fin, "h2_dy_dphi_jpsi_ups",
+    plot_2d(input_file, "h2_dy_dphi_jpsi_ups",
             os.path.join(output_dir, f"correlation_2d_jpsi_ups_{process}"),
             f"J/#psi - #Upsilon: #Delta y vs #Delta#phi ({process})")
     
-    plot_2d(fin, "h2_dy_dphi_jpsi_phi",
+    plot_2d(input_file, "h2_dy_dphi_jpsi_phi",
             os.path.join(output_dir, f"correlation_2d_jpsi_phi_{process}"),
             f"J/#psi - #phi: #Delta y vs #Delta#phi ({process})")
     
-    plot_2d(fin, "h2_dy_dphi_ups_phi",
+    plot_2d(input_file, "h2_dy_dphi_ups_phi",
             os.path.join(output_dir, f"correlation_2d_ups_phi_{process}"),
             f"#Upsilon - #phi: #Delta y vs #Delta#phi ({process})")
     
     # 组合2D图
-    plot_2d_all_jyp(fin, output_dir, process)
+    plot_2d_all_jyp(input_file, output_dir, process)
     
     # 运动学分布
-    plot_kinematics_jyp(fin, output_dir, process)
+    plot_kinematics_jyp(input_file, output_dir, process)
     
     # 不变质量分布
-    plot_invariant_mass_jyp(fin, output_dir, process)
+    plot_invariant_mass_jyp(input_file, output_dir, process)
 
 
 def main():
@@ -926,8 +930,8 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     
     # 打开输入文件
-    fin = ROOT.TFile.Open(args.input, "READ")
-    if not fin or fin.IsZombie():
+    input_file = ROOT.TFile.Open(args.input, "READ")
+    if not input_file or input_file.IsZombie():
         print(f"Error: Cannot open {args.input}")
         sys.exit(1)
     
@@ -936,13 +940,13 @@ def main():
     print(f"Process: {args.process}")
     
     if args.process == 'JJP':
-        plot_jjp(fin, args.output_dir, args.process)
+        plot_jjp(input_file, args.output_dir, args.process)
     elif args.process == 'JYP':
-        plot_jyp(fin, args.output_dir, args.process)
+        plot_jyp(input_file, args.output_dir, args.process)
     else:
-        plot_jjy(fin, args.output_dir, args.process)
+        plot_jjy(input_file, args.output_dir, args.process)
     
-    fin.Close()
+    input_file.Close()
     print("\nDone!")
 
 

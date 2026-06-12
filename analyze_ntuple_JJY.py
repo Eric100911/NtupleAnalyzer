@@ -243,12 +243,32 @@ def merge_histograms(dest, src):
 
 
 def pri_valid_branch_name(chain):
+    """Resolve the primary-vertex validity branch name for backward compatibility.
+
+    Older ntuples use ``Pri_fitValid``; newer ones use ``Pri_VtxValid``.
+    Returns whichever branch name exists in the input TChain.
+
+    Args:
+        chain: The input TChain.
+
+    Returns:
+        ``"Pri_VtxValid"`` or ``"Pri_fitValid"``.
+    """
     if chain.GetBranch("Pri_VtxValid"):
         return "Pri_VtxValid"
     return "Pri_fitValid"
 
 
 def all_six_muons_same_vertex(chain, mu_indices):
+    """Check that all six selected muons share the same vertex ID.
+
+    Args:
+        chain: The input TChain.
+        mu_indices: List of 6 muon index values.
+
+    Returns:
+        True if all muons have identical ``muVertexId`` values.
+    """
     if not chain.GetBranch("muVertexId"):
         return False
     try:
@@ -503,11 +523,11 @@ def analyze_jjy_ntuple(max_events=-1, jpsi_muon_id="soft", ups_muon_id="tight",
     duplicate_muons = 0
 
     for tmp_path, stats in results:
-        fin = TFile.Open(tmp_path)
-        if fin and not fin.IsZombie():
+        input_file = TFile.Open(tmp_path)
+        if fin and not input_file.IsZombie():
             merge_histograms(histograms, fin)
         if fin:
-            fin.Close()
+            input_file.Close()
         os.remove(tmp_path)
 
         total_processed += stats["processed"]

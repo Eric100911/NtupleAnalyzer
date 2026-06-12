@@ -92,6 +92,7 @@ def parse_args():
 
 
 def build_jpsi_signal(obs, suffix: str, params, keep):
+    """Build a double-sided Crystal Ball PDF for J/psi signal."""
     pdf = ROOT.RooCrystalBall(
         f"jpsi_sig_{suffix}",
         f"jpsi_sig_{suffix}",
@@ -108,12 +109,14 @@ def build_jpsi_signal(obs, suffix: str, params, keep):
 
 
 def build_jpsi_background(obs, suffix: str, slope, keep):
+    """Build an exponential PDF for J/psi background."""
     pdf = ROOT.RooExponential(f"jpsi_bkg_{suffix}", f"jpsi_bkg_{suffix}", obs, slope)
     keep.append(pdf)
     return pdf
 
 
 def build_phi_signal(obs, float_width: bool = False):
+    """Build a Voigtian PDF for phi signal."""
     mean = ROOT.RooRealVar("phi_mean", "phi_mean", 1.019, 1.010, 1.028)
     width = ROOT.RooConstVar("phi_width", "phi_width", 0.004249)
     sigma = ROOT.RooRealVar("phi_sigma", "phi_sigma", 0.002, 0.0002, 0.005)
@@ -122,6 +125,7 @@ def build_phi_signal(obs, float_width: bool = False):
 
 
 def build_phi_background(obs):
+    """Build a threshold-power-law PDF for phi background."""
     mthr = ROOT.RooConstVar("phi_bkg_thr", "phi_bkg_thr", 0.987354)
     p = ROOT.RooRealVar("phi_bkg_p", "phi_bkg_p", 0.8, -8.0, 8.0)
     a1 = ROOT.RooRealVar("phi_bkg_a1", "phi_bkg_a1", 10.0, -200.0, 200.0)
@@ -135,6 +139,7 @@ def build_phi_background(obs):
 
 
 def build_ups_signal(obs, mc_only_1s: bool = False):
+    """Build a triple double-sided Crystal Ball PDF for Upsilon(1S,2S,3S) signal."""
     keep = []
     mean_1s = ROOT.RooRealVar("mean_Ups_1S", "mean_Ups_1S", 9.460, 9.40, 9.50)
     sigma_1s = ROOT.RooRealVar("sigma_Ups_1S", "sigma_Ups_1S", 0.06, 0.005, 0.20)
@@ -171,6 +176,7 @@ def build_ups_signal(obs, mc_only_1s: bool = False):
 
 
 def build_ups_background(obs):
+    """Build a Chebyshev polynomial PDF for Upsilon background."""
     c0 = ROOT.RooRealVar("ups_bkg_c0", "ups_bkg_c0", 0.0, -2.0, 2.0)
     c1 = ROOT.RooRealVar("ups_bkg_c1", "ups_bkg_c1", 0.0, -2.0, 2.0)
     c2 = ROOT.RooRealVar("ups_bkg_c2", "ups_bkg_c2", 0.0, -2.0, 2.0)
@@ -179,6 +185,7 @@ def build_ups_background(obs):
 
 
 def build_jjp_model(n_events: int, mc_two_component: bool = False):
+    """Build the JJP 3D fit model (J/psi1, J/psi2, phi) with signal and background components."""
     keep = []
     m_jpsi1 = ROOT.RooRealVar("sel_Jpsi_1_mass", "m(Jpsi1)", 2.9, 3.3)
     m_jpsi2 = ROOT.RooRealVar("sel_Jpsi_2_mass", "m(Jpsi2)", 2.9, 3.3)
@@ -215,6 +222,7 @@ def build_jjp_model(n_events: int, mc_two_component: bool = False):
     keep.extend(phi_keep.values())
     keep.extend(phi_bkg_keep.values())
 
+    # Yield naming convention: s=signal, b=background; 3-letter code = (jpsi1_status, jpsi2_status, phi_status)
     components = OrderedDict()
     components["yield_sss"] = ROOT.RooProdPdf("pdf_sss", "pdf_sss", ROOT.RooArgSet(jpsi1_sig, jpsi2_sig, phi_sig))
     components["yield_ssb"] = ROOT.RooProdPdf("pdf_ssb", "pdf_ssb", ROOT.RooArgSet(jpsi1_sig, jpsi2_sig, phi_bkg))
@@ -245,6 +253,7 @@ def build_jjp_model(n_events: int, mc_two_component: bool = False):
 
 
 def build_jyp_model(n_events: int, mc_only_1s: bool = False, mc_two_component: bool = False):
+    """Build the JYP 3D fit model (J/psi, Upsilon, phi) with signal and background components."""
     keep = []
     m_jpsi = ROOT.RooRealVar("sel_Jpsi_mass", "m(Jpsi)", 2.9, 3.3)
     m_ups = ROOT.RooRealVar("sel_Ups_mass", "m(Upsilon)", 8.5, 11.4)
@@ -303,6 +312,7 @@ def build_jyp_model(n_events: int, mc_only_1s: bool = False, mc_two_component: b
 
 
 def build_jjy_model(n_events: int, mc_only_1s: bool = True, mc_two_component: bool = True):
+    """Build the JJY 3D fit model (J/psi1, J/psi2, Upsilon) with signal and background components."""
     keep = []
     m_jpsi1 = ROOT.RooRealVar("sel_Jpsi_1_mass", "m(Jpsi1)", 2.9, 3.3)
     m_jpsi2 = ROOT.RooRealVar("sel_Jpsi_2_mass", "m(Jpsi2)", 2.9, 3.3)
@@ -373,6 +383,7 @@ def build_jjy_model(n_events: int, mc_only_1s: bool = True, mc_two_component: bo
 
 
 def initial_yield_fractions(channel: str, mc_two_component: bool) -> list[float]:
+    """Return the initial yield fraction guesses for the given channel and mode."""
     if mc_two_component:
         return [0.9, 0.1]
     if channel == "JJP":
@@ -389,6 +400,7 @@ def initialize_yields_for_dataset(yields, effective_events: float, channel: str,
 
 
 def make_dataset(tree, observables, weight_branch: str | None = None):
+    """Create a RooDataSet from a ROOT tree with optional per-event weights."""
     argset = ROOT.RooArgSet()
     for obs in observables.values():
         argset.add(obs)
@@ -410,6 +422,7 @@ def make_dataset(tree, observables, weight_branch: str | None = None):
 
 
 def fit_weight_error_option(mode: str):
+    """Return the RooFit error strategy option for weighted fits."""
     if mode == "asymptotic":
         return ROOT.RooFit.AsymptoticError(True)
     if mode == "sumw2":
@@ -420,6 +433,7 @@ def fit_weight_error_option(mode: str):
 
 
 def save_projection_plots(channel: str, plot_dir: str, data, model, observables, signal_yield_name: str, yields, dataset: str = "data", lumi_fb: float | None = None):
+    """Save 1D fit projection plots for each observable with data, total model, signal, and background."""
     from efficiency_workflow.config import CmsPlotStyleConfig
     from efficiency_workflow.plotting import apply_cms_label_root
 
@@ -492,11 +506,11 @@ def save_projection_plots(channel: str, plot_dir: str, data, model, observables,
         legend.SetTextSize(0.035)
         legend.SetFillStyle(0)
         legend.SetBorderSize(0)
-        legend.AddEntry(frame.findObject("data"), "Data", "lep")
-        legend.AddEntry(frame.findObject("model"), "Total fit", "l")
-        legend.AddEntry(frame.findObject("signal"), "Signal", "l")
+        legend.AddEntry(frame.input_filedObject("data"), "Data", "lep")
+        legend.AddEntry(frame.input_filedObject("model"), "Total fit", "l")
+        legend.AddEntry(frame.input_filedObject("signal"), "Signal", "l")
         if background_components:
-            legend.AddEntry(frame.findObject("background"), "Background", "l")
+            legend.AddEntry(frame.input_filedObject("background"), "Background", "l")
         legend.Draw()
 
         apply_cms_label_root(canvas, plot_style_cfg)
@@ -505,6 +519,7 @@ def save_projection_plots(channel: str, plot_dir: str, data, model, observables,
 
 
 def clone_tree_with_weights(tree, output_file: str, weight_map):
+    """Clone a ROOT tree and append sWeight branches to a new output file."""
     ensure_parent_dir(output_file)
     fout = ROOT.TFile(output_file, "RECREATE")
     out_tree = tree.CloneTree(0)
@@ -533,6 +548,7 @@ def clone_tree_with_weights(tree, output_file: str, weight_map):
 
 
 def read_tree_scalar_branch(tree, branch_name: str) -> list[float]:
+    """Read a scalar branch from a ROOT tree into a Python list."""
     available = {branch.GetName() for branch in tree.GetListOfBranches()}
     if branch_name not in available:
         raise RuntimeError(f"Branch {branch_name!r} not found in input tree")
@@ -544,6 +560,7 @@ def read_tree_scalar_branch(tree, branch_name: str) -> list[float]:
 
 
 def build_splot_weight_map(data, yields, signal_yield_name: str, effcorr_weights: list[float] | None = None):
+    """Build a map of sWeight branch names to per-event weight arrays."""
     weight_map = OrderedDict()
     for yield_name in yields:
         weight_map[f"{yield_name}_sw"] = [data.get(i).getRealValue(f"{yield_name}_sw") for i in range(data.numEntries())]
@@ -571,6 +588,7 @@ def compute_component_significance(
     print_level: int = -1,
     weighted_error_mode: str | None = None,
 ):
+    """Compute the LRT significance of the signal component by profiling the null hypothesis."""
     signal_var = yields[signal_yield_name]
     signal = max(0.0, signal_var.getVal())
     background = sum(max(0.0, var.getVal()) for name, var in yields.items() if name != signal_yield_name)
@@ -608,6 +626,7 @@ def compute_component_significance(
 
 
 def save_significance_to_root(fout, signal_yield_name: str, significance):
+    """Save LRT significance results as ROOT objects in the output file."""
     ROOT.TNamed("signal_component", signal_yield_name).Write()
     ROOT.TParameter("double")("signal_yield", float(significance["signal_yield"])).Write()
     ROOT.TParameter("double")("background_yield", float(significance["background_yield"])).Write()
@@ -638,11 +657,11 @@ def run_jjp_fit(
     if hasattr(ROOT.RooRealVar, "enableSilentClipping"):
         ROOT.RooRealVar.enableSilentClipping(True)
 
-    fin = open_root_file_read(input_file)
-    tree = fin.Get(tree_name) if fin else None
+    input_file = open_root_file_read(input_file)
+    tree = input_file.Get(tree_name) if input_file else None
     if not tree:
-        if fin:
-            fin.Close()
+        if input_file:
+            input_file.Close()
         raise RuntimeError(f"Input tree {tree_name!r} not found in {input_file}")
 
     n_entries = int(tree.GetEntries())
@@ -651,7 +670,7 @@ def run_jjp_fit(
         n_entries,
         mc_two_component=mc_two_component,
     )
-    keepalive.extend([fin, tree])
+    keepalive.extend([input_file, tree])
 
     data, weight_var = make_dataset(tree, observables, weight_branch)
     keepalive.append(data)
@@ -751,10 +770,10 @@ def main():
     ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.WARNING)
     if hasattr(ROOT.RooRealVar, "enableSilentClipping"):
         ROOT.RooRealVar.enableSilentClipping(True)
-    fin = open_root_file_read(input_file)
-    tree = fin.Get(INPUT_TREE)
+    input_file = open_root_file_read(input_file)
+    tree = input_file.Get(INPUT_TREE)
     if not tree:
-        fin.Close()
+        input_file.Close()
         raise RuntimeError(f"Input tree '{INPUT_TREE}' not found in {input_file}")
     input_tree_entries = int(tree.GetEntries())
 
@@ -830,7 +849,7 @@ def main():
         },
     )
     fit_out.Close()
-    fin.Close()
+    input_file.Close()
 
     print(f"[INFO] input tree entries      : {input_tree_entries}")
     print(f"[INFO] fitted dataset entries : {data.numEntries()}")

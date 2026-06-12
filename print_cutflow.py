@@ -79,7 +79,7 @@ OBJECT_SECTIONS = {
 def clopper_pearson_interval(
     total: int, passed: int, confidence: float = 0.682689492
 ) -> tuple[float, float]:
-    """Clopper-Pearson interval for binomial efficiency."""
+    """Compute the Clopper-Pearson confidence interval for a binomial efficiency."""
     if total <= 0:
         return math.nan, math.nan
     alpha = 1.0 - confidence
@@ -96,7 +96,7 @@ def _make_row(
     passed: int,
     n_total: int,
 ) -> dict[str, Any]:
-    """Build one cutflow row dict."""
+    """Build one cutflow row dict with conditional and absolute efficiencies."""
     cond_eff = passed / total if total > 0 else float("nan")
     abs_eff = passed / n_total if n_total > 0 else float("nan")
 
@@ -144,20 +144,20 @@ def build_cutflow_rows(event_df: pd.DataFrame) -> list[dict[str, Any]]:
         ("phi", PER_PHI_STEPS),
     ]:
         section = OBJECT_SECTIONS[obj_prefix]
-        prev = n_total
+        prev_passed = n_total
         for step_col, step_label in steps:
             col = _col(obj_prefix, step_col)
             passed = _passed(col)
 
-            rows.append(_make_row(section, step_col, step_label, prev, passed, n_total))
-            prev = passed
+            rows.append(_make_row(section, step_col, step_label, prev_passed, passed, n_total))
+            prev_passed = passed
 
     # --- Event-level: sequential chain ---
-    prev = n_total
+    prev_passed = n_total
     for step_col, step_label, _prev_col in EVENT_SEQUENTIAL:
         passed = _passed(step_col)
-        rows.append(_make_row("Event-level", step_col, step_label, prev, passed, n_total))
-        prev = passed
+        rows.append(_make_row("Event-level", step_col, step_label, prev_passed, passed, n_total))
+        prev_passed = passed
 
     # --- Event-level: parallel Pri_* diagnostics ---
     four_mu_passed = _passed("four_muon_vtx")
@@ -173,14 +173,14 @@ def build_cutflow_rows(event_df: pd.DataFrame) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 def _eff_pct(val: float) -> str:
-    """Format efficiency as percentage."""
+    """Format an efficiency value as a percentage string."""
     if math.isnan(val):
         return "   nan"
     return f"{val * 100:6.2f}"
 
 
 def _print_latex_table(sample_name: str, rows: list[dict[str, Any]]) -> None:
-    """Print LaTeX tabular."""
+    """Print the cutflow as a LaTeX tabular environment."""
     print(r"\begin{table}[htbp]")
     print(r"  \centering")
     print(f"  \\caption{{{sample_name} cutflow.}}")
@@ -209,7 +209,7 @@ def _print_latex_table(sample_name: str, rows: list[dict[str, Any]]) -> None:
 
 
 def _print_table(sample_name: str, rows: list[dict[str, Any]]) -> None:
-    """Print plain-text table."""
+    """Print the cutflow as a plain-text table."""
     print()
     print(f"  {sample_name}")
     print("=" * 79)
@@ -231,7 +231,7 @@ def _print_table(sample_name: str, rows: list[dict[str, Any]]) -> None:
 
 
 def _print_csv(sample_name: str, rows: list[dict[str, Any]]) -> None:
-    """Print CSV output."""
+    """Print the cutflow as CSV output to stdout."""
     import csv, io
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -254,6 +254,7 @@ def _print_csv(sample_name: str, rows: list[dict[str, Any]]) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    """Parse arguments, load event_step_flags parquet files, and print formatted cutflow tables."""
     ap = argparse.ArgumentParser(
         description="Print formatted cutflow tables from merged efficiency output."
     )

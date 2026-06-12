@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Compare the sPlot BBB background shape against a three-body sideband sample."""
+"""Compare the sPlot BBB background shape against a three-body sideband sample.
+
+Workflow:
+  1. Run a three-body mass fit (J/psi1, J/psi2, phi) on the filtered selected data
+  2. Compute sWeights for the BBB background component
+  3. Define sideband regions from the fitted mass windows
+  4. Compare the sWeighted background distributions against the sideband-only
+     sample across all kinematic variables, computing chi2/n_dof, JS divergence, etc."""
 
 from __future__ import annotations
 
@@ -344,15 +351,15 @@ def js_divergence(p: np.ndarray, q: np.ndarray) -> float:
 def compute_metrics(splot_norm: np.ndarray, splot_err: np.ndarray, sideband_norm: np.ndarray, sideband_err: np.ndarray) -> dict:
     variance = np.square(splot_err) + np.square(sideband_err)
     valid = variance > 0.0
-    ndf = int(np.count_nonzero(valid) - 1)
+    n_dof = int(np.count_nonzero(valid) - 1)
     chi2 = float(np.sum(np.square(splot_norm[valid] - sideband_norm[valid]) / variance[valid])) if np.any(valid) else float("nan")
-    p_value = float(ROOT.TMath.Prob(chi2, ndf)) if ndf > 0 and math.isfinite(chi2) else float("nan")
+    p_value = float(ROOT.TMath.Prob(chi2, n_dof)) if n_dof > 0 and math.isfinite(chi2) else float("nan")
     pull = np.full_like(splot_norm, np.nan, dtype=float)
     pull[valid] = (sideband_norm[valid] - splot_norm[valid]) / np.sqrt(variance[valid])
     return {
         "chi2": chi2,
-        "ndf": ndf,
-        "chi2_ndf": float(chi2 / ndf) if ndf > 0 and math.isfinite(chi2) else float("nan"),
+        "n_dof": n_dof,
+        "chi2_n_dof": float(chi2 / n_dof) if n_dof > 0 and math.isfinite(chi2) else float("nan"),
         "p_value": p_value,
         "max_abs_pull": float(np.nanmax(np.abs(pull))) if np.any(np.isfinite(pull)) else float("nan"),
         "l1_distance": float(np.sum(np.abs(sideband_norm - splot_norm))),
@@ -400,7 +407,7 @@ def plot_branch_comparison(
     centers = 0.5 * (edges[1:] + edges[:-1])
     ratio, ratio_err = ratio_with_uncertainty(sideband_norm, sideband_err, splot_norm, splot_err)
 
-    fig, (ax, rax) = plt.subplots(
+    fig, (ax, ratio_ax) = plt.subplots(
         2,
         1,
         figsize=(10.5, 9.0),
@@ -415,7 +422,7 @@ def plot_branch_comparison(
     ax.legend(loc="best")
 
     textbox = "\n".join([
-        rf"$\chi^2/\mathrm{{ndf}} = {metrics['chi2_ndf']:.2f}$" if math.isfinite(metrics["chi2_ndf"]) else r"$\chi^2/\mathrm{ndf} = \mathrm{nan}$",
+        rf"$\chi^2/\mathrm{{n_dof}} = {metrics['chi2_n_dof']:.2f}$" if math.isfinite(metrics["chi2_n_dof"]) else r"$\chi^2/\mathrm{n_dof} = \mathrm{nan}$",
         rf"$p = {metrics['p_value']:.3g}$" if math.isfinite(metrics["p_value"]) else r"$p = \mathrm{nan}$",
         rf"$L_1 = {metrics['l1_distance']:.3f}$",
         rf"$JS = {metrics['js_divergence']:.3g}$" if math.isfinite(metrics["js_divergence"]) else r"$JS = \mathrm{nan}$",
@@ -439,14 +446,14 @@ def plot_branch_comparison(
             ax.set_yscale("log")
             ax.set_ylim(max(float(np.min(positive)) * 0.6, 1.0e-5), float(np.max(positive)) * 2.0)
 
-    rax.axhline(1.0, color="0.35", linestyle="--", linewidth=1.0)
+    ratio_ax.axhline(1.0, color="0.35", linestyle="--", linewidth=1.0)
     valid_ratio = np.isfinite(ratio) & np.isfinite(ratio_err)
     if np.any(valid_ratio):
-        rax.errorbar(centers[valid_ratio], ratio[valid_ratio], yerr=ratio_err[valid_ratio], fmt="o", color="tab:red", markersize=4, linewidth=1.0)
-    rax.set_ylabel("SB / sPlot")
-    rax.set_xlabel(plot_helpers.label_for_branch(branch))
-    rax.set_ylim(*choose_ratio_ylim(ratio))
-    rax.grid(True, axis="y", alpha=0.25)
+        ratio_ax.errorbar(centers[valid_ratio], ratio[valid_ratio], yerr=ratio_err[valid_ratio], fmt="o", color="tab:red", markersize=4, linewidth=1.0)
+    ratio_ax.set_ylabel("SB / sPlot")
+    ratio_ax.set_xlabel(plot_helpers.label_for_branch(branch))
+    ratio_ax.set_ylim(*choose_ratio_ylim(ratio))
+    ratio_ax.grid(True, axis="y", alpha=0.25)
 
     fig.subplots_adjust(left=0.12, right=0.97, top=0.93, bottom=0.08, hspace=0.05)
     fig.savefig(output_base + ".pdf")
@@ -544,17 +551,17 @@ def print_top_differences(metrics: dict, top_n: int = 10):
     variables = metrics.get("variables", {})
     ranked = []
     for branch, values in variables.items():
-        score = values.get("chi2_ndf", float("nan"))
+        score = values.get("chi2_n_dof", float("nan"))
         if math.isfinite(score):
             ranked.append((score, branch, values))
     ranked.sort(reverse=True)
     print("=" * 80)
     print(f"[INFO] compared branches      : {metrics.get('n_compared_branches', 0)}")
     print(f"[INFO] sideband event count   : {metrics.get('sideband_entry_count', 0)}")
-    print(f"[INFO] top {min(top_n, len(ranked))} branch differences by chi2/ndf")
+    print(f"[INFO] top {min(top_n, len(ranked))} branch differences by chi2/n_dof")
     for score, branch, values in ranked[:top_n]:
         print(
-            f"[DIFF] {branch:<24} chi2/ndf={score:7.3f}  "
+            f"[DIFF] {branch:<24} chi2/n_dof={score:7.3f}  "
             f"p={values['p_value']:.3g}  JS={values['js_divergence']:.3g}  "
             f"max|pull|={values['max_abs_pull']:.3f}"
         )

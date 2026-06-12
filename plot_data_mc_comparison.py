@@ -51,10 +51,13 @@ def parse_args():
 
 
 def default_output_dir(channel: str, sample: str) -> str:
+    """Return the default output directory path for comparison plots."""
+
     return os.path.join(OUTPUT_BASE, "plots", f"{channel.lower()}_data_vs_mc_{sample.lower()}")
 
 
 def normalize_histogram(counts: np.ndarray, variances: np.ndarray, mode: str):
+    """Normalize histogram to unit integral for shape comparison, or return raw yields."""
     if mode == "yield":
         return counts, variances
     total = np.sum(counts)
@@ -64,6 +67,7 @@ def normalize_histogram(counts: np.ndarray, variances: np.ndarray, mode: str):
 
 
 def compatibility_metrics(data_counts, data_vars, mc_counts, mc_vars, mode: str):
+    """Compute chi2/ndf and p-value for data-MC bin-by-bin agreement."""
     variances = data_vars + mc_vars
     valid = variances > 0.0
     if not np.any(valid):
@@ -76,6 +80,7 @@ def compatibility_metrics(data_counts, data_vars, mc_counts, mc_vars, mode: str)
 
 
 def ratio_with_errors(data_counts, data_vars, mc_counts, mc_vars):
+    """Compute Data/MC ratio with propagated uncertainties."""
     ratio = np.full_like(data_counts, np.nan, dtype=float)
     ratio_err = np.full_like(data_counts, np.nan, dtype=float)
     valid = mc_counts > 0.0
@@ -99,7 +104,7 @@ def save_comparison_plot(branch, data_counts, data_vars, mc_counts, mc_vars, out
     ratio, ratio_err = ratio_with_errors(data_counts, data_vars, mc_counts, mc_vars)
     chi2, ndf, pvalue = compatibility_metrics(data_counts, data_vars, mc_counts, mc_vars, mode)
 
-    fig, (ax, rax) = plt.subplots(
+    fig, (ax, ratio_ax) = plt.subplots(
         2,
         1,
         figsize=(8, 8),
@@ -133,14 +138,14 @@ def save_comparison_plot(branch, data_counts, data_vars, mc_counts, mc_vars, out
     )
     hep.cms.label("Work in progress", data=True, ax=ax)
 
-    rax.axhline(1.0, color="black", linestyle="--", linewidth=1)
+    ratio_ax.axhline(1.0, color="black", linestyle="--", linewidth=1)
     valid = np.isfinite(ratio)
-    rax.errorbar(centers[valid], ratio[valid], yerr=ratio_err[valid], fmt="o", color="black", markersize=4)
-    rax.set_ylabel("Data/MC")
-    rax.set_xlabel(label_for_branch(branch))
-    rax.set_ylim(0.4, 1.6)
+    ratio_ax.errorbar(centers[valid], ratio[valid], yerr=ratio_err[valid], fmt="o", color="black", markersize=4)
+    ratio_ax.set_ylabel("Data/MC")
+    ratio_ax.set_xlabel(label_for_branch(branch))
+    ratio_ax.set_ylim(0.4, 1.6)
     if branch.endswith("_ctau"):
-        rax.set_xlim(-0.05, 0.1)
+        ratio_ax.set_xlim(-0.05, 0.1)
 
     fig.tight_layout()
     fig.savefig(output_base + ".pdf")

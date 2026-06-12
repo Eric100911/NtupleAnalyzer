@@ -296,20 +296,20 @@ def process_file_batch(file_list, max_events, jpsi_muon_id, ups_muon_id, tree_na
             # Validate muon indices
             try:
                 mu_size = chain.muPx.size()
-                idxs = [best_cand['jpsi_mu1_idx'], best_cand['jpsi_mu2_idx'],
+                muon_indices = [best_cand['jpsi_mu1_idx'], best_cand['jpsi_mu2_idx'],
                         best_cand['ups_mu1_idx'], best_cand['ups_mu2_idx']]
-                if any(idx < 0 for idx in idxs) or any(idx >= mu_size for idx in idxs):
+                if any(idx < 0 for idx in muon_indices) or any(idx >= mu_size for idx in muon_indices):
                     continue
-                mu_jpsi1 = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi_mu1_idx']),
+                muon_jpsi1_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi_mu1_idx']),
                                                  chain.muPy.at(best_cand['jpsi_mu1_idx']),
                                                  chain.muPz.at(best_cand['jpsi_mu1_idx']), MUON_MASS)
-                mu_jpsi2 = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi_mu2_idx']),
+                muon_jpsi2_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi_mu2_idx']),
                                                  chain.muPy.at(best_cand['jpsi_mu2_idx']),
                                                  chain.muPz.at(best_cand['jpsi_mu2_idx']), MUON_MASS)
-                mu_ups1 = build_vec_from_pxpypz(chain.muPx.at(best_cand['ups_mu1_idx']),
+                muon_ups1_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['ups_mu1_idx']),
                                                 chain.muPy.at(best_cand['ups_mu1_idx']),
                                                 chain.muPz.at(best_cand['ups_mu1_idx']), MUON_MASS)
-                mu_ups2 = build_vec_from_pxpypz(chain.muPx.at(best_cand['ups_mu2_idx']),
+                muon_ups2_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['ups_mu2_idx']),
                                                 chain.muPy.at(best_cand['ups_mu2_idx']),
                                                 chain.muPz.at(best_cand['ups_mu2_idx']), MUON_MASS)
             except Exception:
@@ -320,7 +320,7 @@ def process_file_batch(file_list, max_events, jpsi_muon_id, ups_muon_id, tree_na
 
             # Track-misuse veto: any muon (Jpsi or Upsilon) vs Phi kaons
             track_misuse = False
-            for mu_vec in (mu_jpsi1, mu_jpsi2, mu_ups1, mu_ups2):
+            for mu_vec in (muon_jpsi1_vec, muon_jpsi2_vec, muon_ups1_vec, muon_ups2_vec):
                 for k_vec in (k1_vec, k2_vec):
                     deta = mu_vec.Eta() - k_vec.Eta()
                     dphi = delta_phi(mu_vec.Phi(), k_vec.Phi())
@@ -496,10 +496,10 @@ def analyze_jyp_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', 
         for idx, f in enumerate(data_files):
             batches[idx % n_workers].append(f)
         batches = [b for b in batches if b]
-        n_workers = len(batches)
-        per_batch_events = -1 if max_events < 0 else math.ceil(max_events / n_workers)
+        n_batches = len(batches)
+        per_batch_events = -1 if max_events < 0 else math.ceil(max_events / n_batches)
 
-        with multiprocessing.Pool(processes=n_workers) as pool:
+        with multiprocessing.Pool(processes=n_batches) as pool:
             results = pool.starmap(process_file_batch,
                                    [(b, per_batch_events, jpsi_muon_id, ups_muon_id, TREE_NAME) for b in batches])
         temp_files = [r[0] for r in results]
@@ -508,12 +508,12 @@ def analyze_jyp_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', 
         total_track_misuse = sum(r[3] for r in results)
 
     histograms = create_histograms()
-    for tf in temp_files:
-        fin = TFile.Open(tf)
-        if fin and not fin.IsZombie():
-            merge_histograms(histograms, fin)
-        fin.Close()
-        os.remove(tf)
+    for tmp_path in temp_files:
+        input_file = TFile.Open(tmp_path)
+        if input_file and not input_file.IsZombie():
+            merge_histograms(histograms, input_file)
+        input_file.Close()
+        os.remove(tmp_path)
 
     elapsed = time.time() - start_time
     n_to_process = total_events if max_events < 0 else min(max_events, total_events)

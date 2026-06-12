@@ -8,6 +8,13 @@ from efficiency_workflow.products import merge_efficiency_shards
 
 
 def main() -> None:
+    """Entry point for merging efficiency shard outputs.
+
+    Parses command-line arguments and delegates to the
+    efficiency_workflow.products.merge_efficiency_shards function,
+    which concatenates per-shard parquet files and rebuilds
+    the binned efficiency maps.
+    """
     parser = argparse.ArgumentParser(description="Merge JJP efficiency shard outputs")
     parser.add_argument("--sample", required=True)
     parser.add_argument("--shards-dir", required=True)
