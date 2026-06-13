@@ -2,6 +2,8 @@ output/
 *.pdf
 *.png
 *.root
+*.hepmc
+*.parquet
 chiw.cc
 xcheng.cc
 __pycache__/
@@ -14,3 +16,7 @@ efficiency_map_products/
 test_output/
 test_response_output/
 test_data/
+single_object_efficiency_20260609/
+stacked_jpsi_pt_absy_20260605/
+stacked_jpsi_pt_absy_only_20260605/
+yield_hybrid.json
