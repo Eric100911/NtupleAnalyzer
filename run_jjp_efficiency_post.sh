@@ -1,8 +1,9 @@
 #!/bin/bash
 # ==============================================================================
-# run_jjp_efficiency_post.sh - Merge shard outputs and generate all efficiency plots
+# run_jjp_efficiency_post.sh - Merge shard outputs, build all efficiency products
 # ==============================================================================
 # Runs inside run_wrapper.sh on a Condor worker node after all shard jobs complete.
+# Produces: merged parquets, derived maps, factorized correction maps, post-acceptance 5D map.
 #
 # Usage:
 #   run_jjp_efficiency_post.sh SAMPLE SHARDS_DIR MERGED_DIR
@@ -31,22 +32,41 @@ echo "=============================================="
 
 # Step 1: Merge shard outputs (fast, no plots)
 echo ""
-echo "[1/2] Merging shard outputs for $SAMPLE ..."
+echo "[1/4] Merging shard outputs for $SAMPLE ..."
 python3 merge_efficiency_shards.py \
     --sample "$SAMPLE" \
     --shards-dir "$SHARDS_DIR" \
     --output-dir "$MERGED_DIR"
 
-echo "[1/2] Merge complete."
+echo "[1/4] Merge complete."
 
 # Step 2: Build derived products and ALL plots (cumulative + derived)
 echo ""
-echo "[2/2] Building derived efficiency products and plots ..."
+echo "[2/4] Building derived efficiency products and plots ..."
 python3 build_derived_efficiency.py \
     --input-dir "$MERGED_DIR" \
     --output-dir "$MERGED_DIR"
 
-echo "[2/2] Derived products and plots complete."
+echo "[2/4] Derived products and plots complete."
+
+# Step 3: Build factorized correction maps (per-object 2D + event-level, fine/coarse/inclusive)
+echo ""
+echo "[3/4] Building factorized correction maps for $SAMPLE ..."
+python3 efficiency_workflow/build_factorized_maps.py \
+    --input-dir "$MERGED_DIR" \
+    --samples "$SAMPLE"
+
+echo "[3/4] Factorized maps complete."
+
+# Step 4: Build post-acceptance 5D conditional efficiency map (for hybrid correction mode)
+echo ""
+echo "[4/4] Building post-acceptance 5D map for $SAMPLE ..."
+python3 efficiency_workflow/build_factorized_maps.py \
+    --input-dir "$MERGED_DIR" \
+    --samples "$SAMPLE" \
+    --build-post-acceptance
+
+echo "[4/4] Post-acceptance 5D map complete."
 
 echo ""
 echo "=============================================="
