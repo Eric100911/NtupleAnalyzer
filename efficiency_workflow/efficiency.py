@@ -1274,8 +1274,12 @@ def _compute_full_hlt_match_vectorized(
         """Check if muon at mu_idx has both trigger and filter indices."""
         if trig_val is None or filt_val is None:
             return ak.values_astype(ak.zeros_like(mu_idx), bool)
-        trig_match = ak.any(_safe_take_jagged(mu_trig_indices, mu_idx, -1) == trig_val, axis=-1)
-        filt_match = ak.any(_safe_take_jagged(mu_filt_indices, mu_idx, -1) == filt_val, axis=-1)
+        # _safe_take_jagged can return irreducible UnionArrays (union of list and scalar)
+        # when the muon-index arrays have irregular lengths. Collapse to uniform jagged.
+        t = ak.Array(ak.to_list(_safe_take_jagged(mu_trig_indices, mu_idx, -1)))
+        f = ak.Array(ak.to_list(_safe_take_jagged(mu_filt_indices, mu_idx, -1)))
+        trig_match = ak.any(t == trig_val, axis=-1)
+        filt_match = ak.any(f == filt_val, axis=-1)
         return trig_match & filt_match
 
     # Per-muon match flags for each trigger path
@@ -1305,7 +1309,8 @@ def _compute_full_hlt_match_vectorized(
     j2_pair_dm = j2_mu1_dm & j2_mu2_dm
     match_doublemu = j1_pair_dm | j2_pair_dm
 
-    return match_dimuon0 | match_doublemu
+    # Per-candidate → per-event: any candidate with full HLT match
+    return ak.any(match_dimuon0 | match_doublemu, axis=1)
 
 
 def _compute_per_object_flags_v16(
@@ -1353,39 +1358,38 @@ def _compute_per_object_flags_v16(
 
     # dimuon: requires SingleJpsi candidate (vertex fit, mass window)
     if {"SingleJpsi_mass", "SingleJpsi_mu1_Idx", "SingleJpsi_mu2_Idx"}.issubset(arrays.fields):
-        sj_mu1_idx = _as_index_array(arrays["SingleJpsi_mu1_Idx"])
-        sj_mu2_idx = _as_index_array(arrays["SingleJpsi_mu2_Idx"])
+        single_jpsi_mu1_idx = _as_index_array(arrays["SingleJpsi_mu1_Idx"])
+        single_jpsi_mu2_idx = _as_index_array(arrays["SingleJpsi_mu2_Idx"])
         if {"SingleJpsi_mu1_genMatchIdx", "SingleJpsi_mu2_genMatchIdx"}.issubset(arrays.fields):
-            sj_mu1_gen = arrays["SingleJpsi_mu1_genMatchIdx"]
-            sj_mu2_gen = arrays["SingleJpsi_mu2_genMatchIdx"]
+            single_jpsi_mu1_gen = arrays["SingleJpsi_mu1_genMatchIdx"]
+            single_jpsi_mu2_gen = arrays["SingleJpsi_mu2_genMatchIdx"]
         else:
-            sj_mu1_gen = _safe_take_jagged(arrays["muGenMatchIdx"], sj_mu1_idx, -1)
-            sj_mu2_gen = _safe_take_jagged(arrays["muGenMatchIdx"], sj_mu2_idx, -1)
-        sj_a1 = _ancestor_idx_to_pdg(sj_mu1_gen, pdg, mother, 443)
-        sj_a2 = _ancestor_idx_to_pdg(sj_mu2_gen, pdg, mother, 443)
-        sj_leg = ak.where((sj_a1 >= 0) & (sj_a1 == sj_a2), sj_a1, -1)
-
-        mu_id = ak.values_astype(arrays["muIsPatSoftMuon"], bool)
-        sj_mu1_id = _safe_take_jagged(mu_id, sj_mu1_idx, False)
-        sj_mu2_id = _safe_take_jagged(mu_id, sj_mu2_idx, False)
-        sj_both_id = sj_mu1_id & sj_mu2_id
+            single_jpsi_mu1_gen = _safe_take_jagged(arrays["muGenMatchIdx"], single_jpsi_mu1_idx, -1)
+            single_jpsi_mu2_gen = _safe_take_jagged(arrays["muGenMatchIdx"], single_jpsi_mu2_idx, -1)
+        single_jpsi_mu1_ancestor = _ancestor_idx_to_pdg(single_jpsi_mu1_gen, pdg, mother, 443)
+        single_jpsi_mu2_ancestor = _ancestor_idx_to_pdg(single_jpsi_mu2_gen, pdg, mother, 443)
+        single_jpsi_ancestor = ak.where(
+            (single_jpsi_mu1_ancestor >= 0) & (single_jpsi_mu1_ancestor == single_jpsi_mu2_ancestor),
+            single_jpsi_mu1_ancestor,
+            -1,
+        )
 
         if "SingleJpsi_y" in arrays.fields:
-            sj_y = abs(arrays["SingleJpsi_y"])
+            single_jpsi_abs_y = abs(arrays["SingleJpsi_y"])
         else:
-            sj_y = abs(_scalar_rapidity_array(arrays["SingleJpsi_px"], arrays["SingleJpsi_py"], arrays["SingleJpsi_pz"], arrays["SingleJpsi_mass"]))
-        sj_quality = (
+            single_jpsi_abs_y = abs(_scalar_rapidity_array(arrays["SingleJpsi_px"], arrays["SingleJpsi_py"], arrays["SingleJpsi_pz"], arrays["SingleJpsi_mass"]))
+        single_jpsi_quality = (
             (arrays["SingleJpsi_mass"] >= cfg.jpsi_mass_window[0])
             & (arrays["SingleJpsi_mass"] <= cfg.jpsi_mass_window[1])
             & (arrays["SingleJpsi_pt"] > cfg.jpsi_pt_min)
-            & (sj_y < cfg.jpsi_abs_y_max)
+            & (single_jpsi_abs_y < cfg.jpsi_abs_y_max)
             & (arrays["SingleJpsi_VtxProb"] > cfg.jpsi_vtxprob_min)
             & (_as_index_array(arrays["SingleJpsi_fitValid"]) != 0)
             & (_as_index_array(arrays["SingleJpsi_fitPass"]) != 0)
         )
 
-        result["jpsi_lead_dimuon"] = ak.any((sj_leg == jpsi1_idx) & sj_both_id & sj_quality, axis=1)
-        result["jpsi_sublead_dimuon"] = ak.any((sj_leg == jpsi2_idx) & sj_both_id & sj_quality, axis=1)
+        result["jpsi_lead_dimuon"] = ak.any((single_jpsi_ancestor == jpsi1_idx) & single_jpsi_quality, axis=1)
+        result["jpsi_sublead_dimuon"] = ak.any((single_jpsi_ancestor == jpsi2_idx) & single_jpsi_quality, axis=1)
 
     # ── φ side ──
     # kaonRECO and kaonID: direct from RecoKaonTrack block (genMatchIdx + quality)
@@ -1412,19 +1416,23 @@ def _compute_per_object_flags_v16(
 
     # dikaon: requires SinglePhi candidate (vertex fit, mass window)
     if {"SinglePhi_mass", "SinglePhi_K1_RecoKaonTrackIdx", "SinglePhi_K2_RecoKaonTrackIdx"}.issubset(arrays.fields):
-        sp_k1_idx = _as_index_array(arrays["SinglePhi_K1_RecoKaonTrackIdx"])
-        sp_k2_idx = _as_index_array(arrays["SinglePhi_K2_RecoKaonTrackIdx"])
+        single_phi_k1_idx = _as_index_array(arrays["SinglePhi_K1_RecoKaonTrackIdx"])
+        single_phi_k2_idx = _as_index_array(arrays["SinglePhi_K2_RecoKaonTrackIdx"])
         if {"SinglePhi_K1_genMatchIdx", "SinglePhi_K2_genMatchIdx"}.issubset(arrays.fields):
-            sp_k1_gen = arrays["SinglePhi_K1_genMatchIdx"]
-            sp_k2_gen = arrays["SinglePhi_K2_genMatchIdx"]
+            single_phi_k1_gen = arrays["SinglePhi_K1_genMatchIdx"]
+            single_phi_k2_gen = arrays["SinglePhi_K2_genMatchIdx"]
         else:
-            sp_k1_gen = _safe_take_jagged(arrays["RecoKaonTrack_genMatchIdx"], sp_k1_idx, -1)
-            sp_k2_gen = _safe_take_jagged(arrays["RecoKaonTrack_genMatchIdx"], sp_k2_idx, -1)
-        sp_a1 = _ancestor_idx_to_pdg(sp_k1_gen, pdg, mother, 333)
-        sp_a2 = _ancestor_idx_to_pdg(sp_k2_gen, pdg, mother, 333)
-        sp_leg = ak.where((sp_a1 >= 0) & (sp_a1 == sp_a2), sp_a1, -1)
+            single_phi_k1_gen = _safe_take_jagged(arrays["RecoKaonTrack_genMatchIdx"], single_phi_k1_idx, -1)
+            single_phi_k2_gen = _safe_take_jagged(arrays["RecoKaonTrack_genMatchIdx"], single_phi_k2_idx, -1)
+        single_phi_k1_ancestor = _ancestor_idx_to_pdg(single_phi_k1_gen, pdg, mother, 333)
+        single_phi_k2_ancestor = _ancestor_idx_to_pdg(single_phi_k2_gen, pdg, mother, 333)
+        single_phi_ancestor = ak.where(
+            (single_phi_k1_ancestor >= 0) & (single_phi_k1_ancestor == single_phi_k2_ancestor),
+            single_phi_k1_ancestor,
+            -1,
+        )
 
-        sp_quality = (
+        single_phi_quality = (
             (arrays["SinglePhi_mass"] >= cfg.phi_mass_window[0])
             & (arrays["SinglePhi_mass"] <= cfg.phi_mass_window[1])
             & (arrays["SinglePhi_pt"] > cfg.phi_pt_min)
@@ -1432,7 +1440,7 @@ def _compute_per_object_flags_v16(
             & (_as_index_array(arrays["SinglePhi_fitValid"]) != 0)
             & (_as_index_array(arrays["SinglePhi_fitPass"]) != 0)
         )
-        result["phi_dikaon"] = ak.any((sp_leg == phi_idx) & sp_quality, axis=1)
+        result["phi_dikaon"] = ak.any((single_phi_ancestor == phi_idx) & single_phi_quality, axis=1)
 
     return result
 
