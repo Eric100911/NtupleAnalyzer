@@ -52,7 +52,7 @@ echo "[2/4] Derived products and plots complete."
 # Step 3: Build factorized correction maps (per-object 2D + event-level, fine/coarse/inclusive)
 echo ""
 echo "[3/4] Building factorized correction maps for $SAMPLE ..."
-python3 efficiency_workflow/build_factorized_maps.py \
+python3 -m efficiency_workflow.build_factorized_maps \
     --input-dir "$MERGED_DIR" \
     --samples "$SAMPLE"
 
@@ -61,7 +61,7 @@ echo "[3/4] Factorized maps complete."
 # Step 4: Build post-acceptance 5D conditional efficiency map (for hybrid correction mode)
 echo ""
 echo "[4/4] Building post-acceptance 5D map for $SAMPLE ..."
-python3 efficiency_workflow/build_factorized_maps.py \
+python3 -m efficiency_workflow.build_factorized_maps \
     --input-dir "$MERGED_DIR" \
     --samples "$SAMPLE" \
     --build-post-acceptance
