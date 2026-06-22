@@ -241,28 +241,36 @@ def run_efficiency_with_fallback(
     event_parts: list[pd.DataFrame] = []
     source_by_staged: dict[str, str] = {}
     method_counts: dict[str, int] = {}
+    failed_files: list[str] = []
     attempt_root = ensure_dir(stage_dir / "_attempts")
     for index, source in enumerate(files):
-        tables, source_map, method = process_file_with_fallback(
-            source,
-            sample,
-            tree_path,
-            stage_dir,
-            attempt_root,
-            index,
-            retries,
-            keep_staged_files,
-            efficiency_backend,
-            step_size,
-            worker_timeout,
-            copy_timeout,
-        )
+        try:
+            tables, source_map, method = process_file_with_fallback(
+                source,
+                sample,
+                tree_path,
+                stage_dir,
+                attempt_root,
+                index,
+                retries,
+                keep_staged_files,
+                efficiency_backend,
+                step_size,
+                worker_timeout,
+                copy_timeout,
+            )
+        except RuntimeError:
+            print(f"[WARN] Skipping {source}: all {retries + 1} access methods failed")
+            failed_files.append(source)
+            continue
         method_counts[method] = method_counts.get(method, 0) + 1
         source_by_staged.update(source_map)
         if not tables["gen_systems"].empty:
             gen_parts.append(tables["gen_systems"])
         if not tables["event_step_flags"].empty:
             event_parts.append(tables["event_step_flags"])
+    if not gen_parts:
+        raise RuntimeError(f"No files could be processed for {sample}: {len(failed_files)}/{len(files)} failed")
     gen_df = pd.concat(gen_parts, ignore_index=True) if gen_parts else pd.DataFrame()
     event_df = pd.concat(event_parts, ignore_index=True) if event_parts else pd.DataFrame()
     binning = EfficiencyBinning(include_trigger_matching=include_trigger_matching)

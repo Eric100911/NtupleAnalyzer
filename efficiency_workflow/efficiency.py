@@ -1309,8 +1309,10 @@ def _compute_full_hlt_match_vectorized(
     j2_pair_dm = j2_mu1_dm & j2_mu2_dm
     match_doublemu = j1_pair_dm | j2_pair_dm
 
-    # Per-candidate → per-event: any candidate with full HLT match
-    return ak.any(match_dimuon0 | match_doublemu, axis=1)
+    # Per-candidate -> per-event: any candidate with full HLT match.
+    # One-candidate-per-event shards can already be event-level 1D arrays.
+    result = match_dimuon0 | match_doublemu
+    return ak.any(result, axis=1) if result.ndim > 1 else result
 
 
 def _compute_per_object_flags_v16(
