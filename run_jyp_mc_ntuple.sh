@@ -35,7 +35,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-ARGS=(--channel JUP --dataset mc --sample "$MODE" -n "$MAX_EVENTS" -j "$JOBS" --jpsi-muon-id "$JPSI_MUON_ID" --ups-muon-id "$UPS_MUON_ID")
+ARGS=(--channel JYP --dataset mc --sample "$MODE" -n "$MAX_EVENTS" -j "$JOBS" --jpsi-muon-id "$JPSI_MUON_ID" --ups-muon-id "$UPS_MUON_ID")
 [[ -n "$INPUT_DIR" ]] && ARGS+=(-i "$INPUT_DIR")
 [[ -n "$OUTPUT" ]] && ARGS+=(-o "$OUTPUT")
 

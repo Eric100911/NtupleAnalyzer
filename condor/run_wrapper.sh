@@ -5,7 +5,7 @@
 # This wrapper sets up the LCG Python/ROOT environment and runs the analysis script.
 #
 # Usage (from HTCondor):
-#   arguments = "run_jup_mc_ntuple.sh -m DPS_1 -j 8"
+#   arguments = "run_jyp_mc_ntuple.sh -m DPS_1 -j 8"
 # ==============================================================================
 
 set -e
@@ -14,7 +14,7 @@ set -e
 # Configuration
 # ==============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ANALYZER_DIR="$(dirname "$SCRIPT_DIR")"
+ANALYZER_DIR="${ANALYZER_DIR:-$(dirname "$SCRIPT_DIR")}"
 LCG_VIEW="${LCG_VIEW:-/cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt}"
 
 # Parse wrapper arguments
@@ -50,6 +50,18 @@ fi
 
 echo "[INFO] Python: $(command -v python3)"
 echo "[INFO] ROOT: $(root-config --version 2>/dev/null || echo unavailable)"
+
+# ==============================================================================
+# Unpack runtime tarball (if present)
+# ==============================================================================
+if [ -n "$RUNTIME_TARBALL" ]; then
+    RUNTIME_DIR="$PWD/NtupleAnalyzer_runtime"
+    mkdir -p "$RUNTIME_DIR"
+    TARBALL_BASENAME="$(basename "$RUNTIME_TARBALL")"
+    echo "[INFO] Unpacking runtime tarball: $TARBALL_BASENAME"
+    tar -xzf "$TARBALL_BASENAME" -C "$RUNTIME_DIR"
+    ANALYZER_DIR="$RUNTIME_DIR"
+fi
 
 # ==============================================================================
 # Setup VOMS Proxy (for xrootd access)

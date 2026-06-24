@@ -1,0 +1,585 @@
+#!/usr/bin/env python3
+"""Unit tests for efficiency pipeline schema (per-object step decomposition).
+
+Usage:
+    source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+    python3 -m pytest test_efficiency_schema.py -v
+"""
+from __future__ import annotations
+
+import os
+
+import awkward as ak
+import numpy as np
+import pandas as pd
+import pytest
+
+from efficiency_workflow.config import OfflineSelectionConfig
+from efficiency_workflow.efficiency import (
+    EVENT_STEPS,
+    PER_JPSI_STEPS,
+    PER_PHI_STEPS,
+    DERIVED_FLAGS,
+    EVENT_STEP_PREVIOUS,
+    PAIR_LEVEL_MAP_SPECS,
+    per_object_step_columns,
+    _process_efficiency_chunk_vectorized,
+    _compute_per_object_flags_v16,
+    _detect_ntuple_format,
+    process_efficiency_file_vectorized,
+    process_efficiency_file,
+    ALL_KNOWN_BRANCHES,
+    EfficiencyBinning,
+    _as_index_array,
+    _ancestor_idx_to_pdg,
+    _safe_take_jagged,
+    _safe_first,
+    _safe_second,
+    _scalar_rapidity_array,
+    _compute_full_hlt_match_vectorized,
+)
+
+
+class TestStepDefinitions:
+    def test_detect_ntuple_format(self):
+        assert _detect_ntuple_format({"Jpsi_1_mass", "Phi_mass"}) == "v1.0"
+        assert _detect_ntuple_format({"SingleJpsi_mass", "SinglePhi_mass"}) == "v1.6-singles"
+        assert _detect_ntuple_format({"SingleJpsi_mass", "Jpsi_1_mass"}) == "v1.6-full"
+        assert _detect_ntuple_format({"SingleJpsi_mass", "SinglePhi_mass", "RecoKaonTrack_normalizedChi2"}) == "v2.0-singles"
+        assert _detect_ntuple_format({"SingleJpsi_mass", "Jpsi_1_mass", "RecoKaonTrack_normalizedChi2"}) == "v2.0-full"
+
+    def test_per_object_step_columns_count(self):
+        cols = per_object_step_columns()
+        assert len(cols) == 12, f"Expected 12 per-object columns, got {len(cols)}: {cols}"
+
+    def test_per_object_step_columns_names(self):
+        cols = per_object_step_columns()
+        expected = [
+            "jpsi_lead_fiducial", "jpsi_lead_muonRECO", "jpsi_lead_muonID", "jpsi_lead_dimuon",
+            "jpsi_sublead_fiducial", "jpsi_sublead_muonRECO", "jpsi_sublead_muonID", "jpsi_sublead_dimuon",
+            "phi_fiducial", "phi_kaonRECO", "phi_kaonID", "phi_dikaon",
+        ]
+        assert cols == expected
+
+    def test_event_steps_order(self):
+        expected = (
+            "hlt_event", "hlt_muon_matched", "four_muon_vtx",
+            "Pri_fitValid", "Pri_fitPass", "Pri_assocPVPass",
+            "Pri_trackPVPass",
+        )
+        assert EVENT_STEPS == expected
+
+    def test_event_steps_no_duplicates(self):
+        assert len(EVENT_STEPS) == len(set(EVENT_STEPS))
+
+    def test_event_level_parallel_denominators(self):
+        assert EVENT_STEP_PREVIOUS["hlt_event"] == "s_cand"
+        assert EVENT_STEP_PREVIOUS["hlt_muon_matched"] == "hlt_event"
+        assert EVENT_STEP_PREVIOUS["four_muon_vtx"] == "hlt_muon_matched"
+        for step in ("Pri_fitValid", "Pri_fitPass", "Pri_assocPVPass", "Pri_trackPVPass"):
+            assert EVENT_STEP_PREVIOUS[step] == "four_muon_vtx"
+
+    def test_pair_level_map_specs(self):
+        by_step = {spec.step: spec for spec in PAIR_LEVEL_MAP_SPECS}
+        assert by_step["four_muon_vtx"].denominator_col == "hlt_muon_matched"
+        for step in ("Pri_fitValid", "Pri_fitPass", "Pri_assocPVPass", "Pri_trackPVPass"):
+            assert by_step[step].denominator_col == "four_muon_vtx"
+
+    def test_per_jpsi_steps_no_duplicates(self):
+        assert len(PER_JPSI_STEPS) == len(set(PER_JPSI_STEPS))
+
+    def test_per_phi_steps_no_duplicates(self):
+        assert len(PER_PHI_STEPS) == len(set(PER_PHI_STEPS))
+
+    def test_step_groups_disjoint(self):
+        """No overlap between per-object step suffixes and event step names."""
+        all_per_obj = set(PER_JPSI_STEPS) | set(PER_PHI_STEPS)
+        event_set = set(EVENT_STEPS)
+        overlap = all_per_obj & event_set
+        assert not overlap, f"Overlap between per-object and event steps: {overlap}"
+
+    def test_derived_flags(self):
+        assert DERIVED_FLAGS == ("full_gen", "s_cand")
+
+    def test_per_jpsi_chain_order(self):
+        """Acceptance must be first; the rest must be conditional on previous."""
+        assert PER_JPSI_STEPS[0] == "fiducial"
+        assert PER_JPSI_STEPS == ("fiducial", "muonRECO", "muonID", "dimuon")
+
+    def test_per_phi_chain_order(self):
+        assert PER_PHI_STEPS[0] == "fiducial"
+        assert PER_PHI_STEPS == ("fiducial", "kaonRECO", "kaonID", "dikaon")
+
+    def test_full_hlt_match_accepts_single_candidate_event_arrays(self):
+        """One candidate per event produces a 1D result and must not reduce on axis=1."""
+        trig_filt_map = {
+            "dimuon0_trig": 0,
+            "dimuon0_filt": 0,
+            "doublemu_trig": 1,
+            "doublemu_filt": 1,
+        }
+        arrays = ak.Array({
+            "muJpsiMatchedTriggerIndices": [
+                [[1], [1], [], []],
+                [[1], [], [], []],
+                [[0], [0], [0], []],
+            ],
+            "muJpsiMatchedFilterIndices": [
+                [[1], [1], [], []],
+                [[1], [], [], []],
+                [[0], [0], [0], []],
+            ],
+        })
+        result = _compute_full_hlt_match_vectorized(
+            arrays,
+            ak.Array([[0], [0], [0]]),
+            ak.Array([[1], [1], [1]]),
+            ak.Array([[2], [2], [2]]),
+            ak.Array([[3], [3], [3]]),
+            trig_filt_map,
+            ak.Array([[True], [True], [True]]),
+        )
+        assert result.ndim == 1
+        assert result.tolist() == [True, False, True]
+
+    def test_full_hlt_match_reduces_jagged_candidate_arrays_per_event(self):
+        trig_filt_map = {
+            "dimuon0_trig": 0,
+            "dimuon0_filt": 0,
+            "doublemu_trig": 1,
+            "doublemu_filt": 1,
+        }
+        arrays = ak.Array({
+            "muJpsiMatchedTriggerIndices": [
+                [[1], [1], [], []],
+                [[], [], [], []],
+                [[0], [0], [0], []],
+            ],
+            "muJpsiMatchedFilterIndices": [
+                [[1], [1], [], []],
+                [[], [], [], []],
+                [[0], [0], [0], []],
+            ],
+        })
+        result = _compute_full_hlt_match_vectorized(
+            arrays,
+            ak.Array([[0, 2], [0], []]),
+            ak.Array([[1, 3], [1], []]),
+            ak.Array([[2, 0], [2], []]),
+            ak.Array([[3, 1], [3], []]),
+            trig_filt_map,
+            ak.Array([[True, True], [True], []]),
+        )
+        assert result.ndim == 1
+        assert result.tolist() == [True, False, False]
+
+
+# ── Integration tests (require a single ROOT file) ──
+
+NTUPLE = (
+    "root://cceos.ihep.ac.cn/"
+    "///eos/ihep/cms/store/user/xcheng/MC_Production_v3/output/"
+    "JJP_DPS2_CS/0/output_ntuple.root:mkcands/X_data"
+)
+
+V16_NTUPLE = "test_data/test_JpsiJpsiPhi_composite_v1p6_numEvent50.root"
+
+V20_NTUPLE = "test_data/test_JpsiJpsiPhi_v2p0_patch1_numEvent118.root"
+
+
+def _load_chunk():
+    """Load one chunk from the test ntuple. Returns empty dict on failure."""
+    if os.environ.get("RUN_REMOTE_EFFICIENCY_TESTS") != "1":
+        return {}
+    import uproot
+    try:
+        arrays = uproot.iterate(NTUPLE, filter_name=list(ALL_KNOWN_BRANCHES),
+                                library="ak", step_size="50 MB")
+        for chunk, _report in arrays:
+            return chunk
+    except Exception:
+        pass
+    return {}
+
+
+@pytest.fixture(scope="module")
+def efficiency_result():
+    """Process one chunk with vectorized backend, return DataFrames."""
+    chunk = _load_chunk()
+    if not chunk:
+        pytest.skip("Cannot access test ntuple")
+    cfg = OfflineSelectionConfig()
+    result = _process_efficiency_chunk_vectorized(chunk, NTUPLE, "test_sample", cfg, 0)
+    return result
+
+
+@pytest.fixture(scope="module")
+def python_loop_result():
+    """Process one chunk with python-loop backend."""
+    if os.environ.get("RUN_REMOTE_EFFICIENCY_TESTS") != "1":
+        return {}
+    try:
+        import uproot
+        arrays = uproot.iterate(NTUPLE, filter_name=list(ALL_KNOWN_BRANCHES),
+                                library="ak", step_size="50 MB")
+        for chunk, _report in arrays:
+            cfg = OfflineSelectionConfig()
+            return process_efficiency_file_chunk(chunk, NTUPLE, "test_sample", cfg)
+    except Exception:
+        pass
+    return {}
+
+
+def process_efficiency_file_chunk(chunk, path, sample, cfg):
+    """Process a single uproot chunk through the python-loop backend."""
+    n_events = len(chunk["evtNum"])
+    gen_rows, event_rows = [], []
+    for entry in range(n_events):
+        from efficiency_workflow.efficiency import _pythonize_event, build_event_efficiency_row
+        event = _pythonize_event(chunk, entry)
+        gen_row, event_row = build_event_efficiency_row(event, path, sample, entry, cfg)
+        if gen_row is not None and event_row is not None:
+            gen_rows.append(gen_row)
+            event_rows.append(event_row)
+    return {
+        "gen_systems": pd.DataFrame(gen_rows),
+        "event_step_flags": pd.DataFrame(event_rows),
+    }
+
+
+class TestPerObjectData:
+    """Integration tests on real data from the vectorized backend."""
+
+    def test_per_object_columns_exist(self, efficiency_result):
+        event_df = efficiency_result["event_step_flags"]
+        if event_df.empty:
+            pytest.skip("No events in test chunk")
+        for col in per_object_step_columns():
+            assert col in event_df.columns, f"Missing column: {col}"
+
+    def test_per_object_values_are_0_or_1(self, efficiency_result):
+        event_df = efficiency_result["event_step_flags"]
+        if event_df.empty:
+            pytest.skip("No events")
+        for col in per_object_step_columns():
+            vals = event_df[col].unique()
+            assert set(vals) <= {0, 1}, f"{col} has values {set(vals)}"
+
+    def test_s_cand_column_exists(self, efficiency_result):
+        event_df = efficiency_result["event_step_flags"]
+        if event_df.empty:
+            pytest.skip("No events")
+        assert "s_cand" in event_df.columns
+
+    def test_s_cand_implies_all_per_object(self, efficiency_result):
+        event_df = efficiency_result["event_step_flags"]
+        if event_df.empty:
+            pytest.skip("No events")
+        s_cand_true = event_df[event_df["s_cand"] == 1]
+        if len(s_cand_true) == 0:
+            pytest.skip("No s_cand events in test chunk")
+        for col in per_object_step_columns():
+            assert (s_cand_true[col] == 1).all(), f"s_cand=1 but {col} has zeros"
+
+    def test_pri_fitPass_implies_four_muon(self, efficiency_result):
+        event_df = efficiency_result["event_step_flags"]
+        if event_df.empty:
+            pytest.skip("No events")
+        pf_true = event_df[event_df["Pri_fitPass"] == 1]
+        if len(pf_true) == 0:
+            pytest.skip("No Pri_fitPass events")
+        assert (pf_true["four_muon_vtx"] == 1).all()
+
+    def test_gen_score_matches_formula(self, efficiency_result):
+        gen_df = efficiency_result["gen_systems"]
+        if gen_df.empty:
+            pytest.skip("No events")
+        expected = gen_df["jpsi_lead_pt"]**2 + gen_df["jpsi_sublead_pt"]**2 + gen_df["phi_pt"]**2
+        assert np.allclose(gen_df["gen_score"], expected, rtol=1e-10)
+
+    def test_new_columns_no_nan(self, efficiency_result):
+        """Per-object step flags should not have NaN (they are int8)."""
+        event_df = efficiency_result["event_step_flags"]
+        if event_df.empty:
+            pytest.skip("No events")
+        for col in per_object_step_columns():
+            assert not event_df[col].isna().any(), f"{col} has NaN"
+        for col in ("s_cand", "full_gen", "hlt_event", "hlt_muon_matched",
+                     "four_muon_vtx", "four_muon_vtx_noTrigMatch",
+                     "Pri_fitValid", "Pri_fitValid_noTrigMatch",
+                     "Pri_fitPass", "Pri_fitPass_noTrigMatch",
+                     "Pri_assocPVPass", "Pri_assocPVPass_noTrigMatch",
+                     "Pri_trackPVPass", "Pri_trackPVPass_noTrigMatch"):
+            assert col in event_df.columns
+            assert not event_df[col].isna().any(), f"{col} has NaN"
+
+    def test_old_cumulative_columns_not_present(self, efficiency_result):
+        event_df = efficiency_result["event_step_flags"]
+        if event_df.empty:
+            pytest.skip("No events")
+        removed = {"single_jpsi_reco", "double_jpsi_reco", "single_phi_reco",
+                    "jpsi_quality", "phi_quality", "all6_same_recVtx",
+                    "fiducial_acceptance",
+                    "triple_gen_matched_candidate"}
+        for col in removed:
+            assert col not in event_df.columns, f"Old column {col} should not be present"
+
+    def test_event_level_columns_exist(self, efficiency_result):
+        event_df = efficiency_result["event_step_flags"]
+        if event_df.empty:
+            pytest.skip("No events")
+        for col in ("full_gen", "s_cand", "hlt_event", "hlt_muon_matched",
+                     "four_muon_vtx", "four_muon_vtx_noTrigMatch",
+                     "Pri_fitValid", "Pri_fitPass",
+                     "Pri_assocPVPass", "Pri_trackPVPass"):
+            assert col in event_df.columns, f"Missing event column: {col}"
+
+
+def test_process_v16_ntuple_chunk():
+    if not os.path.exists(V16_NTUPLE):
+        pytest.skip(f"Missing v1.6 test ntuple: {V16_NTUPLE}")
+    cfg = OfflineSelectionConfig()
+    frames = process_efficiency_file_vectorized(V16_NTUPLE, "test_sample", cfg)
+    gen_df = frames["gen_systems"]
+    event_df = frames["event_step_flags"]
+    assert len(gen_df) > 0
+    assert len(event_df) == len(gen_df)
+    for col in ("jpsi_lead_fiducial", "jpsi_lead_muonRECO", "phi_dikaon"):
+        assert col in event_df.columns
+    for col in ("four_muon_vtx", "Pri_assocPVPass"):
+        assert col in event_df.columns
+
+
+class TestSinglesBasedPerObjectFlags:
+    def test_singles_flags(self):
+        arrays = ak.Array({
+            "muGenMatchIdx": [[1, 2], [1, 2], [], []],
+            "muIsPatSoftMuon": [[1, 1], [1, 0], [], []],
+            "SingleJpsi_mass": [[3.10], [3.10], [], []],
+            "SingleJpsi_pt": [[10.0], [10.0], [], []],
+            "SingleJpsi_px": [[10.0], [10.0], [], []],
+            "SingleJpsi_py": [[0.0], [0.0], [], []],
+            "SingleJpsi_pz": [[0.0], [0.0], [], []],
+            "SingleJpsi_y": [[0.0], [0.0], [], []],
+            "SingleJpsi_VtxProb": [[0.20], [0.20], [], []],
+            "SingleJpsi_fitValid": [[1], [1], [], []],
+            "SingleJpsi_fitPass": [[1], [1], [], []],
+            "SingleJpsi_mu1_Idx": [[0], [0], [], []],
+            "SingleJpsi_mu2_Idx": [[1], [1], [], []],
+            "SingleJpsi_mu1_genMatchIdx": [[1], [1], [], []],
+            "SingleJpsi_mu2_genMatchIdx": [[2], [2], [], []],
+            "SinglePhi_mass": [[], [], [], [1.02]],
+            "SinglePhi_pt": [[], [], [], [5.0]],
+            "SinglePhi_px": [[], [], [], [5.0]],
+            "SinglePhi_py": [[], [], [], [0.0]],
+            "SinglePhi_pz": [[], [], [], [0.0]],
+            "SinglePhi_VtxProb": [[], [], [], [0.20]],
+            "SinglePhi_fitValid": [[], [], [], [1]],
+            "SinglePhi_fitPass": [[], [], [], [1]],
+            "SinglePhi_K1_RecoKaonTrackIdx": [[], [], [], [0]],
+            "SinglePhi_K2_RecoKaonTrackIdx": [[], [], [], [1]],
+            "SinglePhi_K1_genMatchIdx": [[], [], [], [7]],
+            "SinglePhi_K2_genMatchIdx": [[], [], [], [8]],
+            "RecoKaonTrack_pt": [[], [], [], [2.5, 2.7]],
+            "RecoKaonTrack_eta": [[], [], [], [0.1, -0.2]],
+            "RecoKaonTrack_genMatchIdx": [[], [], [], [7, 8]],
+        })
+        pdg = ak.Array([
+            [443, 13, -13, 443, 13, -13, 333, 321, -321],
+            [443, 13, -13, 443, 13, -13, 333, 321, -321],
+            [443, 13, -13, 443, 13, -13, 333, 321, -321],
+            [443, 13, -13, 443, 13, -13, 333, 321, -321],
+        ])
+        mother = ak.Array([
+            [-1, 0, 0, -1, 3, 3, -1, 6, 6],
+            [-1, 0, 0, -1, 3, 3, -1, 6, 6],
+            [-1, 0, 0, -1, 3, 3, -1, 6, 6],
+            [-1, 0, 0, -1, 3, 3, -1, 6, 6],
+        ])
+        cfg = OfflineSelectionConfig()
+        flags = _compute_per_object_flags_v16(
+            arrays,
+            pdg,
+            mother,
+            ak.Array([0, 0, 0, 0]),
+            ak.Array([3, 3, 3, 3]),
+            ak.Array([6, 6, 6, 6]),
+            cfg,
+            ak.Array([True, True, True, True]),
+            ak.Array([True, True, True, True]),
+            ak.Array([True, True, True, True]),
+        )
+
+        assert ak.to_list(flags["jpsi_lead_muonRECO"]) == [True, True, False, False]
+        assert ak.to_list(flags["jpsi_lead_muonID"]) == [True, False, False, False]
+        assert ak.to_list(flags["jpsi_lead_dimuon"]) == [True, True, False, False]
+        assert ak.to_list(
+            flags["jpsi_lead_muonID"] & flags["jpsi_lead_dimuon"]
+        ) == [True, False, False, False]
+        assert ak.to_list(flags["phi_kaonRECO"]) == [False, False, False, True]
+        assert ak.to_list(flags["phi_kaonID"]) == [False, False, False, True]
+        assert ak.to_list(flags["phi_dikaon"]) == [False, False, False, True]
+
+
+class TestV20PerObjectFlags:
+    """Integration test: per-track RECO/ID on a real v2.0_patch1 ntuple."""
+
+    V20_REQUIRED_BRANCHES = [
+        "MC_GenPart_pdgId", "MC_GenPart_motherGenIdx",
+        "MC_GenPart_pt", "MC_GenPart_eta", "MC_GenPart_mass",
+        "SingleJpsi_mass", "SingleJpsi_pt", "SingleJpsi_px", "SingleJpsi_py",
+        "SingleJpsi_pz", "SingleJpsi_y", "SingleJpsi_VtxProb",
+        "SingleJpsi_fitValid", "SingleJpsi_fitPass",
+        "SingleJpsi_mu1_Idx", "SingleJpsi_mu2_Idx",
+        "SingleJpsi_mu1_genMatchIdx", "SingleJpsi_mu2_genMatchIdx",
+        "muGenMatchIdx", "muIsPatSoftMuon",
+        "SinglePhi_mass", "SinglePhi_pt", "SinglePhi_VtxProb",
+        "SinglePhi_fitValid", "SinglePhi_fitPass",
+        "SinglePhi_K1_RecoKaonTrackIdx", "SinglePhi_K2_RecoKaonTrackIdx",
+        "SinglePhi_K1_genMatchIdx", "SinglePhi_K2_genMatchIdx",
+        "RecoKaonTrack_genMatchIdx", "RecoKaonTrack_pt", "RecoKaonTrack_eta",
+        "RecoKaonTrack_normalizedChi2", "RecoKaonTrack_numberOfHits",
+        "RecoKaonTrack_isHighPurity",
+    ]
+
+    @staticmethod
+    def _rapidity(pt, eta, mass):
+        p = pt * np.cosh(eta)
+        pz = pt * np.sinh(eta)
+        energy = np.sqrt(p * p + mass * mass)
+        return 0.5 * np.log((energy + pz) / np.maximum(energy - pz, 1e-15))
+
+    def test_per_track_flags_on_real_ntuple(self):
+        """Compute per-object flags on v2.0 ntuple and verify chain ordering."""
+        if not os.path.exists(V20_NTUPLE):
+            pytest.skip(f"Missing v2.0 test ntuple: {V20_NTUPLE}")
+        import uproot
+
+        cfg = OfflineSelectionConfig()
+        f = uproot.open(f"{V20_NTUPLE}:mkcands/X_data")
+        arrays = f.arrays(self.V20_REQUIRED_BRANCHES)
+
+        # Build GEN system
+        pdg = arrays["MC_GenPart_pdgId"]
+        mother = _as_index_array(arrays["MC_GenPart_motherGenIdx"])
+        gen_idx = ak.local_index(pdg)
+        gen_pt = arrays["MC_GenPart_pt"]
+        gen_eta = arrays["MC_GenPart_eta"]
+        gen_mass = arrays["MC_GenPart_mass"]
+        gen_y = self._rapidity(gen_pt, gen_eta, gen_mass)
+
+        is_mu = abs(pdg) == 13
+        mu_mother = mother[is_mu]
+        n_mu_daughters = ak.sum(mu_mother[:, :, None] == gen_idx[:, None, :], axis=1)
+        is_kaon = abs(pdg) == 321
+        kaon_mother = mother[is_kaon]
+        n_kaon_daughters = ak.sum(kaon_mother[:, :, None] == gen_idx[:, None, :], axis=1)
+
+        valid_jpsi = (
+            (abs(pdg) == 443) & (n_mu_daughters >= 2)
+            & (gen_pt > cfg.jpsi_pt_min) & (abs(gen_y) < cfg.jpsi_abs_y_max)
+        )
+        valid_phi = (
+            (abs(pdg) == 333) & (n_kaon_daughters >= 2)
+            & (gen_pt > cfg.phi_pt_min) & (abs(gen_y) < cfg.phi_abs_y_max)
+        )
+
+        jpsi_order = ak.argsort(gen_pt[valid_jpsi], ascending=False)
+        jpsi_idx_sorted = gen_idx[valid_jpsi][jpsi_order]
+        jpsi1_idx = _safe_first(jpsi_idx_sorted, -1)
+        jpsi2_idx = _safe_second(jpsi_idx_sorted, -1)
+
+        phi_order = ak.argsort(gen_pt[valid_phi], ascending=False)
+        phi_idx_sorted = gen_idx[valid_phi][phi_order]
+        phi_idx = _safe_first(phi_idx_sorted, -1)
+
+        has_gen = (jpsi2_idx >= 0) & (phi_idx >= 0)
+        assert ak.sum(has_gen) > 0, "No events with full GEN system"
+
+        # Compute flags
+        fiducial_true = ak.values_astype(ak.ones_like(jpsi1_idx), bool)
+        flags = _compute_per_object_flags_v16(
+            arrays, pdg, mother, jpsi1_idx, jpsi2_idx, phi_idx, cfg,
+            fiducial_true, fiducial_true, fiducial_true,
+        )
+
+        mask = has_gen
+        total = int(ak.sum(mask))
+
+        # ── Pre-condition: per-object columns exist ──
+        for col in ("jpsi_lead_muonRECO", "phi_kaonRECO", "phi_dikaon"):
+            assert col in flags, f"Missing flag: {col}"
+
+        # ── Chain ordering: muonRECO >= muonID >= dimuon (lead) ──
+        lead_reco = int(ak.sum(flags["jpsi_lead_muonRECO"] & mask))
+        lead_id = int(ak.sum(flags["jpsi_lead_muonID"] & mask))
+        lead_dimu = int(ak.sum(flags["jpsi_lead_dimuon"] & mask))
+        assert lead_reco >= lead_id, f"lead muonRECO({lead_reco}) < muonID({lead_id})"
+        assert lead_id >= lead_dimu, f"lead muonID({lead_id}) < dimuon({lead_dimu})"
+
+        # ── Chain ordering: kaonRECO >= kaonID >= dikaon ──
+        phi_reco = int(ak.sum(flags["phi_kaonRECO"] & mask))
+        phi_id = int(ak.sum(flags["phi_kaonID"] & mask))
+        phi_dika = int(ak.sum(flags["phi_dikaon"] & mask))
+        assert phi_reco >= phi_id, f"phi kaonRECO({phi_reco}) < kaonID({phi_id})"
+        assert phi_id >= phi_dika, f"phi kaonID({phi_id}) < dikaon({phi_dika})"
+
+        # ── dimuon needs SingleJpsi; dikaon needs SinglePhi ──
+        assert "SingleJpsi_mass" in arrays.fields
+        assert "SinglePhi_mass" in arrays.fields
+
+        # ── Phi side should distinguish RECO from vertexing ──
+        # Before fix: phi_kaonRECO == phi_dikaon (both from SinglePhi)
+        # After fix:  phi_kaonRECO >= phi_dikaon (different sources)
+        if phi_dika > 0:
+            assert phi_reco >= phi_dika, \
+                f"phi_kaonRECO({phi_reco}) should cover phi_dikaon({phi_dika})"
+
+        # ── s_cand is AND of all steps ──
+        s_cand = (
+            flags["jpsi_lead_muonRECO"] & flags["jpsi_lead_muonID"]
+            & flags["jpsi_lead_dimuon"]
+            & flags["jpsi_sublead_muonRECO"] & flags["jpsi_sublead_muonID"]
+            & flags["jpsi_sublead_dimuon"]
+            & flags["phi_kaonRECO"] & flags["phi_kaonID"] & flags["phi_dikaon"]
+        ) & mask
+        n_s_cand = int(ak.sum(s_cand))
+        assert n_s_cand <= phi_dika, f"s_cand({n_s_cand}) > dikaon({phi_dika})"
+
+        print(f"\n  Events with GEN system: {total}")
+        print(f"  lead   muonRECO→muonID→dimuon: {lead_reco}→{lead_id}→{lead_dimu}")
+        print(f"  sublead muonRECO→muonID→dimuon: "
+              f"{int(ak.sum(flags['jpsi_sublead_muonRECO'] & mask))}→"
+              f"{int(ak.sum(flags['jpsi_sublead_muonID'] & mask))}→"
+              f"{int(ak.sum(flags['jpsi_sublead_dimuon'] & mask))}")
+        print(f"  phi    kaonRECO→kaonID→dikaon: {phi_reco}→{phi_id}→{phi_dika}")
+        print(f"  s_cand: {n_s_cand}")
+
+
+class TestBackendEquality:
+    """Verify both backends produce identical output."""
+
+    def test_backends_same_gen_systems(self, efficiency_result, python_loop_result):
+        gen_v = efficiency_result.get("gen_systems", pd.DataFrame())
+        gen_p = python_loop_result.get("gen_systems", pd.DataFrame())
+        if gen_v.empty or gen_p.empty:
+            pytest.skip("No data from one or both backends")
+        # Compare kinematic columns (ignore entry/source_file)
+        kin_cols = [c for c in gen_v.columns if c not in ("entry", "source_file", "sample")]
+        assert len(gen_v) == len(gen_p)
+        for col in kin_cols:
+            if col in gen_p.columns:
+                assert np.allclose(gen_v[col].values, gen_p[col].values, rtol=1e-10, equal_nan=True), \
+                    f"gen.{col} differs between backends"
+
+    def test_backends_same_step_flags(self, efficiency_result, python_loop_result):
+        evt_v = efficiency_result.get("event_step_flags", pd.DataFrame())
+        evt_p = python_loop_result.get("event_step_flags", pd.DataFrame())
+        if evt_v.empty or evt_p.empty:
+            pytest.skip("No data from one or both backends")
+        assert len(evt_v) == len(evt_p)
+        common_cols = [c for c in evt_v.columns if c in evt_p.columns
+                       and c not in ("entry", "source_file", "sample")]
+        for col in common_cols:
+            same = (evt_v[col].values == evt_p[col].values)
+            assert same.all(), f"event.{col} differs: {int((~same).sum())}/{len(same)} rows"

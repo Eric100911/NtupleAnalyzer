@@ -4,4 +4,4 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 ./run_jjp_analysis.sh "$@" || exit $?
-./run_jup_analysis.sh "$@"
+./run_jyp_analysis.sh "$@"

@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
+from pathlib import Path
+import sys
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 # -*- coding: utf-8 -*-
 """
-J/psi + Upsilon + Phi (JUP) Ntuple角度关联分析
+J/psi + Upsilon + Phi (JYP) Ntuple角度关联分析
 
 功能:
 1. 从Ntuple加载数据并应用事件选择cuts
@@ -9,9 +16,9 @@ J/psi + Upsilon + Phi (JUP) Ntuple角度关联分析
 3. 填充直方图并保存
 
 使用方法:
-    python analyze_ntuple_JUP.py -o output_jup.root
-    python analyze_ntuple_JUP.py -n 10000  # 处理前10000个事件
-    python analyze_ntuple_JUP.py --jpsi-muon-id soft --ups-muon-id tight
+    python analyze_ntuple_JYP.py -o output_jyp.root
+    python analyze_ntuple_JYP.py -n 10000  # 处理前10000个事件
+    python analyze_ntuple_JYP.py --jpsi-muon-id soft --ups-muon-id tight
 """
 
 import ROOT
@@ -31,7 +38,7 @@ import subprocess
 # =============================================================================
 
 # 数据路径 (默认可被 --input-dir 覆盖)
-JUP_DATA_PATH_DEFAULT = "/eos/user/x/xcheng/JpsiUpsPhi/merged_rootNtuple/"
+JYP_DATA_PATH_DEFAULT = "/eos/user/x/xcheng/JpsiUpsPhi/merged_rootNtuple/"
 TREE_NAME = "mkcands/X_data"
 
 # 质量窗口
@@ -97,12 +104,12 @@ def check_muon_id(chain, mu_idx, id_type):
     """检查muon是否通过ID选择"""
     if id_type is None:
         return True
-    
+
     try:
         idx = int(mu_idx)
         if idx < 0:
             return False
-        
+
         if id_type == 'loose':
             return chain.muIsPatLooseMuon.at(idx)
         elif id_type == 'medium':
@@ -120,7 +127,7 @@ def check_muon_id(chain, mu_idx, id_type):
 def create_histograms():
     """创建所有直方图"""
     histograms = {}
-    
+
     # 1D: Δy (快度差)
     histograms['h_dy_jpsi_ups'] = TH1F("h_dy_jpsi_ups",
         "#Delta y (J/#psi - #Upsilon);|#Delta y|;Events", 50, 0, 5)
@@ -128,7 +135,7 @@ def create_histograms():
         "#Delta y (J/#psi - #phi);|#Delta y|;Events", 50, 0, 5)
     histograms['h_dy_ups_phi'] = TH1F("h_dy_ups_phi",
         "#Delta y (#Upsilon - #phi);|#Delta y|;Events", 50, 0, 5)
-    
+
     # 1D: Δφ (方位角差)
     histograms['h_dphi_jpsi_ups'] = TH1F("h_dphi_jpsi_ups",
         "#Delta#phi (J/#psi - #Upsilon);|#Delta#phi|;Events", 50, 0, math.pi)
@@ -136,7 +143,7 @@ def create_histograms():
         "#Delta#phi (J/#psi - #phi);|#Delta#phi|;Events", 50, 0, math.pi)
     histograms['h_dphi_ups_phi'] = TH1F("h_dphi_ups_phi",
         "#Delta#phi (#Upsilon - #phi);|#Delta#phi|;Events", 50, 0, math.pi)
-    
+
     # 2D: Δy vs Δφ
     histograms['h2_dy_dphi_jpsi_ups'] = TH2F("h2_dy_dphi_jpsi_ups",
         "J/#psi - #Upsilon;|#Delta y|;|#Delta#phi|", 50, 0, 5, 50, 0, math.pi)
@@ -144,7 +151,7 @@ def create_histograms():
         "J/#psi - #phi;|#Delta y|;|#Delta#phi|", 50, 0, 5, 50, 0, math.pi)
     histograms['h2_dy_dphi_ups_phi'] = TH2F("h2_dy_dphi_ups_phi",
         "#Upsilon - #phi;|#Delta y|;|#Delta#phi|", 50, 0, 5, 50, 0, math.pi)
-    
+
     # 运动学分布: pT
     histograms['h_jpsi_pt'] = TH1F("h_jpsi_pt",
         "J/#psi p_{T};p_{T} [GeV];Events", 100, 0, 50)
@@ -152,7 +159,7 @@ def create_histograms():
         "#Upsilon p_{T};p_{T} [GeV];Events", 100, 0, 50)
     histograms['h_phi_pt'] = TH1F("h_phi_pt",
         "#phi p_{T};p_{T} [GeV];Events", 100, 0, 50)
-    
+
     # 运动学分布: η
     histograms['h_jpsi_eta'] = TH1F("h_jpsi_eta",
         "J/#psi #eta;#eta;Events", 60, -3, 3)
@@ -160,7 +167,7 @@ def create_histograms():
         "#Upsilon #eta;#eta;Events", 60, -3, 3)
     histograms['h_phi_eta'] = TH1F("h_phi_eta",
         "#phi #eta;#eta;Events", 60, -3, 3)
-    
+
     # 运动学分布: y (快度)
     histograms['h_jpsi_y'] = TH1F("h_jpsi_y",
         "J/#psi y;y;Events", 60, -3, 3)
@@ -168,7 +175,7 @@ def create_histograms():
         "#Upsilon y;y;Events", 60, -3, 3)
     histograms['h_phi_y'] = TH1F("h_phi_y",
         "#phi y;y;Events", 60, -3, 3)
-    
+
     # 运动学分布: φ (方位角)
     histograms['h_jpsi_phi'] = TH1F("h_jpsi_phi",
         "J/#psi #phi;#phi;Events", 60, -math.pi, math.pi)
@@ -176,7 +183,7 @@ def create_histograms():
         "#Upsilon #phi;#phi;Events", 60, -math.pi, math.pi)
     histograms['h_phi_phi'] = TH1F("h_phi_phi",
         "#phi #phi;#phi;Events", 60, -math.pi, math.pi)
-    
+
     # 不变质量分布
     histograms['h_mass_jpsi_ups'] = TH1F("h_mass_jpsi_ups",
         "M(J/#psi + #Upsilon);M [GeV];Events", 100, 10, 30)
@@ -186,7 +193,7 @@ def create_histograms():
         "M(#Upsilon + #phi);M [GeV];Events", 100, 9, 25)
     histograms['h_mass_all'] = TH1F("h_mass_all",
         "M(J/#psi + #Upsilon + #phi);M [GeV];Events", 100, 12, 40)
-    
+
     return histograms
 
 
@@ -296,20 +303,20 @@ def process_file_batch(file_list, max_events, jpsi_muon_id, ups_muon_id, tree_na
             # Validate muon indices
             try:
                 mu_size = chain.muPx.size()
-                idxs = [best_cand['jpsi_mu1_idx'], best_cand['jpsi_mu2_idx'],
+                muon_indices = [best_cand['jpsi_mu1_idx'], best_cand['jpsi_mu2_idx'],
                         best_cand['ups_mu1_idx'], best_cand['ups_mu2_idx']]
-                if any(idx < 0 for idx in idxs) or any(idx >= mu_size for idx in idxs):
+                if any(idx < 0 for idx in muon_indices) or any(idx >= mu_size for idx in muon_indices):
                     continue
-                mu_jpsi1 = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi_mu1_idx']),
+                muon_jpsi1_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi_mu1_idx']),
                                                  chain.muPy.at(best_cand['jpsi_mu1_idx']),
                                                  chain.muPz.at(best_cand['jpsi_mu1_idx']), MUON_MASS)
-                mu_jpsi2 = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi_mu2_idx']),
+                muon_jpsi2_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['jpsi_mu2_idx']),
                                                  chain.muPy.at(best_cand['jpsi_mu2_idx']),
                                                  chain.muPz.at(best_cand['jpsi_mu2_idx']), MUON_MASS)
-                mu_ups1 = build_vec_from_pxpypz(chain.muPx.at(best_cand['ups_mu1_idx']),
+                muon_ups1_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['ups_mu1_idx']),
                                                 chain.muPy.at(best_cand['ups_mu1_idx']),
                                                 chain.muPz.at(best_cand['ups_mu1_idx']), MUON_MASS)
-                mu_ups2 = build_vec_from_pxpypz(chain.muPx.at(best_cand['ups_mu2_idx']),
+                muon_ups2_vec = build_vec_from_pxpypz(chain.muPx.at(best_cand['ups_mu2_idx']),
                                                 chain.muPy.at(best_cand['ups_mu2_idx']),
                                                 chain.muPz.at(best_cand['ups_mu2_idx']), MUON_MASS)
             except Exception:
@@ -320,7 +327,7 @@ def process_file_batch(file_list, max_events, jpsi_muon_id, ups_muon_id, tree_na
 
             # Track-misuse veto: any muon (Jpsi or Upsilon) vs Phi kaons
             track_misuse = False
-            for mu_vec in (mu_jpsi1, mu_jpsi2, mu_ups1, mu_ups2):
+            for mu_vec in (muon_jpsi1_vec, muon_jpsi2_vec, muon_ups1_vec, muon_ups2_vec):
                 for k_vec in (k1_vec, k2_vec):
                     deta = mu_vec.Eta() - k_vec.Eta()
                     dphi = delta_phi(mu_vec.Phi(), k_vec.Phi())
@@ -346,7 +353,7 @@ def process_file_batch(file_list, max_events, jpsi_muon_id, ups_muon_id, tree_na
             fill_histograms(histos, jpsi_4vec, ups_4vec, phi_4vec)
             n_passed += 1
 
-    fd, tmp_path = tempfile.mkstemp(suffix=".root", prefix="jup_ntuple_tmp_")
+    fd, tmp_path = tempfile.mkstemp(suffix=".root", prefix="jyp_ntuple_tmp_")
     os.close(fd)
     fout = TFile(tmp_path, "RECREATE")
     for h in histos.values():
@@ -362,48 +369,48 @@ def fill_histograms(histograms, jpsi_4vec, ups_4vec, phi_4vec):
     y_jpsi = jpsi_4vec.Rapidity()
     y_ups = ups_4vec.Rapidity()
     y_phi = phi_4vec.Rapidity()
-    
+
     # 计算Δy
     dy_jpsi_ups = abs(y_jpsi - y_ups)
     dy_jpsi_phi = abs(y_jpsi - y_phi)
     dy_ups_phi = abs(y_ups - y_phi)
-    
+
     # 计算Δφ
     dphi_jpsi_ups = abs(delta_phi(jpsi_4vec.Phi(), ups_4vec.Phi()))
     dphi_jpsi_phi = abs(delta_phi(jpsi_4vec.Phi(), phi_4vec.Phi()))
     dphi_ups_phi = abs(delta_phi(ups_4vec.Phi(), phi_4vec.Phi()))
-    
+
     # 填充1D直方图
     histograms['h_dy_jpsi_ups'].Fill(dy_jpsi_ups)
     histograms['h_dy_jpsi_phi'].Fill(dy_jpsi_phi)
     histograms['h_dy_ups_phi'].Fill(dy_ups_phi)
-    
+
     histograms['h_dphi_jpsi_ups'].Fill(dphi_jpsi_ups)
     histograms['h_dphi_jpsi_phi'].Fill(dphi_jpsi_phi)
     histograms['h_dphi_ups_phi'].Fill(dphi_ups_phi)
-    
+
     # 填充2D直方图
     histograms['h2_dy_dphi_jpsi_ups'].Fill(dy_jpsi_ups, dphi_jpsi_ups)
     histograms['h2_dy_dphi_jpsi_phi'].Fill(dy_jpsi_phi, dphi_jpsi_phi)
     histograms['h2_dy_dphi_ups_phi'].Fill(dy_ups_phi, dphi_ups_phi)
-    
+
     # 填充运动学直方图
     histograms['h_jpsi_pt'].Fill(jpsi_4vec.Pt())
     histograms['h_ups_pt'].Fill(ups_4vec.Pt())
     histograms['h_phi_pt'].Fill(phi_4vec.Pt())
-    
+
     histograms['h_jpsi_eta'].Fill(jpsi_4vec.Eta())
     histograms['h_ups_eta'].Fill(ups_4vec.Eta())
     histograms['h_phi_eta'].Fill(phi_4vec.Eta())
-    
+
     histograms['h_jpsi_y'].Fill(y_jpsi)
     histograms['h_ups_y'].Fill(y_ups)
     histograms['h_phi_y'].Fill(y_phi)
-    
+
     histograms['h_jpsi_phi'].Fill(jpsi_4vec.Phi())
     histograms['h_ups_phi'].Fill(ups_4vec.Phi())
     histograms['h_phi_phi'].Fill(phi_4vec.Phi())
-    
+
     # 填充不变质量直方图
     histograms['h_mass_jpsi_ups'].Fill((jpsi_4vec + ups_4vec).M())
     histograms['h_mass_jpsi_phi'].Fill((jpsi_4vec + phi_4vec).M())
@@ -411,10 +418,10 @@ def fill_histograms(histograms, jpsi_4vec, ups_4vec, phi_4vec):
     histograms['h_mass_all'].Fill((jpsi_4vec + ups_4vec + phi_4vec).M())
 
 
-def analyze_jup_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', output_file=None, input_dir=None, n_workers=1):
+def analyze_jyp_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', output_file=None, input_dir=None, n_workers=1):
     """
-    分析JUP Ntuple
-    
+    分析JYP Ntuple
+
     Args:
         max_events: 最大处理事件数 (-1表示全部)
         jpsi_muon_id: J/psi muon ID类型
@@ -424,11 +431,11 @@ def analyze_jup_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', 
     print("\n" + "="*60)
     print("J/psi + Upsilon + Phi Ntuple 角度关联分析")
     print("="*60)
-    
+
     start_time = time.time()
-    
+
     # 数据路径选择
-    data_path = input_dir if input_dir else JUP_DATA_PATH_DEFAULT
+    data_path = input_dir if input_dir else JYP_DATA_PATH_DEFAULT
 
     if data_path.startswith("root://"):
         # Enumerate files via xrdfs to avoid wildcard-on-directory issues
@@ -496,10 +503,10 @@ def analyze_jup_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', 
         for idx, f in enumerate(data_files):
             batches[idx % n_workers].append(f)
         batches = [b for b in batches if b]
-        n_workers = len(batches)
-        per_batch_events = -1 if max_events < 0 else math.ceil(max_events / n_workers)
+        n_batches = len(batches)
+        per_batch_events = -1 if max_events < 0 else math.ceil(max_events / n_batches)
 
-        with multiprocessing.Pool(processes=n_workers) as pool:
+        with multiprocessing.Pool(processes=n_batches) as pool:
             results = pool.starmap(process_file_batch,
                                    [(b, per_batch_events, jpsi_muon_id, ups_muon_id, TREE_NAME) for b in batches])
         temp_files = [r[0] for r in results]
@@ -508,12 +515,12 @@ def analyze_jup_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', 
         total_track_misuse = sum(r[3] for r in results)
 
     histograms = create_histograms()
-    for tf in temp_files:
-        fin = TFile.Open(tf)
-        if fin and not fin.IsZombie():
-            merge_histograms(histograms, fin)
-        fin.Close()
-        os.remove(tf)
+    for tmp_path in temp_files:
+        input_file = TFile.Open(tmp_path)
+        if input_file and not input_file.IsZombie():
+            merge_histograms(histograms, input_file)
+        input_file.Close()
+        os.remove(tmp_path)
 
     elapsed = time.time() - start_time
     n_to_process = total_events if max_events < 0 else min(max_events, total_events)
@@ -527,7 +534,7 @@ def analyze_jup_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', 
 
     if output_file is None:
         os.makedirs(OUTPUT_DIR, exist_ok=True)
-        output_file = os.path.join(OUTPUT_DIR, "jup_ntuple_correlations.root")
+        output_file = os.path.join(OUTPUT_DIR, "jyp_ntuple_correlations.root")
 
     fout = TFile(output_file, "RECREATE")
     for h in histograms.values():
@@ -540,7 +547,7 @@ def analyze_jup_ntuple(max_events=-1, jpsi_muon_id='soft', ups_muon_id='tight', 
 
 
 def main():
-    parser = argparse.ArgumentParser(description='JUP Ntuple角度关联分析')
+    parser = argparse.ArgumentParser(description='JYP Ntuple角度关联分析')
     parser.add_argument('-n', '--max-events', type=int, default=-1,
                         help='最大处理事件数 (-1=全部)')
     parser.add_argument('-o', '--output', type=str, default=None,
@@ -555,15 +562,15 @@ def main():
                         help='输入Ntuple目录 (默认使用内置数据路径)')
     parser.add_argument('-j', '--jobs', type=int, default=1,
                         help='并行进程数 (默认: 1)')
-    
+
     args = parser.parse_args()
-    
+
     setup_root()
-    
+
     jpsi_muon_id = None if args.jpsi_muon_id == 'none' else args.jpsi_muon_id
     ups_muon_id = None if args.ups_muon_id == 'none' else args.ups_muon_id
-    
-    result = analyze_jup_ntuple(
+
+    result = analyze_jyp_ntuple(
         max_events=args.max_events,
         jpsi_muon_id=jpsi_muon_id,
         ups_muon_id=ups_muon_id,

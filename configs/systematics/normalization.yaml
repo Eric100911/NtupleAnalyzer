@@ -1,0 +1,20 @@
+schema_version: "ntuple-analyzer-systematics/v1"
+
+sources:
+  - name: luminosity_scale
+    category: normalization
+    target: yield
+    enabled: false
+    nominal:
+      scale: 1.0
+    variations:
+      down:
+        scale: 0.985
+      up:
+        scale: 1.015
+    evaluation:
+      method: two_sided
+    rerun_from: normalization
+    correlations:
+      across_bins: correlated
+      across_years: correlated
