@@ -36,6 +36,7 @@ from efficiency_workflow.efficiency import (
     _safe_first,
     _safe_second,
     _scalar_rapidity_array,
+    _compute_full_hlt_match_vectorized,
 )
 
 
@@ -108,6 +109,69 @@ class TestStepDefinitions:
     def test_per_phi_chain_order(self):
         assert PER_PHI_STEPS[0] == "fiducial"
         assert PER_PHI_STEPS == ("fiducial", "kaonRECO", "kaonID", "dikaon")
+
+    def test_full_hlt_match_accepts_single_candidate_event_arrays(self):
+        """One candidate per event produces a 1D result and must not reduce on axis=1."""
+        trig_filt_map = {
+            "dimuon0_trig": 0,
+            "dimuon0_filt": 0,
+            "doublemu_trig": 1,
+            "doublemu_filt": 1,
+        }
+        arrays = ak.Array({
+            "muJpsiMatchedTriggerIndices": [
+                [[1], [1], [], []],
+                [[1], [], [], []],
+                [[0], [0], [0], []],
+            ],
+            "muJpsiMatchedFilterIndices": [
+                [[1], [1], [], []],
+                [[1], [], [], []],
+                [[0], [0], [0], []],
+            ],
+        })
+        result = _compute_full_hlt_match_vectorized(
+            arrays,
+            ak.Array([[0], [0], [0]]),
+            ak.Array([[1], [1], [1]]),
+            ak.Array([[2], [2], [2]]),
+            ak.Array([[3], [3], [3]]),
+            trig_filt_map,
+            ak.Array([[True], [True], [True]]),
+        )
+        assert result.ndim == 1
+        assert result.tolist() == [True, False, True]
+
+    def test_full_hlt_match_reduces_jagged_candidate_arrays_per_event(self):
+        trig_filt_map = {
+            "dimuon0_trig": 0,
+            "dimuon0_filt": 0,
+            "doublemu_trig": 1,
+            "doublemu_filt": 1,
+        }
+        arrays = ak.Array({
+            "muJpsiMatchedTriggerIndices": [
+                [[1], [1], [], []],
+                [[], [], [], []],
+                [[0], [0], [0], []],
+            ],
+            "muJpsiMatchedFilterIndices": [
+                [[1], [1], [], []],
+                [[], [], [], []],
+                [[0], [0], [0], []],
+            ],
+        })
+        result = _compute_full_hlt_match_vectorized(
+            arrays,
+            ak.Array([[0, 2], [0], []]),
+            ak.Array([[1, 3], [1], []]),
+            ak.Array([[2, 0], [2], []]),
+            ak.Array([[3, 1], [3], []]),
+            trig_filt_map,
+            ak.Array([[True, True], [True], []]),
+        )
+        assert result.ndim == 1
+        assert result.tolist() == [True, False, False]
 
 
 # ── Integration tests (require a single ROOT file) ──

@@ -970,14 +970,15 @@ def write_efficiency_plot_bundle(
     min_total: int = 1,
 ) -> dict[str, dict[str, str]]:
     plot_style_cfg = with_subprocess_label(plot_style_cfg, sample_dir.name)
+    # write_efficiency_plots internally uses subdir="cumulative"
     plot_paths = write_efficiency_plots(
-        sample_dir / "plots" / "cumulative",
+        sample_dir / "plots",
         counts_df,
         plot_style_cfg=plot_style_cfg,
         min_total=min_total,
     )
     qa_paths = write_efficiency_plots(
-        sample_dir / "plots_with_uncertainty" / "cumulative",
+        sample_dir / "plots_with_uncertainty",
         counts_df,
         plot_style_cfg=plot_style_cfg,
         min_total=min_total,
@@ -1051,22 +1052,39 @@ def write_derived_plots(
     cond_obj_df = cond_df.loc[
         (cond_df["map_type"] == "object_2d") & (cond_df["step"] != "full_gen")
     ].copy()
+    SINGLE_OBJECT_STEPS = {"muonRECO", "muonID", "kaonRECO", "kaonID"}
+    DI_OBJECT_STEPS = {"dimuon", "dikaon"}
+    cond_single = cond_obj_df.loc[cond_obj_df["step"].isin(SINGLE_OBJECT_STEPS)]
+    cond_di = cond_obj_df.loc[cond_obj_df["step"].isin(DI_OBJECT_STEPS)]
+    # Single-object: muonRECO, muonID, kaonRECO, kaonID
     written.update(_write_2d_object_maps(
-        output_dir, cond_obj_df,
+        output_dir, cond_single,
         plot_style_cfg=plot_style_cfg, min_total=min_total,
-        include_uncertainty=include_uncertainty, subdir="conditional",
+        include_uncertainty=include_uncertainty, subdir="conditional/single_object",
     ))
-    # |y|-folded conditional per-object
-    if not cond_obj_df.empty:
+    if not cond_single.empty:
         written.update(_write_2d_object_maps_abs_y(
-            output_dir, cond_obj_df,
+            output_dir, cond_single,
             plot_style_cfg=plot_style_cfg, min_total=min_total,
-            include_uncertainty=include_uncertainty, subdir="conditional",
+            include_uncertainty=include_uncertainty, subdir="conditional/single_object",
         ))
+    # Di-object: dimuon, dikaon
+    written.update(_write_2d_object_maps(
+        output_dir, cond_di,
+        plot_style_cfg=plot_style_cfg, min_total=min_total,
+        include_uncertainty=include_uncertainty, subdir="conditional/di_object",
+    ))
+    if not cond_di.empty:
+        written.update(_write_2d_object_maps_abs_y(
+            output_dir, cond_di,
+            plot_style_cfg=plot_style_cfg, min_total=min_total,
+            include_uncertainty=include_uncertainty, subdir="conditional/di_object",
+        ))
+    # Event-level: correlated 3D
     written.update(_write_correlated_3d_maps(
         output_dir, cond_df,
         plot_style_cfg=plot_style_cfg, min_total=min_total,
-        include_uncertainty=include_uncertainty, subdir="conditional",
+        include_uncertainty=include_uncertainty, subdir="conditional/event",
     ))
     return written
 
@@ -1109,10 +1127,16 @@ def write_stacked_jpsi_plots(
     plot_style_cfg: CmsPlotStyleConfig,
     min_total: int = 1,
     include_uncertainty: bool = False,
+    *,
+    acceptance_dir: Path | None = None,
+    efficiency_dir: Path | None = None,
 ) -> dict[str, Path]:
     from .efficiency import _fold_frame_to_abs_y
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    acc_dir = acceptance_dir or output_dir
+    eff_dir = efficiency_dir or output_dir
+    acc_dir.mkdir(parents=True, exist_ok=True)
+    eff_dir.mkdir(parents=True, exist_ok=True)
     written: dict[str, Path] = {}
 
     def _is_abs_y_frame(frame: pd.DataFrame) -> bool:
@@ -1138,7 +1162,7 @@ def write_stacked_jpsi_plots(
 
     if not stacked_acceptance_df.empty:
         if not _is_abs_y_frame(stacked_acceptance_df):
-            path = output_dir / "stacked_jpsi_fiducial_acceptance.png"
+            path = acc_dir / "stacked_jpsi_fiducial_acceptance.png"
             written["stacked_jpsi.fiducial_acceptance"] = save_efficiency_heatmap(
                 path,
                 stacked_acceptance_df,
@@ -1156,7 +1180,7 @@ def write_stacked_jpsi_plots(
             output_map_type="stacked_jpsi_acceptance_2d_abs_y",
         )
         if not acc_abs.empty:
-            path_abs = output_dir / "stacked_jpsi_absy_fiducial_acceptance.png"
+            path_abs = acc_dir / "stacked_jpsi_absy_fiducial_acceptance.png"
             written["stacked_jpsi_absy.fiducial_acceptance"] = save_efficiency_heatmap(
                 path_abs,
                 acc_abs,
@@ -1176,7 +1200,7 @@ def write_stacked_jpsi_plots(
                 continue
             step_label = _step_display_name(step)
             if not _is_abs_y_frame(frame):
-                path = output_dir / f"stacked_jpsi_{step}.png"
+                path = eff_dir / f"stacked_jpsi_{step}.png"
                 written[f"stacked_jpsi.{step}"] = save_efficiency_heatmap(
                     path,
                     frame,
@@ -1194,7 +1218,7 @@ def write_stacked_jpsi_plots(
                 output_map_type="stacked_jpsi_efficiency_2d_abs_y",
             )
             if not eff_abs.empty:
-                path_abs = output_dir / f"stacked_jpsi_absy_{step}.png"
+                path_abs = eff_dir / f"stacked_jpsi_absy_{step}.png"
                 written[f"stacked_jpsi_absy.{step}"] = save_efficiency_heatmap(
                     path_abs,
                     eff_abs,
@@ -1543,26 +1567,39 @@ def write_derived_plot_bundle(
     plot_style_cfg = with_subprocess_label(plot_style_cfg, derived_dir.parent.name)
     outputs: dict[str, object] = {}
 
+    # Per-object acceptance → acceptance/ (merged with derived acceptance)
     if not per_object_acceptance_df.empty:
         outputs.update(_dual_plot_invocation(
             derived_dir, write_per_object_acceptance_plots,
-            subdir="per_object_acceptance",
-            output_key="per_object_acceptance_plots",
-            qa_prefix="per_object_acceptance_qa",
+            subdir="acceptance",
+            output_key="acceptance_per_object_plots",
+            qa_prefix="acceptance_per_object_qa",
             poa_df=per_object_acceptance_df,
             plot_style_cfg=plot_style_cfg, min_total=min_total,
         ))
 
-    if not stacked_jpsi_acceptance_df.empty or not stacked_jpsi_efficiency_df.empty:
-        outputs.update(_dual_plot_invocation(
-            derived_dir, write_stacked_jpsi_plots,
-            subdir="stacked_jpsi",
-            output_key="stacked_jpsi_plots",
-            qa_prefix="stacked_jpsi_qa",
-            stacked_acceptance_df=stacked_jpsi_acceptance_df,
-            stacked_efficiency_df=stacked_jpsi_efficiency_df,
-            plot_style_cfg=plot_style_cfg, min_total=min_total,
-        ))
+    # Stacked J/psi: acceptance → acceptance/, efficiency → conditional/
+    has_sj_acc = not stacked_jpsi_acceptance_df.empty
+    has_sj_eff = not stacked_jpsi_efficiency_df.empty
+    if has_sj_acc or has_sj_eff:
+        for qa in (False, True):
+            plot_root = derived_dir / ("plots_with_uncertainty" if qa else "plots")
+            sj_out = write_stacked_jpsi_plots(
+                plot_root,
+                stacked_acceptance_df=stacked_jpsi_acceptance_df,
+                stacked_efficiency_df=stacked_jpsi_efficiency_df,
+                plot_style_cfg=plot_style_cfg, min_total=min_total,
+                include_uncertainty=qa,
+                acceptance_dir=plot_root / "acceptance",
+                efficiency_dir=plot_root / "conditional",
+            )
+            for k, p in sj_out.items():
+                rel = str(p.relative_to(derived_dir))
+                key = f"stacked_jpsi_qa.{k}" if qa else k
+                if qa:
+                    outputs.setdefault("plots_with_uncertainty", {})[key] = rel
+                else:
+                    outputs.setdefault("stacked_jpsi_plots", {})[key] = rel
 
     for step, frame in pair_level_dfs.items():
         if frame.empty:

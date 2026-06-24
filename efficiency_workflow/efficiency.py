@@ -2314,17 +2314,25 @@ def build_cutflow(event_df: pd.DataFrame, binning: EfficiencyBinning | None = No
 
     def _cutflow_chain(frame: pd.DataFrame, step_list: tuple[str, ...],
                        base_total: int, object_name: str = "") -> None:
-        previous = base_total
+        prev_col: str | None = None
+        prev_passed: int = base_total
         for step in step_list:
             col = step if not object_name else f"{object_name}_{step}"
-            passed = int(frame[col].sum()) if col in frame.columns else 0
+            raw_passed = int(frame[col].sum()) if col in frame.columns else 0
+            # Raw efficiency vs full_gen
             row = _efficiency_row(
-                {"step": step, "object": object_name}, base_total, passed)
-            row["conditional_total"] = int(previous)
-            row["conditional_passed"] = int(passed)
-            row["conditional_efficiency"] = float(passed / previous) if previous > 0 else math.nan
+                {"step": step, "object": object_name}, base_total, raw_passed)
+            # Conditional: AND-intersection with previous step
+            if prev_col and prev_col in frame.columns:
+                cond_passed = int((frame[col] & frame[prev_col]).sum())
+            else:
+                cond_passed = raw_passed
+            row["conditional_total"] = prev_passed
+            row["conditional_passed"] = cond_passed
+            row["conditional_efficiency"] = float(cond_passed / prev_passed) if prev_passed > 0 else math.nan
             rows.append(row)
-            previous = passed
+            prev_col = col
+            prev_passed = cond_passed
 
     total_full_gen = int(event_df["full_gen"].sum())
 
@@ -2785,13 +2793,13 @@ def build_stacked_jpsi_efficiency_maps(
 ) -> pd.DataFrame:
     """Build stacked J/psi per-object conditional efficiency maps in (pT, |y|).
 
-    Each step uses the *previous* step's passed count as denominator,
-    matching the chained conditional-efficiency definition used by
-    ``_chain_conditional_rows`` for the regular per-object maps:
+    Each step uses the AND-intersection with the previous step as numerator
+    and the previous step as denominator, matching the chained conditional
+    definition:
 
-        muonRECO  = N(muonRECO)  / N(fiducial)
-        muonID    = N(muonID)    / N(muonRECO)
-        dimuon    = N(dimuon)    / N(muonID)
+        muonRECO  = N(muonRECO & fiducial)  / N(fiducial)
+        muonID    = N(muonID & muonRECO)    / N(muonRECO)
+        dimuon    = N(dimuon & muonID)      / N(muonID)
     """
     stacked = _stacked_jpsi_frame(gen_df, event_df)
     if stacked.empty:
@@ -2810,11 +2818,20 @@ def build_stacked_jpsi_efficiency_maps(
             total_gen = int(len(subset))
             if total_gen == 0:
                 continue
-            # Chain denominators: each step conditional on the previous one
+            # Chain denominators: each step AND-intersection with previous
             n_fiducial = int(subset["jpsi_fiducial_acceptance"].sum())
-            n_muonRECO = int(subset["jpsi_muonRECO"].sum()) if "jpsi_muonRECO" in subset.columns else 0
-            n_muonID   = int(subset["jpsi_muonID"].sum())   if "jpsi_muonID"   in subset.columns else 0
-            n_dimuon   = int(subset["jpsi_dimuon"].sum())   if "jpsi_dimuon"   in subset.columns else 0
+            if "jpsi_muonRECO" in subset.columns:
+                n_muonRECO = int((subset["jpsi_muonRECO"] & subset["jpsi_fiducial_acceptance"]).sum())
+            else:
+                n_muonRECO = 0
+            if "jpsi_muonID" in subset.columns:
+                n_muonID = int((subset["jpsi_muonID"] & subset["jpsi_muonRECO"]).sum()) if "jpsi_muonRECO" in subset.columns else int(subset["jpsi_muonID"].sum())
+            else:
+                n_muonID = 0
+            if "jpsi_dimuon" in subset.columns:
+                n_dimuon = int((subset["jpsi_dimuon"] & subset["jpsi_muonID"]).sum()) if "jpsi_muonID" in subset.columns else int(subset["jpsi_dimuon"].sum())
+            else:
+                n_dimuon = 0
 
             _base = {
                 "map_type": "stacked_jpsi_efficiency_2d",
@@ -2885,7 +2902,8 @@ _OBJECT_CHAIN = {
 }
 
 
-def build_conditional_maps(counts_df: pd.DataFrame, binning: EfficiencyBinning | None = None) -> pd.DataFrame:
+def build_conditional_maps(counts_df: pd.DataFrame, binning: EfficiencyBinning | None = None,
+                           frame: pd.DataFrame | None = None) -> pd.DataFrame:
     if counts_df.empty:
         return pd.DataFrame()
     use_trig_match = binning.include_trigger_matching if binning is not None else True
@@ -2905,7 +2923,10 @@ def build_conditional_maps(counts_df: pd.DataFrame, binning: EfficiencyBinning |
             for obj_name in subset["object"].drop_duplicates():
                 obj_subset = subset[subset["object"] == obj_name]
                 chain = _OBJECT_CHAIN.get(obj_name, ())
-                _chain_conditional_rows(obj_subset, chain, keys, parts)
+                if frame is not None and not frame.empty and chain:
+                    _chain_conditional_rows_with_and(obj_subset, chain, keys, obj_name, frame, binning, parts)
+                else:
+                    _chain_conditional_rows(obj_subset, chain, keys, parts)
         elif map_type == "correlated_3d":
             _conditional_rows_with_denominators(
                 subset,
@@ -2937,7 +2958,21 @@ def build_conditional_maps(counts_df: pd.DataFrame, binning: EfficiencyBinning |
                     obj_subset = subset[subset["object"] == obj_name]
                     if obj_name and obj_name != "":
                         chain = _OBJECT_CHAIN.get(obj_name, ())
-                        _chain_conditional_rows(obj_subset, chain, keys, parts)
+                        if frame is not None and not frame.empty and chain:
+                            # Build inclusive (1-bin) conditional rows from frame
+                            # Use dummy bin edges that cover all values
+                            pt_edges_all = (-float("inf"), float("inf"))
+                            y_edges_all = (-float("inf"), float("inf"))
+                            _chain_conditional_rows_with_and(
+                                obj_subset, chain, keys, obj_name, frame,
+                                EfficiencyBinning(
+                                    jpsi_pt_edges=pt_edges_all,
+                                    phi_pt_edges=pt_edges_all,
+                                    object_y_edges=y_edges_all,
+                                ), parts, map_type="inclusive",
+                            )
+                        else:
+                            _chain_conditional_rows(obj_subset, chain, keys, parts)
                     else:
                         _conditional_rows_with_denominators(
                             obj_subset,
@@ -2954,6 +2989,115 @@ def build_conditional_maps(counts_df: pd.DataFrame, binning: EfficiencyBinning |
     result = pd.concat(parts, ignore_index=True)
     result.drop(columns=["passed_prev"], errors="ignore", inplace=True)
     return result
+
+
+def _chain_conditional_rows_with_and(
+    subset: pd.DataFrame, chain: tuple[str, ...], keys: list[str],
+    obj_name: str, frame: pd.DataFrame, binning: EfficiencyBinning,
+    parts: list[pd.DataFrame], map_type: str = "object_2d",
+) -> None:
+    """Build conditional efficiency rows with AND-intersection denominators.
+
+    Unlike ``_chain_conditional_rows`` which chains raw step counts, this
+    computes ``N(step & previous) / N(previous)`` directly from the merged
+    gen+event frame, giving properly chained conditional efficiencies.
+    """
+    if not chain:
+        return
+    present_steps = [s for s in chain if s in subset["step"].values]
+    if len(present_steps) < 2:
+        return
+
+    # Map object name to (pt_col, y_col, pt_edges, y_edges)
+    obj_specs = {
+        "jpsi_lead": ("jpsi_lead_pt", "jpsi_lead_y", binning.jpsi_pt_edges, binning.object_y_edges),
+        "jpsi_sublead": ("jpsi_sublead_pt", "jpsi_sublead_y", binning.jpsi_pt_edges, binning.object_y_edges),
+        "phi": ("phi_pt", "phi_y", binning.phi_pt_edges, binning.object_y_edges),
+    }
+    if obj_name not in obj_specs:
+        _chain_conditional_rows(subset, chain, keys, parts)
+        return
+    pt_col, y_col, pt_edges, y_edges = obj_specs[obj_name]
+
+    # First step: baseline vs full_gen
+    first_step = present_steps[0]
+    first_col = f"{obj_name}_{first_step}"
+    for ix in range(len(pt_edges) - 1):
+        for iy in range(len(y_edges) - 1):
+            bin_mask = (
+                (frame[pt_col] >= pt_edges[ix]) & (frame[pt_col] < pt_edges[ix + 1])
+                & (frame[y_col] >= y_edges[iy]) & (frame[y_col] < y_edges[iy + 1])
+            )
+            bin_frame = frame[bin_mask]
+            total = int(bin_frame["full_gen"].sum())
+            passed = int(bin_frame[first_col].sum()) if first_col in bin_frame.columns else 0
+            row = _efficiency_row({
+                "map_type": map_type,
+                "object": obj_name,
+                "step": first_step,
+                "x_axis": "pt", "y_axis": "y",
+                "x_bin": ix, "y_bin": iy,
+                "x_min": pt_edges[ix], "x_max": pt_edges[ix + 1],
+                "y_min": y_edges[iy], "y_max": y_edges[iy + 1],
+                "x_label": _bin_label(pt_edges, ix),
+                "y_label": _bin_label(y_edges, iy),
+            }, total, passed)
+            row["previous_step"] = "total"
+            row["conditional_total"] = total
+            row["conditional_passed"] = passed
+            row["absolute_total"] = total
+            row["absolute_passed"] = passed
+            row["absolute_efficiency"] = row["efficiency"]
+            _recompute_efficiency_from_dict(row, "conditional_total", "conditional_passed")
+            row["quantity"] = "conditional_efficiency_vs_previous_step"
+            parts.append(pd.DataFrame([row]))
+
+    # Subsequent steps: AND-intersection with previous
+    for prev_step, this_step in zip(present_steps, present_steps[1:]):
+        prev_col = f"{obj_name}_{prev_step}"
+        this_col = f"{obj_name}_{this_step}"
+        if prev_col not in frame.columns or this_col not in frame.columns:
+            continue
+        for ix in range(len(pt_edges) - 1):
+            for iy in range(len(y_edges) - 1):
+                bin_mask = (
+                    (frame[pt_col] >= pt_edges[ix]) & (frame[pt_col] < pt_edges[ix + 1])
+                    & (frame[y_col] >= y_edges[iy]) & (frame[y_col] < y_edges[iy + 1])
+                )
+                bin_frame = frame[bin_mask]
+                total = int(bin_frame[prev_col].sum())
+                passed = int((bin_frame[this_col] & bin_frame[prev_col]).sum())
+                row = _efficiency_row({
+                    "map_type": map_type,
+                    "object": obj_name,
+                    "step": this_step,
+                    "x_axis": "pt", "y_axis": "y",
+                    "x_bin": ix, "y_bin": iy,
+                    "x_min": pt_edges[ix], "x_max": pt_edges[ix + 1],
+                    "y_min": y_edges[iy], "y_max": y_edges[iy + 1],
+                    "x_label": _bin_label(pt_edges, ix),
+                    "y_label": _bin_label(y_edges, iy),
+                }, total, passed)
+                row["previous_step"] = prev_step
+                row["conditional_total"] = total
+                row["conditional_passed"] = passed
+                row["absolute_total"] = total
+                row["absolute_passed"] = passed
+                row["absolute_efficiency"] = row["efficiency"]
+                _recompute_efficiency_from_dict(row, "conditional_total", "conditional_passed")
+                row["quantity"] = "conditional_efficiency_vs_previous_step"
+                parts.append(pd.DataFrame([row]))
+
+
+def _recompute_efficiency_from_dict(row: dict[str, Any], total_key: str, passed_key: str) -> None:
+    """Recompute efficiency/uncertainty in a row dict using named keys."""
+    t = int(row[total_key])
+    p = int(row[passed_key])
+    eff_row = _efficiency_row({}, t, p)
+    row["efficiency"] = eff_row["efficiency"]
+    row["err_low"] = eff_row["err_low"]
+    row["err_high"] = eff_row["err_high"]
+    row["err_sym"] = eff_row["err_sym"]
 
 
 def _chain_conditional_rows(subset: pd.DataFrame, chain: tuple[str, ...],

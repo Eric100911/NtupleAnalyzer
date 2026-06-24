@@ -1,0 +1,40 @@
+schema_version: "ntuple-analyzer-systematics/v1"
+
+sources:
+  - name: fit_background_model
+    category: fit_model
+    target: yield
+    enabled: true
+    nominal:
+      variation: exponential
+    variations:
+      - exponential
+      - chebychev1
+      - chebychev2
+    evaluation:
+      method: envelope
+    rerun_from: fit
+    correlations:
+      across_bins: correlated
+      across_years: correlated
+
+  - name: fit_range
+    category: fit_model
+    target: yield
+    enabled: false
+    variations:
+      - name: nominal
+        parameters:
+          jpsi_mass_window: [2.9, 3.3]
+      - name: narrow
+        parameters:
+          jpsi_mass_window: [2.95, 3.25]
+      - name: wide
+        parameters:
+          jpsi_mass_window: [2.85, 3.35]
+    evaluation:
+      method: envelope
+    rerun_from: fit
+    correlations:
+      across_bins: correlated
+      across_years: correlated

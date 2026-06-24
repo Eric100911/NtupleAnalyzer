@@ -1,0 +1,43 @@
+schema_version: "ntuple-analyzer-systematics/v1"
+
+sources:
+  - name: kaon_track_quality
+    category: efficiency_selection
+    target: yield
+    enabled: false
+    nominal:
+      kaon_chi2_max: 8.0
+      kaon_n_valid_hits_min: 4
+      kaon_require_highpurity: true
+    variations:
+      loose:
+        kaon_chi2_max: 10.0
+      tight:
+        kaon_chi2_max: 6.0
+    evaluation:
+      method: envelope
+    rerun_from: efficiency_extraction
+    correlations:
+      across_bins: correlated
+      across_years: correlated
+
+  - name: muon_pt_threshold
+    category: efficiency_selection
+    target: yield
+    enabled: false
+    nominal:
+      mu_pt_barrel_min: 3.5
+      mu_pt_endcap_min: 2.5
+    variations:
+      tight:
+        mu_pt_barrel_min: 4.0
+        mu_pt_endcap_min: 3.0
+      loose:
+        mu_pt_barrel_min: 3.0
+        mu_pt_endcap_min: 2.0
+    evaluation:
+      method: two_sided
+    rerun_from: efficiency_extraction
+    correlations:
+      across_bins: correlated
+      across_years: correlated

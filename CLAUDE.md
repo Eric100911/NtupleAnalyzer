@@ -193,59 +193,63 @@ index in their matched lists.
 
 ## Key Scripts
 
+Python entry points now live under `scripts/` and tests under `tests/`.
+Root-level Python files are temporary deprecation shims kept for command
+compatibility; prefer the canonical paths below for new docs and automation.
+
 ### Pre-Efficiency Pipeline
 
 | Script | Purpose |
 |--------|---------|
-| `merge_apply_cuts.py` | Merge raw ntuples, apply best-candidate selection + GEN-match (MC), compute sel_ columns |
-| `fit_splot.py` | Run RooFit 3D mass fit, compute sWeights, write weighted output |
-| `fit_splot_with_kinematic_cuts.py` | sPlot fit with additional kinematic selections |
-| `plot_weighted_distributions.py` | Generic sWeighted 1D distribution plots (all sel_ columns) + pair Δy/Δφ 2D correlations |
+| `scripts/kinematics/merge_apply_cuts.py` | Merge raw ntuples, apply best-candidate selection + GEN-match (MC), compute sel_ columns |
+| `scripts/kinematics/fit_splot.py` | Run RooFit 3D mass fit, compute sWeights, write weighted output |
+| `scripts/kinematics/fit_splot_with_kinematic_cuts.py` | sPlot fit with additional kinematic selections |
+| `scripts/kinematics/plot_weighted_distributions.py` | Generic sWeighted 1D distribution plots (all sel_ columns) + pair Δy/Δφ 2D correlations |
 
 ### MC-Data Agreement & Kinematics Plots
 
 | Script | Purpose |
 |--------|---------|
-| `plot_kinematics_jjp.py` | **Pre-efficiency kinematics**: sWeighted data-only plots + data-MC overlay (all 5 MC samples overlaid, shape-normalized) |
-| `plot_data_mc_comparison.py` | **Single-sample data/MC comparison** with χ²/ndf compatibility metrics and Data/MC ratio panel |
-| `add_mc_weights.py` | Add `signal_sw=1.0` branch to GEN-matched MC files via RDataFrame (needed by plot_data_mc_comparison.py) |
+| `scripts/kinematics/plot_kinematics_jjp.py` | **Pre-efficiency kinematics**: sWeighted data-only plots + data-MC overlay (all 5 MC samples overlaid, shape-normalized) |
+| `scripts/kinematics/plot_data_mc_comparison.py` | **Single-sample data/MC comparison** with χ²/ndf compatibility metrics and Data/MC ratio panel |
+| `scripts/kinematics/add_mc_weights.py` | Add `signal_sw=1.0` branch to GEN-matched MC files via RDataFrame (needed by plot_data_mc_comparison.py) |
 
 ### Efficiency Computation
 
 | Script | Purpose |
 |--------|---------|
-| `run_efficiency.py` | Thin wrapper entry point for efficiency computation |
-| `prepare_efficiency_shards.py` | Prepare per-file efficiency computation shards for Condor |
-| `merge_efficiency_shards.py` | Merge efficiency shard outputs into consolidated parquet files |
-| `rebuild_efficiency_maps.py` | Rebuild `efficiency_maps.parquet` from existing `gen_systems.parquet` + `event_step_flags.parquet` (non-overwriting by default) |
-| `build_derived_efficiency.py` | Build derived efficiency products (acceptance, conditional, pair-level, stacked-J/ψ); use `--plot-scope stacked-jpsi` to render only stacked-J/ψ plots |
-| `build_response_classification.py` | Build response matrix classification for efficiency correction diagnostics |
-| `build_systematic_uncertainty.py` | Compute systematic uncertainty envelope from per-sample efficiency variations |
-| `print_cutflow.py` | Print formatted cutflow tables (text/LaTeX/CSV) from `event_step_flags.parquet` |
+| `scripts/efficiency/run_efficiency.py` | Thin wrapper entry point for efficiency computation |
+| `scripts/efficiency/prepare_efficiency_shards.py` | Prepare per-file efficiency computation shards for Condor |
+| `scripts/efficiency/merge_efficiency_shards.py` | Merge efficiency shard outputs into consolidated parquet files |
+| `scripts/efficiency/rebuild_efficiency_maps.py` | Rebuild `efficiency_maps.parquet` from existing `gen_systems.parquet` + `event_step_flags.parquet` (non-overwriting by default) |
+| `scripts/efficiency/build_derived_efficiency.py` | Build derived efficiency products (acceptance, conditional, pair-level, stacked-J/ψ); use `--plot-scope stacked-jpsi` to render only stacked-J/ψ plots |
+| `scripts/efficiency/build_response_classification.py` | Build response matrix classification for efficiency correction diagnostics |
+| `scripts/efficiency/build_systematic_uncertainty.py` | Compute systematic uncertainty envelope from per-sample efficiency variations |
+| `scripts/efficiency/print_cutflow.py` | Print formatted cutflow tables (text/LaTeX/CSV) from `event_step_flags.parquet` |
 
 ### Efficiency Correction & Yield
 
 | Script | Purpose |
 |--------|---------|
-| `apply_efficiency_corrections.py` | Apply efficiency correction weights to ROOT trees |
-| `compute_efficiency_corrected_yield.py` | **Main entry point**: compute efficiency-corrected signal yield with subprocess envelope, supports factorized, legacy-correlated, and hybrid modes |
-| `check_candchoice_closure.py` | Check candidate-choice closure: compare corrected yields with different best-candidate metrics |
-| `classify_response_events.py` | Classify events by response migration pattern (for response matrix diagnostics) |
+| `scripts/efficiency/apply_efficiency_corrections.py` | Apply efficiency correction weights to ROOT trees |
+| `scripts/efficiency/compute_efficiency_corrected_yield.py` | **Main entry point**: compute efficiency-corrected signal yield with subprocess envelope, supports factorized, legacy-correlated, and hybrid modes |
+| `scripts/studies/check_candchoice_closure.py` | Check candidate-choice closure: compare corrected yields with different best-candidate metrics |
+| `scripts/efficiency/classify_response_events.py` | Classify events by response migration pattern (for response matrix diagnostics) |
 
 ### Tests & Diagnostics
 
 | Script | Purpose |
 |--------|---------|
-| `test_acceptance_factorization.py` | Bin-by-bin closure test of the acceptance factorization assumption (A_direct vs A_factorized) |
-| `test_closure_cli.py` | CLI closure tests for efficiency correction (factorized, correlated, hybrid) |
-| `test_efficiency_corrections.py` | Unit tests for efficiency correction lookups (factorized, correlated, ROOT annotation) |
-| `test_efficiency_plots.py` | Unit tests for efficiency plotting functions |
-| `test_efficiency_schema.py` | Schema validation tests for efficiency data products |
-| `test_efficiency_systematics.py` | Unit tests for systematic uncertainty computation |
-| `test_factorized_maps.py` | Unit tests for factorized efficiency map building |
-| `test_fit_splot_schema.py` | Schema tests for sPlot fit outputs |
-| `quantify_scand_factorization.py` | Quantify S_cand factorization: compare direct 3-body vs factorized per-object S_cand efficiency |
-| `test_scand_factorization.py` | Test harness for SCand factorization quantification |
+| `tests/test_acceptance_factorization.py` | Bin-by-bin closure test of the acceptance factorization assumption (A_direct vs A_factorized) |
+| `tests/test_closure_cli.py` | CLI closure tests for efficiency correction (factorized, correlated, hybrid) |
+| `tests/test_efficiency_corrections.py` | Unit tests for efficiency correction lookups (factorized, correlated, ROOT annotation) |
+| `tests/test_efficiency_plots.py` | Unit tests for efficiency plotting functions |
+| `tests/test_efficiency_schema.py` | Schema validation tests for efficiency data products |
+| `tests/test_efficiency_systematics.py` | Unit tests for systematic uncertainty computation |
+| `tests/test_factorized_maps.py` | Unit tests for factorized efficiency map building |
+| `tests/test_fit_splot_schema.py` | Schema tests for sPlot fit outputs |
+| `scripts/studies/quantify_scand_factorization.py` | Quantify S_cand factorization: compare direct 3-body vs factorized per-object S_cand efficiency |
+| `tests/test_scand_factorization.py` | Test harness for SCand factorization quantification |
 
 ### Analysis Studies (sideband, vertex, etc.)
 

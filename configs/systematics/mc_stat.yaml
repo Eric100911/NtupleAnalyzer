@@ -1,0 +1,20 @@
+schema_version: "ntuple-analyzer-systematics/v1"
+
+sources:
+  - name: efficiency_mc_stat
+    category: mc_stat
+    target: yield
+    enabled: false
+    nominal:
+      mode: toy
+      n_toys: 200
+      seed: 12345
+      clip: [1.0e-6, 1.0]
+    variations:
+      toys: {}
+    evaluation:
+      method: rms
+    rerun_from: corrected_yield
+    correlations:
+      across_bins: correlated
+      across_years: correlated

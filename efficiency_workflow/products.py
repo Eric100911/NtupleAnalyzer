@@ -10,6 +10,7 @@ from .efficiency import (
     PAIR_LEVEL_MAP_SPECS,
     PAIR_LEVEL_MAP_SPECS_NO_TRIG_MATCH,
     EfficiencyBinning,
+    _merged_gen_events,
     build_acceptance_maps,
     build_conditional_maps,
     build_cutflow,
@@ -216,18 +217,25 @@ def build_derived_sample_products(
     counts_df = pd.read_parquet(counts_path)
     active_binning = binning or EfficiencyBinning()
     acc_df = build_acceptance_maps(counts_df)
-    cond_df = build_conditional_maps(counts_df, active_binning)
+
+    # Read gen+event data for AND-intersection conditional maps + derived products
+    gen_path = sample_dir / "gen_systems.parquet"
+    event_path = sample_dir / "event_step_flags.parquet"
+    merged_frame: pd.DataFrame | None = None
+    gen_df = pd.DataFrame()
+    event_df = pd.DataFrame()
+    if gen_path.exists() and event_path.exists():
+        gen_df = pd.read_parquet(gen_path)
+        event_df = pd.read_parquet(event_path)
+        merged_frame = _merged_gen_events(gen_df, event_df)
+    cond_df = build_conditional_maps(counts_df, active_binning, frame=merged_frame)
     derived_dir = ensure_dir(output_dir / sample / "derived")
 
     poa_df = pd.DataFrame()
     stacked_acc_df = pd.DataFrame()
     stacked_eff_df = pd.DataFrame()
     pair_level_dfs: dict[str, pd.DataFrame] = {}
-    gen_path = sample_dir / "gen_systems.parquet"
-    event_path = sample_dir / "event_step_flags.parquet"
-    if gen_path.exists() and event_path.exists():
-        gen_df = pd.read_parquet(gen_path)
-        event_df = pd.read_parquet(event_path)
+    if not gen_df.empty and not event_df.empty:
         poa_df = build_per_object_acceptance_maps(gen_df, event_df, active_binning)
         stacked_acc_df = build_stacked_jpsi_acceptance_maps(gen_df, event_df, active_binning)
         stacked_eff_df = build_stacked_jpsi_efficiency_maps(gen_df, event_df, active_binning)

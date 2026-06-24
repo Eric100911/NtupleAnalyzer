@@ -1,4 +1,5 @@
 output/
+outputs/
 *.pdf
 *.png
 *.root

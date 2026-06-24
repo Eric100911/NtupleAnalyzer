@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-from __future__ import annotations
+from scripts._compat import shim
 
-from efficiency_workflow.scand_factorization import main
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+shim("scripts.studies.quantify_scand_factorization", "quantify_scand_factorization.py")

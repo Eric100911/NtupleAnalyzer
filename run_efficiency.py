@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-from efficiency_workflow.cli_efficiency import main
+from scripts._compat import shim
 
-
-if __name__ == "__main__":
-    main()
+shim("scripts.efficiency.run_efficiency", "run_efficiency.py")

@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 import pytest
 
-from fit_splot import build_splot_weight_map
+from scripts.kinematics.fit_splot import build_splot_weight_map
 
 
 class _FakeRow:
