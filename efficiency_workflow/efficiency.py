@@ -2815,9 +2815,6 @@ def build_stacked_jpsi_efficiency_maps(
                 & (stacked["jpsi_abs_y"] >= y_edges[iy])
                 & (stacked["jpsi_abs_y"] < y_edges[iy + 1])
             ]
-            total_gen = int(len(subset))
-            if total_gen == 0:
-                continue
             # Chain denominators: each step AND-intersection with previous
             n_fiducial = int(subset["jpsi_fiducial_acceptance"].sum())
             if "jpsi_muonRECO" in subset.columns:

@@ -412,7 +412,10 @@ class TestSinglesBasedPerObjectFlags:
 
         assert ak.to_list(flags["jpsi_lead_muonRECO"]) == [True, True, False, False]
         assert ak.to_list(flags["jpsi_lead_muonID"]) == [True, False, False, False]
-        assert ak.to_list(flags["jpsi_lead_dimuon"]) == [True, False, False, False]
+        assert ak.to_list(flags["jpsi_lead_dimuon"]) == [True, True, False, False]
+        assert ak.to_list(
+            flags["jpsi_lead_muonID"] & flags["jpsi_lead_dimuon"]
+        ) == [True, False, False, False]
         assert ak.to_list(flags["phi_kaonRECO"]) == [False, False, False, True]
         assert ak.to_list(flags["phi_kaonID"]) == [False, False, False, True]
         assert ak.to_list(flags["phi_dikaon"]) == [False, False, False, True]
