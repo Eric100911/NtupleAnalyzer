@@ -705,6 +705,9 @@ class FactorizedCorrectionMap:
         phi_pt: float,
         phi_y: float,
     ) -> FactorizedCorrection:
+        # Object maps use the two supplied J/psi kinematics separately, while
+        # event maps always use pT-ordered axes.  This keeps a data-tree slot
+        # convention from leaking into the event-level map lookup.
         lead_pt = max(float(jpsi1_pt), float(jpsi2_pt))
         sublead_pt = min(float(jpsi1_pt), float(jpsi2_pt))
         components = [

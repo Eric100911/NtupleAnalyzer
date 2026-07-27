@@ -132,6 +132,9 @@ def _append_rows_for_axes(
     active_axes = tuple(axis for axis in axes if axis_names[axis] is not None and axis_edges[axis] is not None)
     values = {axis: _axis_values(frame, axis_names[axis]) for axis in active_axes}
 
+    # The explicit intersection makes every stored factor a conditional
+    # efficiency N(denominator AND numerator) / N(denominator), even if an
+    # upstream flag was not encoded as a strictly nested boolean.
     if not active_axes:
         denom = frame[spec.denominator_col].to_numpy(dtype=bool)
         passed = denom & frame[spec.numerator_col].to_numpy(dtype=bool)
@@ -260,6 +263,10 @@ def factor_specs(
     *,
     event_end_step: str = DEFAULT_EVENT_END_STEP,
 ) -> dict[str, tuple[pd.DataFrame | None, FactorSpec]]:
+    # Read numerator/denominator pairs as the physics definition of each
+    # factor.  The product used later is an approximation: correlations between
+    # the three object chains and event-level factors are intentionally not
+    # retained in these maps (use the hybrid/correlated products to study them).
     return {
         "acceptance_jpsi": (
             None,

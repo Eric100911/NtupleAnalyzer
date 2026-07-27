@@ -991,6 +991,11 @@ def build_event_efficiency_row(
     fiducial_phi = _daughter_fiducial(event, system.phi, cfg, "kaon")
 
     # ── Per-object matching: check ALL candidates ──
+    # Each flag is existential (``any`` matching candidate/track).  Therefore
+    # ``s_cand`` below means that all three GEN objects are reconstructed in the
+    # event; it does *not* by itself require those object-level successes to be
+    # carried by one common composite candidate.  The event-level chain below
+    # supplies that stricter triple-GEN-matched composite requirement.
     matched_candidates: list[int] = []
     lead_muonRECO = False
     sublead_muonRECO = False
@@ -1049,7 +1054,11 @@ def build_event_efficiency_row(
             if not phi_dikaon_flag:
                 phi_dikaon_flag = _phi_quality(event, cand_idx, cfg)
 
-    # ── Event-level: only for gen-matched candidates ──
+    # ── Event-level: only for triple-GEN-matched composite candidates ──
+    # The raw flags are ORs over matching candidates.  In particular, the
+    # candidate satisfying four_muon_vtx and the one satisfying a Pri_* flag
+    # need not be the same candidate.  Keep this event-existence definition in
+    # mind when comparing with a strictly per-candidate cutflow.
     hlt_raw = False
     four_muon_raw = False
     pri_valid_raw = False
@@ -1075,6 +1084,8 @@ def build_event_efficiency_row(
         if not pri_track_raw:
             pri_track_raw = to_int_idx(_event_value(event, "Pri_trackPVPass", cand_idx, 0), 0) == 1
 
+    # Object-level prerequisite for the event chain.  See the existential
+    # matching note above: this is not a common-candidate selection.
     s_cand = (
         fiducial_jpsi_lead and lead_muonRECO and lead_muonID and lead_dimuon
         and fiducial_jpsi_sublead and sublead_muonRECO and sublead_muonID and sublead_dimuon
@@ -1092,6 +1103,8 @@ def build_event_efficiency_row(
         hlt_event = s_cand and trigger_or
         hlt_muon_matched = hlt_event and hlt_raw
     four_muon_vtx = hlt_muon_matched and four_muon_raw
+    # Pri_* are parallel endpoints, all conditional on four_muon_vtx.  They are
+    # deliberately not a serial Pri_fitValid -> Pri_fitPass -> ... chain.
     Pri_fitValid = four_muon_vtx and pri_valid_raw
     Pri_fitPass = four_muon_vtx and pri_pass_raw
     Pri_assocPVPass = four_muon_vtx and pri_assoc_raw
@@ -1941,14 +1954,19 @@ def _process_efficiency_chunk_vectorized(
         phi_kaonID = per_obj_singles["phi_kaonID"]
         phi_dikaon = per_obj_singles["phi_dikaon"]
 
-    # Derived flags
+    # Derived flags.  The object flags may come from the singles collection in
+    # v1.6+/v2.0; consequently s_cand is an event-level conjunction, not proof
+    # that one composite candidate realizes every object-level requirement.
     s_cand = (
         fiducial_jpsi_lead & jpsi_lead_muonRECO & jpsi_lead_muonID & jpsi_lead_dimuon
         & fiducial_jpsi_sublead & jpsi_sublead_muonRECO & jpsi_sublead_muonID & jpsi_sublead_dimuon
         & fiducial_phi & phi_kaonRECO & phi_kaonID & phi_dikaon
     )
 
-    # Event-level flags: s_cand → hlt_event (inc. per-muon trigger+filter matching) → four_muon_vtx
+    # Event-level flags: s_cand → hlt_event (inc. per-muon trigger+filter matching) → four_muon_vtx.
+    # Each ``ak.any`` below is an existential OR over triple-GEN-matched
+    # composites, so different raw event conditions can be satisfied by
+    # different candidates in a multi-candidate event.
     _trigger_or = hlt_event_path_or != 0
     _four_muon_raw = ak.any(matched_candidate & four_muon_same, axis=1)
     _pri_valid_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_fitValid"]) == 1), axis=1)
