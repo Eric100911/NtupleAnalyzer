@@ -165,8 +165,8 @@ may be applied depending on the analysis working point.
 
 | Role | Branch / logic |
 |------|----------------|
-| Denominator (passed per-object steps) | Events with at least one valid dimuon candidate (Run B, full chain) |
-| Numerator (passes THIS step) | Denominator events where at least one configured J/ψ trigger path fired AND the candidate muons have trigger-object matching |
+| Denominator (passed per-object steps) | `s_cand`: events where both J/ψ and the φ pass their complete per-object chains |
+| Numerator (passes THIS step) | Denominator events where a configured J/ψ trigger path fired AND at least one triple-GEN-matched composite candidate has the required trigger-object match |
 
 **Event-level trigger information** (one entry per HLT path in the event):
 
@@ -203,8 +203,14 @@ was performed.
    `Jpsi_1_mu_2_Idx` to look up the muon indices.
 3. Check `muJpsiMatchedTriggerIndices[muIdx]` — non-empty means this muon's
    trigger objects matched a configured J/ψ trigger path.
-4. A candidate passes trigger matching when at least one of its daughter muons
-   has a non-empty `muJpsiMatchedTriggerIndices`.
+4. A candidate passes trigger matching when the required daughter-muon pair
+   satisfies the configured trigger and filter association.
+
+The event-level reduction is made only after applying all later event cuts on
+the same triple-GEN-matched composite candidate. This prevents trigger matching,
+`DiOnia_*`, and `Pri_*` values from different candidates in a multi-candidate
+event from being combined. The nominal definition is therefore
+`N(s_cand && HLT path fired && candidate muon matched) / N(s_cand)`.
 
 The `muIsJpsiTrigMatch` flag alone is NOT sufficient for trigger-object
 matching — it only indicates the trigger fired for the event, not that a

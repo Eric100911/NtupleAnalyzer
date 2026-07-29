@@ -17,6 +17,9 @@ efficiency_map_products/
 test_output/
 test_response_output/
 test_data/
+!test_data/
+!test_data/jjp_dps2_cs_v21_first200.root
+!test_data/jjp_dps2_cs_v21_first200.manifest.json
 single_object_efficiency_20260609/
 stacked_jpsi_pt_absy_20260605/
 stacked_jpsi_pt_absy_only_20260605/

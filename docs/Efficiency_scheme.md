@@ -16,8 +16,10 @@
 ### Current implementation notes
 
 The parquet efficiency workflow stores object-level reconstruction and ID steps
-as conditional chains, then switches to event-level flags. The nominal event
-chain is:
+as conditional chains, then switches to event-level flags. `s_cand` is the
+event-level conjunction of the three object chains. Its object successes may be
+found in different single-object candidates; it is not itself a common-composite
+selection. The nominal event chain is:
 
 ```text
 s_cand -> hlt_event -> four_muon_vtx
@@ -32,6 +34,19 @@ Pri_fitPass
 Pri_assocPVPass
 Pri_trackPVPass
 ```
+
+From `hlt_muon_matched` onward, the implementation preserves the composite
+candidate axis until the final event-level reduction. A passing event must have
+at least one *single* triple-GEN-matched composite candidate that passes all
+stages in sequence. Thus, a four-muon vertex from candidate A and an
+`Pri_assocPVPass` value from candidate B cannot be combined into one passing
+event. The `Pri_*` endpoints remain parallel alternatives, each conditional on
+that same-candidate `four_muon_vtx` chain.
+
+Per-object daughter matching is exact: each direct GEN muon (kaon) of the
+chosen J/psi (phi) must have a separately GEN-index-matched RECO muon (track).
+Two duplicate RECO objects matched to the same GEN daughter do not satisfy the
+two-daughter requirement.
 
 For corrected-yield studies the default correction is factorized rather than a
 single cumulative `correlated_3d` lookup. It multiplies per-object acceptance and
@@ -49,6 +64,43 @@ The nominal central value uses observed bin efficiencies after fallback
 selection. Jeffreys symmetric binomial uncertainties are stored for each bin and
 used for MC-stat diagnostics. The default thresholds are `N_min_fine = 30` and
 `N_min_coarse = 50`.
+
+The factorized-map `manifest.json` records every factor's explicit numerator
+and denominator. In particular, the nominal HLT factor is
+
+$$
+\epsilon_{\mathrm{HLT}}
+= \frac{N(s_{\mathrm{cand}}\cap \mathrm{HLT\ path\ fired}\cap
+\mathrm{candidate\ muon\ matched})}{N(s_{\mathrm{cand}})}.
+$$
+
+### Small-sample validation and residual checks
+
+`test_data/jjp_dps2_cs_v21_first200.root` is a committed, complete-branch
+200-event fixture copied from the v2.1-compatible MC Production v3 JJP DPS2 CS
+ntuple. It retains `mkcands/X_data`, `X_config`, and `X_lhe_run_info`; its
+SHA-256 and source are recorded in the adjacent manifest. Regenerate it only
+when intentionally updating the reference sample:
+
+```bash
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+python3 scripts/efficiency/build_v21_test_fixture.py
+python3 scripts/efficiency/diagnose_gen_match_depth.py \
+  test_data/jjp_dps2_cs_v21_first200.root
+```
+
+After producing a shard or merged sample directory from this fixture, inspect
+residual dependence on variables omitted from the event maps:
+
+```bash
+python3 scripts/efficiency/diagnose_omitted_event_variables.py \
+  <sample_dir> --output omitted_event_variable_closure.parquet
+```
+
+The diagnostic reports direct conditional efficiencies for HLT, four-muon
+vertexing, and `Pri_assocPVPass` versus both J/psi rapidities and phi `(pT,|y|)`.
+With 200 events it is a visual/sanity check only; empty or low-count bins are
+not evidence for a physics residual.
 
 The stacked J/psi derived plots are diagnostics for the two J/psi objects
 combined into one per-object map. Their parquet products use direct

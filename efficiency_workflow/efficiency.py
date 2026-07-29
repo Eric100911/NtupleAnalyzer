@@ -1054,67 +1054,63 @@ def build_event_efficiency_row(
             if not phi_dikaon_flag:
                 phi_dikaon_flag = _phi_quality(event, cand_idx, cfg)
 
-    # ── Event-level: only for triple-GEN-matched composite candidates ──
-    # The raw flags are ORs over matching candidates.  In particular, the
-    # candidate satisfying four_muon_vtx and the one satisfying a Pri_* flag
-    # need not be the same candidate.  Keep this event-existence definition in
-    # mind when comparing with a strictly per-candidate cutflow.
-    hlt_raw = False
-    four_muon_raw = False
-    pri_valid_raw = False
-    pri_pass_raw = False
-    pri_assoc_raw = False
-    pri_track_raw = False
+    # ── Event-level: retain the candidate axis until the final reduction ──
+    # A triple-GEN-matched candidate must pass every successive event-level
+    # requirement itself.  Reducing each condition independently would allow
+    # different candidates in the same event to satisfy different stages.
+    candidate_chain: list[dict[str, bool]] = []
 
     for cand_idx in range(n_candidates):
         if not _candidate_matches_system(event, cand_idx, system):
             continue
         matched_candidates.append(cand_idx)
+        candidate_chain.append({
+            "hlt": _candidate_hlt_muon_matched(event, cand_idx),
+            "four_muon": _candidate_four_muon_vtx(event, cand_idx),
+            "pri_valid": to_int_idx(_event_value(event, "Pri_fitValid", cand_idx, 0), 0) == 1,
+            "pri_pass": to_int_idx(_event_value(event, "Pri_fitPass", cand_idx, 0), 0) == 1,
+            "pri_assoc": to_int_idx(_event_value(event, "Pri_assocPVPass", cand_idx, 0), 0) == 1,
+            "pri_track": to_int_idx(_event_value(event, "Pri_trackPVPass", cand_idx, 0), 0) == 1,
+        })
 
-        if not hlt_raw:
-            hlt_raw = _candidate_hlt_muon_matched(event, cand_idx)
-        if not four_muon_raw:
-            four_muon_raw = _candidate_four_muon_vtx(event, cand_idx)
-        if not pri_valid_raw:
-            pri_valid_raw = to_int_idx(_event_value(event, "Pri_fitValid", cand_idx, 0), 0) == 1
-        if not pri_pass_raw:
-            pri_pass_raw = to_int_idx(_event_value(event, "Pri_fitPass", cand_idx, 0), 0) == 1
-        if not pri_assoc_raw:
-            pri_assoc_raw = to_int_idx(_event_value(event, "Pri_assocPVPass", cand_idx, 0), 0) == 1
-        if not pri_track_raw:
-            pri_track_raw = to_int_idx(_event_value(event, "Pri_trackPVPass", cand_idx, 0), 0) == 1
-
-    # Object-level prerequisite for the event chain.  See the existential
-    # matching note above: this is not a common-candidate selection.
+    # Object-level prerequisite for the event chain.  The strict common-
+    # candidate requirement is applied below, after this per-object stage.
     s_cand = (
         fiducial_jpsi_lead and lead_muonRECO and lead_muonID and lead_dimuon
         and fiducial_jpsi_sublead and sublead_muonRECO and sublead_muonID and sublead_dimuon
         and fiducial_phi and phi_kaonRECO_flag and phi_kaonID_flag and phi_dikaon_flag
     )
-    # hlt_event = trigger OR + per-muon trigger+filter matching (when available)
+    # hlt_event = trigger path fired, conditional on s_cand.  The nominal HLT
+    # factor is therefore N(s_cand && path && muon matched) / N(s_cand).
     trigger_or = _event_path_or(event)
     if "muJpsiMatchedTriggerIndices" in event:
         # v2.0+: per-path matching folded into hlt_event; indices 0=Dimuon0, 1=DoubleMu
         hlt_full = _python_loop_full_hlt_match(event, system)
+        # This legacy backend is not used for v2 ntuples; preserve its
+        # historical full-event matcher while keeping later stages candidate
+        # consistent where candidate information is available.
         hlt_event = s_cand and trigger_or and hlt_full
-        hlt_muon_matched = hlt_event
+        candidate_hlt = [bool(hlt_event)] * len(candidate_chain)
     else:
         # v1.0: heuristic trigger matching as separate step
         hlt_event = s_cand and trigger_or
-        hlt_muon_matched = hlt_event and hlt_raw
-    four_muon_vtx = hlt_muon_matched and four_muon_raw
+        candidate_hlt = [hlt_event and item["hlt"] for item in candidate_chain]
+    candidate_four_muon = [passed and item["four_muon"] for passed, item in zip(candidate_hlt, candidate_chain)]
+    hlt_muon_matched = any(candidate_hlt)
+    four_muon_vtx = any(candidate_four_muon)
     # Pri_* are parallel endpoints, all conditional on four_muon_vtx.  They are
     # deliberately not a serial Pri_fitValid -> Pri_fitPass -> ... chain.
-    Pri_fitValid = four_muon_vtx and pri_valid_raw
-    Pri_fitPass = four_muon_vtx and pri_pass_raw
-    Pri_assocPVPass = four_muon_vtx and pri_assoc_raw
-    Pri_trackPVPass = four_muon_vtx and pri_track_raw
+    Pri_fitValid = any(passed and item["pri_valid"] for passed, item in zip(candidate_four_muon, candidate_chain))
+    Pri_fitPass = any(passed and item["pri_pass"] for passed, item in zip(candidate_four_muon, candidate_chain))
+    Pri_assocPVPass = any(passed and item["pri_assoc"] for passed, item in zip(candidate_four_muon, candidate_chain))
+    Pri_trackPVPass = any(passed and item["pri_track"] for passed, item in zip(candidate_four_muon, candidate_chain))
     # Chain A: without trigger matching
-    four_muon_vtx_noTrigMatch = hlt_event and four_muon_raw
-    Pri_fitValid_noTrigMatch = four_muon_vtx_noTrigMatch and pri_valid_raw
-    Pri_fitPass_noTrigMatch = four_muon_vtx_noTrigMatch and pri_pass_raw
-    Pri_assocPVPass_noTrigMatch = four_muon_vtx_noTrigMatch and pri_assoc_raw
-    Pri_trackPVPass_noTrigMatch = four_muon_vtx_noTrigMatch and pri_track_raw
+    candidate_four_no_trig = [hlt_event and item["four_muon"] for item in candidate_chain]
+    four_muon_vtx_noTrigMatch = any(candidate_four_no_trig)
+    Pri_fitValid_noTrigMatch = any(passed and item["pri_valid"] for passed, item in zip(candidate_four_no_trig, candidate_chain))
+    Pri_fitPass_noTrigMatch = any(passed and item["pri_pass"] for passed, item in zip(candidate_four_no_trig, candidate_chain))
+    Pri_assocPVPass_noTrigMatch = any(passed and item["pri_assoc"] for passed, item in zip(candidate_four_no_trig, candidate_chain))
+    Pri_trackPVPass_noTrigMatch = any(passed and item["pri_track"] for passed, item in zip(candidate_four_no_trig, candidate_chain))
 
     gen_score = system.jpsi_lead.pt ** 2 + system.jpsi_sublead.pt ** 2 + system.phi.pt ** 2
 
@@ -1261,12 +1257,14 @@ def _compute_full_hlt_match_vectorized(
     trig_filt_map: dict[str, int],
     like: ak.Array,
 ) -> ak.Array:
-    """Per-event full HLT match: trigger path OR + per-muon trigger+filter matching.
+    """Return the full trigger/filter match mask for each composite candidate.
 
     Requires BOTH trigger index AND filter index present for each matched muon.
     Filters are pair-level: both muons of at least one J/psi dimuon pair must match.
 
-    Returns boolean array (one per event).
+    The returned shape is ``(event, candidate)``.  The caller must combine it
+    with the event trigger-path bit and the triple-GEN-match mask before the
+    only event-level ``ak.any`` reduction.
     """
     zero = ak.values_astype(ak.zeros_like(like), bool)
 
@@ -1322,10 +1320,30 @@ def _compute_full_hlt_match_vectorized(
     j2_pair_dm = j2_mu1_dm & j2_mu2_dm
     match_doublemu = j1_pair_dm | j2_pair_dm
 
-    # Per-candidate -> per-event: any candidate with full HLT match.
-    # One-candidate-per-event shards can already be event-level 1D arrays.
-    result = match_dimuon0 | match_doublemu
-    return ak.any(result, axis=1) if result.ndim > 1 else result
+    return match_dimuon0 | match_doublemu
+
+
+def _daughter_reco_passes(
+    reco_gen_match: ak.Array,
+    gen_pdg: ak.Array,
+    gen_mother: ak.Array,
+    parent_idx: ak.Array,
+    daughter_abs_pdg: int,
+    reco_quality: ak.Array | None = None,
+) -> ak.Array:
+    """Require each direct GEN daughter of a parent to have a matching RECO object.
+
+    Matching is by the exact stored GEN index, not merely by a shared parent.
+    This prevents two duplicate RECO objects matched to one daughter from being
+    mistaken for the two daughter legs of a J/psi or phi.
+    """
+    gen_idx = ak.local_index(gen_pdg)
+    daughters = gen_idx[(abs(gen_pdg) == daughter_abs_pdg) & (gen_mother == parent_idx[:, None])]
+    exact_match = reco_gen_match[:, None, :] == daughters[:, :, None]
+    if reco_quality is not None:
+        exact_match = exact_match & reco_quality[:, None, :]
+    daughter_passes = ak.any(exact_match, axis=-1)
+    return (ak.num(daughters, axis=1) >= 2) & ak.all(daughter_passes, axis=1)
 
 
 def _compute_per_object_flags_v16(
@@ -1359,17 +1377,12 @@ def _compute_per_object_flags_v16(
     # ── J/psi side ──
     # muonRECO and muonID: direct from PAT muon block (muGenMatchIdx + muIsPatSoftMuon)
     if {"muGenMatchIdx", "muIsPatSoftMuon"}.issubset(arrays.fields):
-        mu_gen_match = arrays["muGenMatchIdx"]
+        mu_gen_match = _as_index_array(arrays["muGenMatchIdx"])
         mu_soft = ak.values_astype(arrays["muIsPatSoftMuon"], bool)
-        mu_ancestor = _ancestor_idx_to_pdg(mu_gen_match, pdg, mother, 443)
-
-        j1_matches = mu_ancestor == jpsi1_idx[:, None]
-        j2_matches = mu_ancestor == jpsi2_idx[:, None]
-
-        result["jpsi_lead_muonRECO"] = ak.sum(j1_matches, axis=1) >= 2
-        result["jpsi_sublead_muonRECO"] = ak.sum(j2_matches, axis=1) >= 2
-        result["jpsi_lead_muonID"] = ak.sum(j1_matches & mu_soft, axis=1) >= 2
-        result["jpsi_sublead_muonID"] = ak.sum(j2_matches & mu_soft, axis=1) >= 2
+        result["jpsi_lead_muonRECO"] = _daughter_reco_passes(mu_gen_match, pdg, mother, jpsi1_idx, 13)
+        result["jpsi_sublead_muonRECO"] = _daughter_reco_passes(mu_gen_match, pdg, mother, jpsi2_idx, 13)
+        result["jpsi_lead_muonID"] = _daughter_reco_passes(mu_gen_match, pdg, mother, jpsi1_idx, 13, mu_soft)
+        result["jpsi_sublead_muonID"] = _daughter_reco_passes(mu_gen_match, pdg, mother, jpsi2_idx, 13, mu_soft)
 
     # dimuon: requires SingleJpsi candidate (vertex fit, mass window)
     if {"SingleJpsi_mass", "SingleJpsi_mu1_Idx", "SingleJpsi_mu2_Idx"}.issubset(arrays.fields):
@@ -1409,11 +1422,7 @@ def _compute_per_object_flags_v16(
     # ── φ side ──
     # kaonRECO and kaonID: direct from RecoKaonTrack block (genMatchIdx + quality)
     if "RecoKaonTrack_genMatchIdx" in arrays.fields:
-        rk_gen_match = arrays["RecoKaonTrack_genMatchIdx"]
-        rk_ancestor = _ancestor_idx_to_pdg(rk_gen_match, pdg, mother, 333)
-
-        phi_matches = rk_ancestor == phi_idx[:, None]
-        result["phi_kaonRECO"] = ak.sum(phi_matches, axis=1) >= 2
+        rk_gen_match = _as_index_array(arrays["RecoKaonTrack_genMatchIdx"])
 
         if {"RecoKaonTrack_normalizedChi2", "RecoKaonTrack_numberOfHits", "RecoKaonTrack_isHighPurity"}.issubset(arrays.fields):
             rk_pass = (
@@ -1427,7 +1436,8 @@ def _compute_per_object_flags_v16(
                 (arrays["RecoKaonTrack_pt"] > cfg.track_pt_min)
                 & (abs(arrays["RecoKaonTrack_eta"]) < cfg.track_abs_eta_max)
             )
-        result["phi_kaonID"] = ak.sum(phi_matches & rk_pass, axis=1) >= 2
+        result["phi_kaonRECO"] = _daughter_reco_passes(rk_gen_match, pdg, mother, phi_idx, 321)
+        result["phi_kaonID"] = _daughter_reco_passes(rk_gen_match, pdg, mother, phi_idx, 321, rk_pass)
 
     # dikaon: requires SinglePhi candidate (vertex fit, mass window)
     if {"SinglePhi_mass", "SinglePhi_K1_RecoKaonTrackIdx", "SinglePhi_K2_RecoKaonTrackIdx"}.issubset(arrays.fields):
@@ -1867,17 +1877,12 @@ def _process_efficiency_chunk_vectorized(
     # ── Per-object step flags (Efficiency_scheme.md) ──
     # muonRECO and muonID: prefer per-muon block; fall back to composite legs
     if {"muGenMatchIdx", "muIsPatSoftMuon"}.issubset(arrays.fields):
-        mu_gen_match = arrays["muGenMatchIdx"]
+        mu_gen_match = _as_index_array(arrays["muGenMatchIdx"])
         mu_soft = ak.values_astype(arrays["muIsPatSoftMuon"], bool)
-        mu_ancestor = _ancestor_idx_to_pdg(mu_gen_match, pdg, mother, 443)
-
-        j1_matches = mu_ancestor == jpsi1_idx[:, None]
-        j2_matches = mu_ancestor == jpsi2_idx[:, None]
-
-        jpsi_lead_muonRECO = ak.sum(j1_matches, axis=1) >= 2
-        jpsi_sublead_muonRECO = ak.sum(j2_matches, axis=1) >= 2
-        jpsi_lead_muonID = ak.sum(j1_matches & mu_soft, axis=1) >= 2
-        jpsi_sublead_muonID = ak.sum(j2_matches & mu_soft, axis=1) >= 2
+        jpsi_lead_muonRECO = _daughter_reco_passes(mu_gen_match, pdg, mother, jpsi1_idx, 13)
+        jpsi_sublead_muonRECO = _daughter_reco_passes(mu_gen_match, pdg, mother, jpsi2_idx, 13)
+        jpsi_lead_muonID = _daughter_reco_passes(mu_gen_match, pdg, mother, jpsi1_idx, 13, mu_soft)
+        jpsi_sublead_muonID = _daughter_reco_passes(mu_gen_match, pdg, mother, jpsi2_idx, 13, mu_soft)
     else:
         # J/psi lead
         jpsi_lead_muonRECO = has_jpsi1_reco
@@ -1906,11 +1911,7 @@ def _process_efficiency_chunk_vectorized(
     )
     # Phi: prefer per-RecoKaonTrack; fall back to composite phi legs
     if "RecoKaonTrack_genMatchIdx" in arrays.fields:
-        rk_gen_match = arrays["RecoKaonTrack_genMatchIdx"]
-        rk_ancestor = _ancestor_idx_to_pdg(rk_gen_match, pdg, mother, 333)
-
-        phi_matches = rk_ancestor == phi_idx[:, None]
-        phi_kaonRECO = ak.sum(phi_matches, axis=1) >= 2
+        rk_gen_match = _as_index_array(arrays["RecoKaonTrack_genMatchIdx"])
 
         if {"RecoKaonTrack_normalizedChi2", "RecoKaonTrack_numberOfHits", "RecoKaonTrack_isHighPurity"}.issubset(arrays.fields):
             rk_pass = (
@@ -1924,7 +1925,8 @@ def _process_efficiency_chunk_vectorized(
                 (arrays["RecoKaonTrack_pt"] > cfg.track_pt_min)
                 & (abs(arrays["RecoKaonTrack_eta"]) < cfg.track_abs_eta_max)
             )
-        phi_kaonID = ak.sum(phi_matches & rk_pass, axis=1) >= 2
+        phi_kaonRECO = _daughter_reco_passes(rk_gen_match, pdg, mother, phi_idx, 321)
+        phi_kaonID = _daughter_reco_passes(rk_gen_match, pdg, mother, phi_idx, 321, rk_pass)
     else:
         phi_kaonRECO = ak.any(phi_leg == phi_idx, axis=1)
         phi_kaonID = ak.any((phi_leg == phi_idx) & phi_kaonID_raw, axis=1)
@@ -1963,16 +1965,12 @@ def _process_efficiency_chunk_vectorized(
         & fiducial_phi & phi_kaonRECO & phi_kaonID & phi_dikaon
     )
 
-    # Event-level flags: s_cand → hlt_event (inc. per-muon trigger+filter matching) → four_muon_vtx.
-    # Each ``ak.any`` below is an existential OR over triple-GEN-matched
-    # composites, so different raw event conditions can be satisfied by
-    # different candidates in a multi-candidate event.
+    # Keep all event selections on the candidate axis until the final reduction.
+    # This prevents one matched candidate from supplying the vertex requirement
+    # while another supplies a Pri_* requirement in the same event.
     _trigger_or = hlt_event_path_or != 0
-    _four_muon_raw = ak.any(matched_candidate & four_muon_same, axis=1)
-    _pri_valid_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_fitValid"]) == 1), axis=1)
-    _pri_pass_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_fitPass"]) == 1), axis=1)
-    _pri_assoc_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_assocPVPass"]) == 1), axis=1)
-    _pri_track_raw = ak.any(matched_candidate & (_as_index_array(arrays["Pri_trackPVPass"]) == 1), axis=1)
+    candidate_base = matched_candidate & s_cand[:, None]
+    candidate_hlt_path = candidate_base & _trigger_or[:, None]
 
     _full_hlt_match = _compute_full_hlt_match_vectorized(
         arrays, j1_mu1_idx, j1_mu2_idx, j2_mu1_idx, j2_mu2_idx,
@@ -1980,28 +1978,38 @@ def _process_efficiency_chunk_vectorized(
     )
     _has_trigger_indices = "muJpsiMatchedTriggerIndices" in arrays.fields
     if _has_trigger_indices and trig_filt_map:
-        # v2.0+: per-path trigger+filter matching folded into hlt_event
-        hlt_event = s_cand & _trigger_or & _full_hlt_match
-        hlt_muon_matched = hlt_event
+        # v2.0+: require the configured path and its matching filter objects
+        # on the same triple-GEN-matched composite candidate.
+        candidate_hlt_matched = candidate_hlt_path & _full_hlt_match
     else:
         # v1.6 fallback: heuristic trigger matching as separate step
-        _hlt_trigger_match_raw = ak.any(matched_candidate & candidate_hlt, axis=1)
-        hlt_event = s_cand & _trigger_or
-        hlt_muon_matched = hlt_event & _hlt_trigger_match_raw
+        candidate_hlt_matched = candidate_hlt_path & candidate_hlt
 
-    four_muon_vtx = hlt_muon_matched & _four_muon_raw
-    # Pri_* flags are parallel: all conditioned on four_muon_vtx, not on each other
-    Pri_fitValid = four_muon_vtx & _pri_valid_raw
-    Pri_fitPass = four_muon_vtx & _pri_pass_raw
-    Pri_assocPVPass = four_muon_vtx & _pri_assoc_raw
-    Pri_trackPVPass = four_muon_vtx & _pri_track_raw
+    candidate_four_muon_vtx = candidate_hlt_matched & four_muon_same
+    candidate_pri_valid = candidate_four_muon_vtx & (_as_index_array(arrays["Pri_fitValid"]) == 1)
+    candidate_pri_pass = candidate_four_muon_vtx & (_as_index_array(arrays["Pri_fitPass"]) == 1)
+    candidate_pri_assoc = candidate_four_muon_vtx & (_as_index_array(arrays["Pri_assocPVPass"]) == 1)
+    candidate_pri_track = candidate_four_muon_vtx & (_as_index_array(arrays["Pri_trackPVPass"]) == 1)
+
+    # ``hlt_event`` is the event trigger-path stage.  It intentionally does
+    # not require a reconstructed composite candidate; that requirement first
+    # enters the candidate-resolved muon-matching stage below.
+    hlt_event = s_cand & _trigger_or
+    hlt_muon_matched = ak.any(candidate_hlt_matched, axis=1)
+    four_muon_vtx = ak.any(candidate_four_muon_vtx, axis=1)
+    # Pri_* are parallel endpoints, each evaluated on the same 4-muon candidate.
+    Pri_fitValid = ak.any(candidate_pri_valid, axis=1)
+    Pri_fitPass = ak.any(candidate_pri_pass, axis=1)
+    Pri_assocPVPass = ak.any(candidate_pri_assoc, axis=1)
+    Pri_trackPVPass = ak.any(candidate_pri_track, axis=1)
 
     # Chain A: without trigger matching (_noTrigMatch suffixed columns)
-    four_muon_vtx_noTrigMatch = hlt_event & _four_muon_raw
-    Pri_fitValid_noTrigMatch = four_muon_vtx_noTrigMatch & _pri_valid_raw
-    Pri_fitPass_noTrigMatch = four_muon_vtx_noTrigMatch & _pri_pass_raw
-    Pri_assocPVPass_noTrigMatch = four_muon_vtx_noTrigMatch & _pri_assoc_raw
-    Pri_trackPVPass_noTrigMatch = four_muon_vtx_noTrigMatch & _pri_track_raw
+    candidate_four_no_trig = candidate_hlt_path & four_muon_same
+    four_muon_vtx_noTrigMatch = ak.any(candidate_four_no_trig, axis=1)
+    Pri_fitValid_noTrigMatch = ak.any(candidate_four_no_trig & (_as_index_array(arrays["Pri_fitValid"]) == 1), axis=1)
+    Pri_fitPass_noTrigMatch = ak.any(candidate_four_no_trig & (_as_index_array(arrays["Pri_fitPass"]) == 1), axis=1)
+    Pri_assocPVPass_noTrigMatch = ak.any(candidate_four_no_trig & (_as_index_array(arrays["Pri_assocPVPass"]) == 1), axis=1)
+    Pri_trackPVPass_noTrigMatch = ak.any(candidate_four_no_trig & (_as_index_array(arrays["Pri_trackPVPass"]) == 1), axis=1)
     # GEN score (unified with RECO: summed pT²)
     gen_score = jpsi1_pt ** 2 + jpsi2_pt ** 2 + phi_pt ** 2
 
@@ -2108,9 +2116,15 @@ def process_efficiency_file_vectorized(
     gen_parts: list[pd.DataFrame] = []
     event_parts: list[pd.DataFrame] = []
     trig_filt_map = _read_trigger_filter_config(path)
+    # Resolve aliases against this file before asking uproot to deserialize.
+    # Passing absent branch names as expressions is not portable across uproot
+    # versions (and fails for legitimate v2.1 files that omit legacy aliases).
+    with uproot.open(path, **_uproot_read_options(path)) as root_file:
+        available_branches = set(root_file[tree_path].keys())
+    selected_branches = [name for name in ALL_KNOWN_BRANCHES if name in available_branches]
     iterator = uproot.iterate(
         f"{path}:{tree_path}",
-        filter_name=list(ALL_KNOWN_BRANCHES),
+        filter_name=selected_branches,
         library="ak",
         step_size=step_size,
         report=True,

@@ -348,6 +348,7 @@ def build_factorized_maps_for_sample(
         write_parquet(factor_df, out_path)
         written[factor_name] = out_path
 
+    specs = {name: spec for name, (_, spec) in factor_specs(binning, event_end_step=event_end_step).items()}
     manifest = {
         "stage": "factorized_efficiency_maps",
         "source": str(input_sample_dir.resolve()),
@@ -356,6 +357,14 @@ def build_factorized_maps_for_sample(
         "n_event_rows": int(len(event_df)),
         "n_merged_rows": int(len(merged)),
         "maps": {name: path.name for name, path in written.items()},
+        "factor_definitions": {
+            name: {
+                "numerator": spec.numerator_col,
+                "denominator": spec.denominator_col,
+                "definition": f"N({spec.denominator_col} AND {spec.numerator_col}) / N({spec.denominator_col})",
+            }
+            for name, spec in specs.items()
+        },
     }
     write_json(manifest, output_maps_dir / "manifest.json")
     return written

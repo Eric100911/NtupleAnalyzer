@@ -37,6 +37,7 @@ from efficiency_workflow.efficiency import (
     _safe_second,
     _scalar_rapidity_array,
     _compute_full_hlt_match_vectorized,
+    _daughter_reco_passes,
 )
 
 
@@ -110,8 +111,8 @@ class TestStepDefinitions:
         assert PER_PHI_STEPS[0] == "fiducial"
         assert PER_PHI_STEPS == ("fiducial", "kaonRECO", "kaonID", "dikaon")
 
-    def test_full_hlt_match_accepts_single_candidate_event_arrays(self):
-        """One candidate per event produces a 1D result and must not reduce on axis=1."""
+    def test_full_hlt_match_keeps_single_candidate_axis(self):
+        """The helper preserves the candidate axis for the caller's strict chain."""
         trig_filt_map = {
             "dimuon0_trig": 0,
             "dimuon0_filt": 0,
@@ -139,10 +140,10 @@ class TestStepDefinitions:
             trig_filt_map,
             ak.Array([[True], [True], [True]]),
         )
-        assert result.ndim == 1
-        assert result.tolist() == [True, False, True]
+        assert result.ndim == 2
+        assert result.tolist() == [[True], [False], [True]]
 
-    def test_full_hlt_match_reduces_jagged_candidate_arrays_per_event(self):
+    def test_full_hlt_match_keeps_jagged_candidate_arrays(self):
         trig_filt_map = {
             "dimuon0_trig": 0,
             "dimuon0_filt": 0,
@@ -170,8 +171,18 @@ class TestStepDefinitions:
             trig_filt_map,
             ak.Array([[True, True], [True], []]),
         )
-        assert result.ndim == 1
-        assert result.tolist() == [True, False, False]
+        assert result.ndim == 2
+        assert result.tolist() == [[True, True], [False], []]
+
+    def test_daughter_matching_rejects_duplicate_reco_match(self):
+        """Two RECO objects matched to one GEN muon cannot form a J/psi pair."""
+        pdg = ak.Array([[443, 13, -13]])
+        mother = ak.Array([[-1, 0, 0]])
+        parent = ak.Array([0])
+        duplicate_first_daughter = ak.Array([[1, 1]])
+        complete_pair = ak.Array([[1, 2]])
+        assert _daughter_reco_passes(duplicate_first_daughter, pdg, mother, parent, 13).tolist() == [False]
+        assert _daughter_reco_passes(complete_pair, pdg, mother, parent, 13).tolist() == [True]
 
 
 # ── Integration tests (require a single ROOT file) ──

@@ -1,0 +1,13 @@
+{
+  "source": "root://cceos.ihep.ac.cn///eos/ihep/cms/store/user/xcheng/MC_Production_v3/output/JJP_DPS2_CS/0/output_ntuple.root",
+  "source_x_data_entries": 1223,
+  "entry_start": 0,
+  "entry_stop": 200,
+  "x_data_branch_count": 480,
+  "trees": [
+    "mkcands/X_data",
+    "mkcands/X_config",
+    "mkcands/X_lhe_run_info"
+  ],
+  "sha256": "f5ec56c5a598986ff26364c69eabe45412ff76dd5526ca1ba78c62fce3ad0275"
+}

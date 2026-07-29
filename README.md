@@ -499,7 +499,10 @@ The `hlt_muon_matched` step requires either a J/ψ dimuon pair matched (2-muon c
 ### Candidate handling
 
 **Data:** single best candidate per event by `sqrt(pt1² + pt2² + pt3²)` score.  
-**MC efficiency:** "any matched candidate" OR logic — event passes if ≥1 reco candidate matches the gen system.  
+**MC efficiency:** event-level stages use an existential reduction only after
+applying the full HLT → four-muon → Pri chain to each triple-GEN-matched
+candidate. Thus one candidate must satisfy the complete selected chain; stages
+from different candidates are not mixed.
 **Gen system:** 2 highest-pT J/ψ + 1 highest-pT φ (extra gen φ mesons present in ~1.8% of events).  
 **Response matrix:** best-by-quality-score candidate stored in `reco_best_*` columns for migration studies.
 
