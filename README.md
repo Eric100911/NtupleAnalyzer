@@ -348,6 +348,24 @@ python3 run_efficiency.py --analysis-mode JpsiJpsiPhi \
 python3 build_derived_efficiency.py --input-dir /tmp/chiw/eff_test
 ```
 
+### Audit efficiency event membership
+
+Use the event audit to inspect numerator, denominator, rejected, and raw-only
+membership with the underlying GEN, RECO, trigger, and composite-candidate
+evidence:
+
+```bash
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+python3 scripts/efficiency/audit_efficiency_events.py \
+  test_data/test_JpsiJpsiPhi_v2p0_patch1_numEvent118.root \
+  --output-dir /tmp/chiw/efficiency_audit
+```
+
+The output includes Markdown and JSON reports, a selection manifest, and
+complete-branch ROOT skims. See
+[`docs/Efficiency_scheme.md`](docs/Efficiency_scheme.md) for membership
+semantics, report structure, and the committed Run-B audit fixtures.
+
 ### Stacked J/psi plots only
 
 This mode rebuilds derived parquet/csv products but only renders the stacked

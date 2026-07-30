@@ -20,6 +20,8 @@ test_data/
 !test_data/
 !test_data/jjp_dps2_cs_v21_first200.root
 !test_data/jjp_dps2_cs_v21_first200.manifest.json
+!test_data/jjp_dps_patch2_pre2_runb_audit_source0_45events.root
+!test_data/jjp_dps_patch2_pre2_runb_audit_source1_35events.root
 single_object_efficiency_20260609/
 stacked_jpsi_pt_absy_20260605/
 stacked_jpsi_pt_absy_only_20260605/

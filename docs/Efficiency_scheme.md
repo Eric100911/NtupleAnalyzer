@@ -89,6 +89,53 @@ python3 scripts/efficiency/diagnose_gen_match_depth.py \
   test_data/jjp_dps2_cs_v21_first200.root
 ```
 
+For event-by-event inspection of numerator, denominator, and rejected-event
+membership, run the audit tool in the LCG 109a environment:
+
+```bash
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+python3 scripts/efficiency/audit_efficiency_events.py \
+  test_data/test_JpsiJpsiPhi_v2p0_patch1_numEvent118.root \
+  --output-dir /tmp/chiw/efficiency_audit
+```
+
+The report keeps cumulative-chain membership, adjacent-raw factor membership,
+and the existing pipeline cutflow values separate. For each step it selects up
+to five numerator, rejected, and raw-only examples and records the underlying
+GEN daughters, matched RECO objects, quality operands, trigger/filter indices,
+and composite-candidate witnesses. The output directory contains Markdown and
+JSON reports, a provenance manifest, and complete-branch ROOT skims grouped by
+source file. Use `--no-root-skim` for a report-only run.
+
+The Markdown report groups examples by `scope / step / role`. Within each
+group, one event occupies one column while selection flags, kinematics, and
+branch-level witnesses occupy rows. Object-step tables stop at the current
+step: for example, a `muonRECO` table shows fiducial and reconstruction
+evidence but not downstream muon-ID or dimuon-candidate details. The Markdown
+does not embed raw JSON; complete machine-readable evidence remains available
+in `audit_report.json`.
+
+The 118-event fixture has no `s_cand` event, so it cannot supply positive
+HLT/vertex/Pri examples. Pass larger local or XRootD inputs, or an efficiency
+input-file manifest, to enrich those categories. Missing categories are
+reported explicitly as coverage gaps.
+
+Two committed Run-B audit skims provide offline coverage of the event-level
+chain:
+
+```text
+test_data/jjp_dps_patch2_pre2_runb_audit_source0_45events.root
+test_data/jjp_dps_patch2_pre2_runb_audit_source1_35events.root
+```
+
+Together they contain 80 selected full-GEN events, including positive
+`s_cand`, HLT, trigger-object matching, four-muon vertex, and all four `Pri_*`
+endpoints, plus rejected examples through the four-muon stage. Both files
+retain the original 480-branch `mkcands/X_data` schema and the complete
+`mkcands/X_config` tree. Their source files, original entry indices, hashes,
+and selection provenance are recorded in
+`test_data/jjp_dps_patch2_pre2_runb_audit.manifest.json`.
+
 After producing a shard or merged sample directory from this fixture, inspect
 residual dependence on variables omitted from the event maps:
 
