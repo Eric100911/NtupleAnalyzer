@@ -3,6 +3,14 @@
 Maps the factorized efficiency scheme in `Efficiency_scheme.md` to the current
 ntuple branch structure and configuration system.
 
+For the executable TPS sample contract and lxplus/Condor commands, see
+[`TPS_Efficiency_Processing.md`](TPS_Efficiency_Processing.md). The current
+retained-singles Run-B sample contains both the object-level and event-level
+inputs and is the nominal source for all factors.
+
+Input ntuple inventory, retention statistics, and storage-access notes for all
+samples are in [Section 6](#6-input-ntuple-inventory--manifests).
+
 ---
 
 ## 1. Required MC runs
@@ -287,8 +295,10 @@ split by φ pT bins. Alternative endpoints may use `Pri_fitPass` or
 
 ### Step 1: Produce efficiency ntuples
 
-Run both Run A (singles-only) and Run B (full chain) on the full MC sample(s).
-Use `maxEvents=-1` to process all events.
+For a new two-run campaign, Run A remains a useful independent singles-only
+production. For the current TPS inventory, use Run B for all factors because it
+retains every single-object candidate and does not require an accepted composite
+candidate before writing the MC tree. Use `maxEvents=-1` to process all events.
 
 ### Step 2: Build per-object efficiency maps
 
@@ -299,27 +309,27 @@ For each J/ψ and φ kinematic bin `(pT, |y|)`:
    - Denominator: all GEN J/ψ (or φ) in the kinematic bin.
    - Numerator: denominator mesons where both GEN daughters are in the fiducial region.
 
-2. **muonRECO** — $\varepsilon_{\mu\mathrm{Reco}|J/\psi}$: From `SingleJpsi_*` (Run A).
+2. **muonRECO** — $\varepsilon_{\mu\mathrm{Reco}|J/\psi}$: From `SingleJpsi_*` (Run A or retained singles in Run B).
    - Denominator: `SingleJpsi` where both GEN daughters are in fiducial acceptance.
    - Numerator: denominator candidates with both `mu*_genMatchIdx >= 0`.
 
-3. **kaonRECO** — $\varepsilon_{K\mathrm{Reco}|\phi}$: From `SinglePhi_*` (Run A).
+3. **kaonRECO** — $\varepsilon_{K\mathrm{Reco}|\phi}$: From `SinglePhi_*` (Run A or retained singles in Run B).
    - Denominator: `SinglePhi` where both GEN daughters are in fiducial acceptance.
    - Numerator: denominator candidates with both `K*_genMatchIdx >= 0`.
 
-4. **muonID** — $\varepsilon_{\mu\mathrm{ID}|J/\psi}$: From `SingleJpsi_*` + `mu*` (Run A).
+4. **muonID** — $\varepsilon_{\mu\mathrm{ID}|J/\psi}$: From `SingleJpsi_*` + `mu*` (Run A or retained singles in Run B).
    - Denominator: `SingleJpsi` passing muonRECO (both muons GEN-matched).
    - Numerator: denominator candidates where both daughter muons pass the chosen ID (baseline: `muIsPatSoftMuon`).
 
-5. **kaonID** — $\varepsilon_{K\mathrm{ID}|\phi}$: From `SinglePhi_*` + `RecoKaonTrack_*` (Run A).
+5. **kaonID** — $\varepsilon_{K\mathrm{ID}|\phi}$: From `SinglePhi_*` + `RecoKaonTrack_*` (Run A or retained singles in Run B).
    - Denominator: `SinglePhi` passing kaonRECO (both kaons GEN-matched).
    - Numerator: denominator candidates where both daughter kaons pass the chosen track-quality ID.
 
-6. **dimuon** — $\varepsilon_{\mu\mu|J/\psi}$: From `SingleJpsi_*` (Run A).
+6. **dimuon** — $\varepsilon_{\mu\mu|J/\psi}$: From `SingleJpsi_*` (Run A or retained singles in Run B).
    - Denominator: `SingleJpsi` passing muonID.
    - Numerator: denominator candidates with `SingleJpsi_fitValid && SingleJpsi_fitPass`.
 
-7. **dikaon** — $\varepsilon_{KK|\phi}$: From `SinglePhi_*` (Run A).
+7. **dikaon** — $\varepsilon_{KK|\phi}$: From `SinglePhi_*` (Run A or retained singles in Run B).
    - Denominator: `SinglePhi` passing kaonID.
    - Numerator: denominator candidates with `SinglePhi_fitValid && SinglePhi_fitPass`.
 
@@ -328,8 +338,9 @@ For each J/ψ and φ kinematic bin `(pT, |y|)`:
 From the full chain ntuple (Run B):
 
 1. **HLT** — $\varepsilon_{\mathrm{HLT}}$:
-   - Denominator: events with ≥1 valid dimuon candidate.
-   - Numerator: denominator events where `MatchJpsiTriggerNames` is non-empty AND at least one daughter muon of the candidate has non-empty `muJpsiMatchedTriggerIndices`.
+   - Denominator: events passing every per-object chain (`s_cand`).
+   - Numerator: a configured path fired and the same triple-GEN-matched composite
+     candidate satisfies its configured per-muon trigger/filter pair rule.
 
 2. **four-muon vertexing** — $\varepsilon_{4\mu\mathrm{vtx}}$: From `DiOnia_*` (Run B).
    - Denominator: events passing HLT + trigger matching, with valid dimuon pairs in both J/ψ slots.
@@ -386,3 +397,61 @@ For composite φ candidates (`Phi_K_1_*` / `Phi_K_2_*`), the inline
 `Phi_K_1_genMatchIdx` / `Phi_K_2_genMatchIdx` can similarly be verified against
 `RecoKaonTrack_genMatchIdx[Phi_K_1_RecoKaonTrackIdx]` /
 `RecoKaonTrack_genMatchIdx[Phi_K_2_RecoKaonTrackIdx]`.
+
+---
+
+## 6. Input ntuple inventory & manifests
+
+All efficiency input manifests live in `configs/efficiency/manifests/*.manifest.json`
+(one per sample) in the TPS-style versioned format accepted by
+`run_efficiency.py --input-file-manifest` / `prepare_efficiency_shards.py`
+(via `load_efficiency_file_manifest`). Each manifest carries per-file
+`total_entries` and `retained_candidate_events` — the reconstruction + selection
+pass statistic, defined as an event with at least one `Pri` candidate satisfying
+`Pri_passAny` (`Pri_fitPass || Pri_assocPVPass`) — plus a content-derived
+`manifest_id` / `master_manifest_id` used for fail-closed merge coverage checks.
+
+| Manifest | Sample | Storage | Files | total_entries | retained | retention |
+|----------|--------|---------|-------|---------------|----------|-----------|
+| `JJP_TPS_MC_v4_1.manifest.json` | TPS | v4_2_full | 317 | 1,472,109 | 93,901 | 6.38% |
+| `JJP_SPS_CS.manifest.json` | SPS_CS | v4_3_full | 4,840 | 17,615,553 | 436,669 | 2.48% |
+| `JJP_DPS2_CS.manifest.json` | DPS2_CS | v4_3_full | 4,840 | 24,197,163 | 698,494 | 2.89% |
+| `JJP_DPS2_G.manifest.json` | DPS2_G | v4_3_full | 730 | 291,458 | 13,543 | 4.65% |
+| `JJP_SPS_G.manifest.json` | SPS_G | v4_3_full | 292 | 230,914 | 10,147 | 4.39% |
+| `JJP_DPS1.manifest.json` | DPS1 | v4_4_full | 888 | 3,812,832 | 221,766 | 5.82% |
+
+Retention here is analyzer-level candidate retention (any event with a
+`Pri_passAny` candidate), **not** the full efficiency-selection pass rate. The
+DPS1 numbers were cross-checked exactly against the production
+`ntuple_candidate_count_*.json`.
+
+### 6.1 Production layout
+
+New production stores ntuples as `<sample>/JOB000000_BLOCK0000XX/`
+(intermediate: MiniAOD + processing manifest, no ntuple) and
+`<sample>/JOB000000_MERGE0000XX/` (output: `output_ntuple.root` +
+`output_MINIAOD.root` + merge/split manifests). `prepare_efficiency_shards.py`'s
+`discover_sample_files()` only keeps integer-named job directories, so it does
+**not** discover this layout — always feed these samples via
+`--input-file-manifest`. Each `merge_manifest_*.json` records `actual_events`,
+equal to the ntuple entry count (a useful cross-check for per-file totals).
+
+### 6.2 Building / updating
+
+- `scripts/efficiency/count_ntuple_candidates.py` — per-file entries,
+  retained-candidate events, and candidate multiplicity over XRootD.
+- `scripts/efficiency/build_oldpipeline_manifests.py` — turn those counts into
+  the versioned manifest (reuses `efficiency_workflow.tps_manifest.build_tps_manifest`).
+- `scripts/efficiency/prepare_tps_efficiency_manifest.py` — convert
+  `docs/tps_retained_ntuple_events.txt` into the TPS manifest.
+
+### 6.3 IHEP storage access
+
+`/store/...` paths are XRootD LFNs, not local filesystem anywhere (including the
+ihep login node). For bulk work over many files, run on **ihep**
+(`ssh ihep` = lxlogin.ihep.ac.cn, user `wangchi`): the same cvmfs LCG_109a
+(`x86_64-el9-gcc13-opt`) is available there and it is ~15× faster than from
+CERN. Authenticate with a proxy copied from CERN
+(`scp ~/condor/x509up ihep:/tmp/chiw_x509up`,
+`export X509_USER_PROXY=/tmp/chiw_x509up`). Note `xrdfs` expects the host in
+arg 1 and the absolute `/store/...` path (without URL prefix) in arg 2.
