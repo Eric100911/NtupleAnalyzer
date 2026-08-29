@@ -269,8 +269,16 @@ def run_efficiency_with_fallback(
             gen_parts.append(tables["gen_systems"])
         if not tables["event_step_flags"].empty:
             event_parts.append(tables["event_step_flags"])
+    if failed_files:
+        failed_preview = ", ".join(failed_files[:3])
+        if len(failed_files) > 3:
+            failed_preview += f", ... ({len(failed_files)} total)"
+        raise RuntimeError(
+            f"Refusing incomplete efficiency sample {sample}: "
+            f"{len(failed_files)}/{len(files)} input files failed. Failed files: {failed_preview}"
+        )
     if not gen_parts:
-        raise RuntimeError(f"No files could be processed for {sample}: {len(failed_files)}/{len(files)} failed")
+        raise RuntimeError(f"No files could be processed for {sample}")
     gen_df = pd.concat(gen_parts, ignore_index=True) if gen_parts else pd.DataFrame()
     event_df = pd.concat(event_parts, ignore_index=True) if event_parts else pd.DataFrame()
     binning = EfficiencyBinning(include_trigger_matching=include_trigger_matching)
