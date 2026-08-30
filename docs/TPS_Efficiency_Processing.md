@@ -151,24 +151,24 @@ SAMPLE=JJP_DPS1
 python3 condor/generate_efficiency_dag.py \
   --sample ${SAMPLE} \
   --queue-file /tmp/chiw/${SAMPLE}_efficiency_batch/manifests/jjp_efficiency_queue.txt \
-  --output-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/${SAMPLE}_efficiency_YYYYMMDD \
+  --output-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_campaign_YYYYMMDD \
   --runtime-tarball /path/to/ntuple_analyzer_runtime.tar.gz \
   --dag-dir /tmp/chiw/${SAMPLE}_efficiency_batch/dag \
   --tree-path auto \
   --efficiency-config configs/efficiency/tps_nominal.yaml \
   --config-policy strict \
   --remote-access-mode fallback \
-  --efficiency-backend vectorized
+  --efficiency-backend vectorized \
+  --proxy-path /afs/cern.ch/user/c/chiw/condor/x509up \
+  --dagman-retries 2
 ```
 
-Inspect the generated submit files before `condor_submit_dag`. Do not request
+The supplied output directory is a campaign root; every POST merges inside a private `<output-dir>/_merge_<sample>` container, then atomically hands off its final bundle as `<output-dir>/<sample>`. This prevents top-level merge-summary races. Inspect the generated submit files before `condor_submit_dag`. Do not request
 shard cleanup until the merged coverage and configuration checks have passed.
 
-## 4. Merge and build maps
+## 4. Merge
 
-The DAG post node runs `run_jjp_efficiency_post.sh`, which merges the shards,
-builds derived products, builds factorized maps, and builds the hybrid
-post-acceptance map.
+The DAG post node runs `run_jjp_efficiency_merge_only.sh`, which performs the fail-closed merge and coverage audit in a private per-sample container, then hands off only the verified bundle as `<campaign-root>/<sample>`. Build derived products, correction maps, closure, and plots downstream after the verified CERN handoff.
 
 The merge is fail-closed for duplicate or missing declared files, incomplete
 entry scans, incompatible production configurations, different efficiency

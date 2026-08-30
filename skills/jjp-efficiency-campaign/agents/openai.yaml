@@ -1,0 +1,4 @@
+interface:
+  display_name: "JJP Efficiency Campaign"
+  short_description: "Orchestrate lxplus-to-hepthu efficiency campaigns"
+  default_prompt: "Use $jjp-efficiency-campaign to plan or operate a manifest-driven JJP efficiency campaign."

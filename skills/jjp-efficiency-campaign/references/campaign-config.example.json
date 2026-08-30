@@ -1,0 +1,21 @@
+{
+  "schema_version": "jjp-efficiency-campaign-config/v1",
+  "campaign_id": "YYYYMMDD_HHMM_jjp_efficiency",
+  "repository_sha": "REPLACE_WITH_FROZEN_GIT_SHA",
+  "lcg_view": "/cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh",
+  "efficiency_config": "configs/efficiency/tps_nominal.yaml",
+  "samples": ["JJP_DPS1", "JJP_DPS2_CS", "JJP_DPS2_G", "JJP_SPS_CS", "JJP_SPS_G", "JJP_TPS_MC_v4_1"],
+  "manifest_dir": "configs/efficiency/manifests",
+  "files_per_job": 10,
+  "automatic_retry_count": 2,
+  "lxplus": {
+    "submit_host": "lxplus967.cern.ch",
+    "output_root": "/eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/REPLACE_CAMPAIGN_ID",
+    "workspace_root": "/tmp/chiw/REPLACE_CAMPAIGN_ID"
+  },
+  "hepthu": {
+    "ssh_host": "hepthu-el9",
+    "repository": "JpsiJpsiPhi/analysis/Efficiency/NtupleAnalyzer",
+    "batch_root": "JpsiJpsiPhi/analysis/Efficiency/REPLACE_CAMPAIGN_ID"
+  }
+}
