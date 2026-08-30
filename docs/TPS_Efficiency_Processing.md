@@ -1,14 +1,23 @@
-# TPS Efficiency Processing Runbook
+# JJP Efficiency Processing Runbook
 
-This runbook is the operational contract for the TPS-Onia2MuMu JJP efficiency
-sample. It complements [Efficiency_Evaluation_Guideline.md](Efficiency_Evaluation_Guideline.md);
-the mathematical definitions remain in [Efficiency_scheme.md](Efficiency_scheme.md).
+This runbook is the operational contract for every JJP subprocess sample in
+`configs/efficiency/manifests/`. All samples use the same versioned efficiency
+definition and the same preflight, shard, merge, map, and closure stages. The
+common input contract is the TPS-Onia2MuMu ntuple format. It complements
+[Efficiency_Evaluation_Guideline.md](Efficiency_Evaluation_Guideline.md); the
+mathematical definitions remain in [Efficiency_scheme.md](Efficiency_scheme.md).
 
-## Nominal contract
+## Common processing contract
 
-Use sample name `JJP_TPS_MC_v4_1`, the versioned definition
+Set `SAMPLE` to one of the checked-in sample labels:
+
+```text
+JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G JJP_TPS_MC_v4_1
+```
+
+Use that sample's manifest, the versioned definition
 [`configs/efficiency/tps_nominal.yaml`](../configs/efficiency/tps_nominal.yaml),
-`--tree-path auto`, and `--config-policy strict`.
+`--tree-path auto`, and `--config-policy strict` for every sample.
 
 The input resolver accepts exactly one of `X_data` and `mkcands/X_data`, then
 finds the sibling `X_config`. Strict mode requires the retained-single-object
@@ -51,38 +60,46 @@ source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
 Use new output directories. Do not overwrite an existing merged efficiency
 sample or closure result.
 
-## 1. Build and verify the master manifest
+## 1. Select and verify the sample manifest
 
-The current inventory contract is 317 files, 1,472,109 entries, and 93,901
-retained candidate events.
-Here, retained means an event with at least one stored `Pri_passAny` candidate
+Use the checked-in manifest for the selected sample. The current inventories
+are:
+
+| Sample | Manifest | Files | Total entries | Retained candidate events |
+|--------|----------|------:|--------------:|--------------------------:|
+| `JJP_DPS1` | `JJP_DPS1.manifest.json` | 888 | 3,812,832 | 221,766 |
+| `JJP_DPS2_CS` | `JJP_DPS2_CS.manifest.json` | 4,840 | 24,197,163 | 698,494 |
+| `JJP_DPS2_G` | `JJP_DPS2_G.manifest.json` | 730 | 291,458 | 13,543 |
+| `JJP_SPS_CS` | `JJP_SPS_CS.manifest.json` | 4,840 | 17,615,553 | 436,669 |
+| `JJP_SPS_G` | `JJP_SPS_G.manifest.json` | 292 | 230,914 | 10,147 |
+| `JJP_TPS_MC_v4_1` | `JJP_TPS_MC_v4_1.manifest.json` | 317 | 1,472,109 | 93,901 |
+
+Retained means an event with at least one stored `Pri_passAny` candidate
 (`Pri_fitPass || Pri_assocPVPass`); it is coverage bookkeeping, not a map cut.
+Every manifest is versioned, carries a content-derived master manifest ID, and
+names this count `retained_candidate_events`.
 
-```bash
-python3 scripts/efficiency/prepare_tps_efficiency_manifest.py \
-  docs/tps_retained_ntuple_events.txt \
-  --sample JJP_TPS_MC_v4_1 \
-  --output configs/efficiency/manifests/JJP_TPS_MC_v4_1.manifest.json
-```
-
-The generated manifest is versioned, carries a content-derived master manifest
-ID, and formally names the third inventory column
-`retained_candidate_events`.
+When updating a manifest, retain both the per-file totals and their provenance.
+Use `count_ntuple_candidates.py` followed by
+`build_oldpipeline_manifests.py` for count tables, or use
+`prepare_tps_efficiency_manifest.py` for a three-column retained-event list.
 
 ## 2. One-file preflight
 
-Run one file through the production backend before creating the batch:
+Run one file from `SAMPLE` through the production backend before creating the
+batch:
 
 ```bash
+SAMPLE=JJP_DPS1
 python3 run_efficiency.py \
   --analysis-mode JpsiJpsiPhi \
-  --input-file-manifest configs/efficiency/manifests/JJP_TPS_MC_v4_1.manifest.json \
-  --samples JJP_TPS_MC_v4_1 \
+  --input-file-manifest configs/efficiency/manifests/${SAMPLE}.manifest.json \
+  --samples ${SAMPLE} \
   --max-files 1 \
   --tree-path auto \
   --efficiency-config configs/efficiency/tps_nominal.yaml \
   --config-policy strict \
-  --output-dir /tmp/chiw/tps_efficiency_preflight \
+  --output-dir /tmp/chiw/${SAMPLE}_efficiency_preflight \
   --skip-plots
 ```
 
@@ -104,35 +121,39 @@ may be inspected and mapped, but must not be presented as the complete sample.
 An optional branch-level audit can be made in another new directory:
 
 ```bash
+SAMPLE=JJP_DPS1
 python3 scripts/efficiency/audit_efficiency_events.py \
-  --input-file-manifest configs/efficiency/manifests/JJP_TPS_MC_v4_1.manifest.json \
+  --input-file-manifest configs/efficiency/manifests/${SAMPLE}.manifest.json \
   --tree-path auto \
   --max-events 2000 \
-  --output-dir /tmp/chiw/tps_efficiency_audit \
+  --output-dir /tmp/chiw/${SAMPLE}_efficiency_audit \
   --fail-on-issues
 ```
 
 ## 3. Prepare shards and DAG
 
-Ten files per shard gives 32 shard jobs for the 317-file inventory:
+Ten files per shard is a practical starting point; the resulting job count is
+determined by the selected sample's manifest:
 
 ```bash
+SAMPLE=JJP_DPS1
 python3 scripts/efficiency/prepare_efficiency_shards.py \
-  --samples JJP_TPS_MC_v4_1 \
-  --input-file-manifest configs/efficiency/manifests/JJP_TPS_MC_v4_1.manifest.json \
+  --samples ${SAMPLE} \
+  --input-file-manifest configs/efficiency/manifests/${SAMPLE}.manifest.json \
   --files-per-job 10 \
-  --output-dir /tmp/chiw/tps_efficiency_batch
+  --output-dir /tmp/chiw/${SAMPLE}_efficiency_batch
 ```
 
-Create the DAG with strict TPS arguments embedded in every shard:
+Create the DAG with the common strict arguments embedded in every shard:
 
 ```bash
+SAMPLE=JJP_DPS1
 python3 condor/generate_efficiency_dag.py \
-  --sample JJP_TPS_MC_v4_1 \
-  --queue-file /tmp/chiw/tps_efficiency_batch/manifests/jjp_efficiency_queue.txt \
-  --output-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/tps_efficiency_YYYYMMDD \
+  --sample ${SAMPLE} \
+  --queue-file /tmp/chiw/${SAMPLE}_efficiency_batch/manifests/jjp_efficiency_queue.txt \
+  --output-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/${SAMPLE}_efficiency_YYYYMMDD \
   --runtime-tarball /path/to/ntuple_analyzer_runtime.tar.gz \
-  --dag-dir /tmp/chiw/tps_efficiency_batch/dag \
+  --dag-dir /tmp/chiw/${SAMPLE}_efficiency_batch/dag \
   --tree-path auto \
   --efficiency-config configs/efficiency/tps_nominal.yaml \
   --config-policy strict \
@@ -152,8 +173,8 @@ post-acceptance map.
 The merge is fail-closed for duplicate or missing declared files, incomplete
 entry scans, incompatible production configurations, different efficiency
 definition hashes, and disagreement about the master manifest. Its
-`sample_manifest.json` records `coverage_scope=complete` only when all 317
-master files are present.
+`sample_manifest.json` records `coverage_scope=complete` only when every file
+declared by the selected sample's manifest is present.
 
 Key merged artifacts are:
 
@@ -167,9 +188,10 @@ Key merged artifacts are:
 Before using the maps, verify totals in the merged coverage table:
 
 ```bash
-python3 - <<'PY'
+SAMPLE=JJP_DPS1
+python3 - <<PY
 import pandas as pd
-p = "/path/to/merged/JJP_TPS_MC_v4_1/file_coverage.parquet"
+p = "/path/to/merged/${SAMPLE}/file_coverage.parquet"
 x = pd.read_parquet(p)
 print("files", len(x))
 print("entries", int(x.entries_scanned.sum()))
@@ -179,7 +201,7 @@ print("statuses", x.status.value_counts().to_dict())
 PY
 ```
 
-Expected inventory totals are 317, 1,472,109, and 93,901 respectively.
+Compare these totals with the selected sample's manifest before using its maps.
 
 ## 5. Independent file-disjoint closure
 
@@ -187,9 +209,10 @@ Build maps on a deterministic set of complete source files and evaluate the
 correction on a disjoint approximately 20% holdout:
 
 ```bash
+SAMPLE=JJP_DPS1
 python3 -m efficiency_workflow.closure \
   --input-dir /path/to/merged \
-  --samples JJP_TPS_MC_v4_1 \
+  --samples ${SAMPLE} \
   --map-type factorized \
   --selected-col Pri_assocPVPass \
   --file-disjoint \
@@ -209,18 +232,17 @@ count is not an acceptable closure result.
 
 ## 6. Data-side boundary
 
-TPS raw `X_data` is an MC efficiency input. It is not the selected data schema
-used by the yield code. Yield correction still requires the Pipeline 1 selected
-ROOT tree with `sel_*` kinematics and sWeights. Apply the TPS maps to that
-selected data input with the preferred `factorized` mode; use `hybrid` as the
-specified alternative. Do not pass raw TPS ROOT files to
+Raw `X_data` from any listed sample is an MC efficiency input. It is not the
+selected data schema used by the yield code. Yield correction still requires
+the Pipeline 1 selected ROOT tree with `sel_*` kinematics and sWeights. Apply
+the selected sample's maps to that data input with the preferred `factorized`
+mode; use `hybrid` as the specified alternative. Do not pass raw efficiency
+ROOT files to
 `compute_efficiency_corrected_yield.py`.
 
-## 7. Other JJP subprocesses
+## 7. Cross-subprocess validation
 
-The strict TPS processing contract is also applicable to the existing
-`JJP_DPS1`, `JJP_DPS2_CS`, `JJP_DPS2_G`, `JJP_SPS_CS`, and `JJP_SPS_G`
-manifests. A one-file preflight on 2026-08-30 found that every sample:
+A one-file preflight on 2026-08-30 found that every listed sample:
 
 - resolved `mkcands/X_data` and its sibling `mkcands/X_config`;
 - contained the complete strict Run-B branch set;
@@ -238,26 +260,27 @@ subprocess:
 | `JJP_DPS2_G` | 400 | 47 | 1 |
 | `JJP_SPS_CS` | 3,654 | 150 | 3 |
 | `JJP_SPS_G` | 802 | 96 | 3 |
+| `JJP_TPS_MC_v4_1` | 4,649 | 625 | 13 |
 
 These are smoke-test populations, not efficiency measurements. They establish
 schema and execution portability but do not replace complete-sample map and
-closure validation. In particular, `JJP_DPS2_G` and `JJP_SPS_G` have only
-13,543 and 10,147 retained candidate events in their complete manifests. Their
-fine bins will frequently need coarse or inclusive fallback, so do not treat
-them like the high-statistics CS samples in ratio-panel comparisons.
+closure validation. Retained populations differ across samples, so review
+fine-to-coarse/inclusive fallback and failed lookups for each map before making
+cross-subprocess comparisons.
 
 Use each sample's formal manifest and a fresh output directory. For example:
 
 ```bash
+SAMPLE=JJP_DPS1
 python3 run_efficiency.py \
   --analysis-mode JpsiJpsiPhi \
-  --input-file-manifest configs/efficiency/manifests/JJP_SPS_CS.manifest.json \
-  --samples JJP_SPS_CS \
+  --input-file-manifest configs/efficiency/manifests/${SAMPLE}.manifest.json \
+  --samples ${SAMPLE} \
   --max-files 1 \
   --tree-path auto \
   --efficiency-config configs/efficiency/tps_nominal.yaml \
   --config-policy strict \
-  --output-dir /tmp/chiw/jjp_sps_cs_efficiency_preflight \
+  --output-dir /tmp/chiw/${SAMPLE}_efficiency_preflight \
   --skip-plots
 ```
 
@@ -275,7 +298,7 @@ review unexpected warning growth and failed map lookups in full production logs.
 ## Legacy compatibility
 
 Existing old-scheme commands that omit `--efficiency-config` retain legacy
-configuration policy. TPS production must pass the YAML explicitly and use
-strict mode. This keeps the smooth legacy workflow working while preventing a
-TPS job from silently using hardcoded trigger order, the old tree path, or a
-partial Run-B schema.
+configuration policy. Every sample processed under the versioned contract must
+pass the YAML explicitly and use strict mode. This keeps the smooth legacy
+workflow working while preventing any sample from silently using hardcoded
+trigger order, the old tree path, or a partial Run-B schema.

@@ -3,10 +3,10 @@
 Maps the factorized efficiency scheme in `Efficiency_scheme.md` to the current
 ntuple branch structure and configuration system.
 
-For the executable TPS sample contract and lxplus/Condor commands, see
-[`TPS_Efficiency_Processing.md`](TPS_Efficiency_Processing.md). The current
-retained-singles Run-B sample contains both the object-level and event-level
-inputs and is the nominal source for all factors.
+For executable per-sample commands and lxplus/Condor operations, see the
+[`JJP Efficiency Processing Runbook`](TPS_Efficiency_Processing.md). The
+checked-in Run-B samples retain both object-level and event-level inputs, so
+the same factor definitions and processing contract apply to each manifest.
 
 Input ntuple inventory, retention statistics, and storage-access notes for all
 samples are in [Section 6](#6-input-ntuple-inventory--manifests).
@@ -296,7 +296,7 @@ split by φ pT bins. Alternative endpoints may use `Pri_fitPass` or
 ### Step 1: Produce efficiency ntuples
 
 For a new two-run campaign, Run A remains a useful independent singles-only
-production. For the current TPS inventory, use Run B for all factors because it
+production. For the current checked-in inventories, use Run B for all factors because it
 retains every single-object candidate and does not require an accepted composite
 candidate before writing the MC tree. Use `maxEvents=-1` to process all events.
 
@@ -403,7 +403,7 @@ For composite φ candidates (`Phi_K_1_*` / `Phi_K_2_*`), the inline
 ## 6. Input ntuple inventory & manifests
 
 All efficiency input manifests live in `configs/efficiency/manifests/*.manifest.json`
-(one per sample) in the TPS-style versioned format accepted by
+(one per sample) in the versioned format accepted by
 `run_efficiency.py --input-file-manifest` / `prepare_efficiency_shards.py`
 (via `load_efficiency_file_manifest`). Each manifest carries per-file
 `total_entries` and `retained_candidate_events` — the reconstruction + selection
@@ -413,17 +413,17 @@ pass statistic, defined as an event with at least one `Pri` candidate satisfying
 
 | Manifest | Sample | Storage | Files | total_entries | retained | retention |
 |----------|--------|---------|-------|---------------|----------|-----------|
-| `JJP_TPS_MC_v4_1.manifest.json` | TPS | v4_2_full | 317 | 1,472,109 | 93,901 | 6.38% |
-| `JJP_SPS_CS.manifest.json` | SPS_CS | v4_3_full | 4,840 | 17,615,553 | 436,669 | 2.48% |
+| `JJP_DPS1.manifest.json` | DPS1 | v4_4_full | 888 | 3,812,832 | 221,766 | 5.82% |
 | `JJP_DPS2_CS.manifest.json` | DPS2_CS | v4_3_full | 4,840 | 24,197,163 | 698,494 | 2.89% |
 | `JJP_DPS2_G.manifest.json` | DPS2_G | v4_3_full | 730 | 291,458 | 13,543 | 4.65% |
+| `JJP_SPS_CS.manifest.json` | SPS_CS | v4_3_full | 4,840 | 17,615,553 | 436,669 | 2.48% |
 | `JJP_SPS_G.manifest.json` | SPS_G | v4_3_full | 292 | 230,914 | 10,147 | 4.39% |
-| `JJP_DPS1.manifest.json` | DPS1 | v4_4_full | 888 | 3,812,832 | 221,766 | 5.82% |
+| `JJP_TPS_MC_v4_1.manifest.json` | TPS | v4_2_full | 317 | 1,472,109 | 93,901 | 6.38% |
 
 Retention here is analyzer-level candidate retention (any event with a
 `Pri_passAny` candidate), **not** the full efficiency-selection pass rate. The
-DPS1 numbers were cross-checked exactly against the production
-`ntuple_candidate_count_*.json`.
+per-file counts were cross-checked against production count reports where
+available.
 
 ### 6.1 Production layout
 
@@ -441,9 +441,9 @@ equal to the ntuple entry count (a useful cross-check for per-file totals).
 - `scripts/efficiency/count_ntuple_candidates.py` — per-file entries,
   retained-candidate events, and candidate multiplicity over XRootD.
 - `scripts/efficiency/build_oldpipeline_manifests.py` — turn those counts into
-  the versioned manifest (reuses `efficiency_workflow.tps_manifest.build_tps_manifest`).
+  the versioned manifest (reuses the common manifest builder).
 - `scripts/efficiency/prepare_tps_efficiency_manifest.py` — convert
-  `docs/tps_retained_ntuple_events.txt` into the TPS manifest.
+  `docs/tps_retained_ntuple_events.txt` into the corresponding sample manifest.
 
 ### 6.3 IHEP storage access
 

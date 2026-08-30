@@ -1947,7 +1947,7 @@ def _process_efficiency_chunk_vectorized(
             if "DiOnia_VtxProb" in arrays.fields else dionia_nominal
         )
     else:
-        # Explicit legacy compatibility only; strict TPS validation requires DiOnia.
+        # Explicit legacy compatibility only; strict validation requires DiOnia.
         dionia_nominal = four_muon_same
         dionia_common = four_muon_same
         dionia_pass_any = four_muon_same

@@ -1,10 +1,14 @@
-# TPS Efficiency Task Outline
+# JJP Efficiency Task Outline
 
 ## Purpose
 
-Build a reproducible and auditable JJP efficiency workflow for TPS-Onia2MuMu samples. The current target inventory is docs/tps_retained_ntuple_events.txt.
+Build a reproducible and auditable JJP efficiency workflow for all JJP
+subprocess samples using the common TPS-Onia2MuMu ntuple contract. The first
+detailed input inventory used during implementation is
+`docs/tps_retained_ntuple_events.txt`; per-sample totals are maintained in the
+versioned manifests and the evaluation guideline.
 
-The inventory currently contains:
+That initial inventory contains:
 
 - 317 files
 - total entries: 1,472,109
@@ -15,7 +19,7 @@ The third column should be formally named retained_candidate_events in a future 
 
 ## Confirmed sample facts
 
-A real TPS file was inspected. The current files use:
+A representative Run-B file was inspected. The files use:
 
 - tree: mkcands/X_data
 - configuration tree: mkcands/X_config
@@ -23,15 +27,16 @@ A real TPS file was inspected. The current files use:
 - KeepAllSingleObjectCandsInMC=True
 - SkipCompositeCandBuildingWhenKeepingSingles=False
 
-Therefore the current sample is a Run B full-chain sample that also retains singles, not a singles-only Run A sample.
+Therefore the inspected input is a Run-B full-chain sample that also retains singles, not a singles-only Run-A sample.
 
-Future TPS-Onia2MuMu v1.5 files may use top-level X_data rather than mkcands/X_data. The input layer must support both layouts.
+The input layer supports both the wrapped `mkcands/X_data` layout and the
+top-level `X_data` layout used by different production versions.
 
 ## A. Four-muon vertex definition
 
 ### Current issue
 
-The current efficiency implementation uses whether the four muonVertexId values agree as four_muon_vtx. Historical commit 99330ad fixed consistency of trigger, vertex, and Pri stages on one composite candidate, but did not complete the migration from the old predicate to the DiOnia branches.
+The initial implementation used whether the four `muonVertexId` values agree as `four_muon_vtx`. The current implementation uses the `DiOnia_*` definition and keeps the former predicate for comparison.
 
 ### Target definition
 
@@ -46,17 +51,17 @@ The following should remain available as diagnostics or alternative working poin
 - DiOnia_passAny
 - DiOnia_VtxProb
 
-### Future implementation tasks
+### Implemented checklist
 
-1. Connect DiOnia_fitValid and DiOnia_fitPass to the candidate-level chain.
-2. Retain the old muVertexId predicate under an explicit diagnostic name.
-3. Provide configuration for nominal and alternative working points.
-4. Produce step cutflows and event differences for the old and new definitions.
-5. Confirm that Pri_* is evaluated only on the same four-muon candidate.
+1. Connected `DiOnia_fitValid` and `DiOnia_fitPass` to the candidate-level chain.
+2. Retained the old `muVertexId` predicate under an explicit diagnostic name.
+3. Provided configuration for nominal and alternative working points.
+4. Produced step cutflows and event differences for the old and new definitions.
+5. Confirmed that `Pri_*` is evaluated only on the same four-muon candidate.
 
 ## B. GEN ancestry and feed-down
 
-Feed-down is not currently treated as a blocker for the TPS sample.
+Feed-down is not currently treated as a blocker for the listed samples.
 
 The current code selects J/psi particles with at least two direct muon daughters and uses motherGenIdx for reconstructed-object matching. If the generated sample contains no psi(2S) feed-down, and the efficiency definition targets final J/psi to mu mu and final phi to K+K- decays, this is in principle suitable.
 
@@ -71,17 +76,17 @@ If future samples include b-hadron, chi_c, or psi(2S) feed-down, clarify whether
 
 ## C. Trigger and filter configuration
 
-The current implementation still hardcodes trigger/filter names and fixes the configuration tree path to mkcands/X_config.
+The implementation resolves trigger/filter names and the configuration tree path from each input file's `X_config`.
 
-Future tasks:
+Implemented:
 
-1. Find X_config relative to the actual data-tree path.
-2. Read TriggersForJpsi and FiltersForJpsi.
-3. Derive trigger/filter indices from their names.
-4. Share one parser between the vectorized and python-loop backends.
-5. Fail or warn explicitly when configuration is missing or cannot be matched.
-6. Store the effective configuration in run metadata.
-7. Check that MatchJpsiTriggerNames and per-muon trigger/filter matching belong to the same candidate chain.
+1. Finds `X_config` relative to the actual data-tree path.
+2. Reads `TriggersForJpsi` and `FiltersForJpsi`.
+3. Derives trigger/filter indices from their names.
+4. Shares one parser between the vectorized and python-loop backends.
+5. Fails or warns explicitly when configuration is missing or cannot be matched.
+6. Stores the effective configuration in run metadata.
+7. Checks that `MatchJpsiTriggerNames` and per-muon trigger/filter matching belong to the same candidate chain.
 
 ## D. Input inventory, coverage, and fail-closed behavior
 
@@ -103,7 +108,7 @@ The helper can:
 
 Fallback processing now refuses to produce an incomplete efficiency sample if any input file fails.
 
-Recommended follow-up additions:
+Recorded per-file coverage fields:
 
 - source entries per file;
 - entries actually scanned;
@@ -114,7 +119,7 @@ Recommended follow-up additions:
 
 ## E. Analyzer configuration and post-processing working points
 
-The TPS X_config intentionally uses loose production selections so that the analysis working point can be adjusted later. This is reasonable, but the two configurations must be recorded separately.
+The sample `X_config` intentionally uses loose production selections so that the analysis working point can be adjusted later. This is reasonable, but the two configurations must be recorded separately.
 
 Store separately:
 
@@ -139,25 +144,25 @@ scripts/kinematics/merge_apply_cuts.py belongs to the pre-efficiency kinematics 
 
 Therefore, if the remembered merge is this step, the schema does naturally become the one required by the later sPlot and yield-correction code.
 
-### Pipeline 2: TPS efficiency merge
+### Pipeline 2: JJP efficiency merge
 
-efficiency_workflow.merge_efficiency_shards only merges:
+`efficiency_workflow.merge_efficiency_shards` only merges:
 
 - gen_systems.parquet
 - event_step_flags.parquet
 - efficiency counts
 
-It does not convert TPS ROOT data into selected or sel_* schema.
+It does not convert raw efficiency ROOT data into selected or `sel_*` schema.
 
 The intended relationship is:
 
-TPS raw X_data
+raw X_data from the selected sample
 to efficiency parquet
 to factorized or hybrid efficiency maps
 to Pipeline 1 selected data ROOT and sWeights
 to corrected yield
 
-The current yield-correction code must not receive raw TPS X_data directly. This is not an efficiency-calculation failure; it is an input-contract difference between the two pipelines.
+The current yield-correction code must not receive raw efficiency X_data directly. This is an input-contract difference between the two pipelines.
 
 ## Recommended processing boundary
 
@@ -165,7 +170,7 @@ The current yield-correction code must not receive raw TPS X_data directly. This
 
 Complete the following on lxplus:
 
-1. Read TPS raw ROOT files over XRootD.
+1. Read raw efficiency ROOT files over XRootD.
 2. Validate schema and X_config.
 3. Compute efficiency in shards.
 4. Audit per-file coverage.
@@ -183,21 +188,21 @@ Transfer compact products:
 - X_config snapshots;
 - closure and systematic-study results.
 
-Do not download all raw TPS ROOT files unless necessary. The final data sPlot and yield correction can run locally or on lxplus; its input must be selected data schema, not raw TPS MC schema.
+Do not download all raw efficiency ROOT files unless necessary. The final data sPlot and yield correction can run locally or on lxplus; its input must be selected data schema, not raw efficiency MC schema.
 
 ## Implementation order
 
 1. Complete A: DiOnia nominal definition and alternative working points.
 2. Complete C: automatic tree, config, trigger, and filter inference.
-3. Add a real TPS integration fixture and contract test.
+3. Add a representative integration fixture and contract test.
 4. Extend D with per-file coverage and shard-completeness checks.
 5. Formalize E by separating production and efficiency-definition configurations.
-6. Validate progressively with one file, one JOB group, and all 317 files.
+6. Validate progressively with one file, one JOB group, and every file in each manifest.
 7. Build maps only after these checks and run an independent corrected-yield closure test.
 
 ## Implementation status and validation
 
-The planned TPS processing changes are now implemented:
+The planned JJP efficiency processing changes are now implemented:
 
 - A: nominal four-muon vertexing uses same-candidate
   `DiOnia_fitValid && DiOnia_fitPass`; the older and alternative predicates are
@@ -214,16 +219,16 @@ The planned TPS processing changes are now implemented:
 
 Validation completed by 2026-08-30:
 
-- complete TPS inventory: 317 files, 1,472,109 entries, and 93,901 retained
+- complete initial inventory: 317 files, 1,472,109 entries, and 93,901 retained
   candidate events;
 - strict two-shard merge smoke test with matching entry, retention, and
   configuration metadata;
 - strict schema/config preflight and full event processing on one real file from
-  each of `JJP_DPS1`, `JJP_DPS2_CS`, `JJP_DPS2_G`, `JJP_SPS_CS`, and
-  `JJP_SPS_G`;
-- focused TPS contract tests and the complete repository test suite.
+  each of `JJP_DPS1`, `JJP_DPS2_CS`, `JJP_DPS2_G`, `JJP_SPS_CS`, `JJP_SPS_G`, and
+  `JJP_TPS_MC_v4_1`;
+- focused efficiency contract tests and the complete repository test suite.
 
 The remaining operational work is complete-sample shard production, merged-map
 review, and file-disjoint closure. One-file subprocess tests establish software
-portability only. Low-statistics `JJP_DPS2_G` and `JJP_SPS_G` maps will require
-particular attention to coarse/inclusive fallback and lookup failures.
+portability only; sample-specific statistics determine the required fallback and
+lookup review.

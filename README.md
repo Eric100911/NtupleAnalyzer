@@ -303,6 +303,10 @@ cd condor
 
 ## JJP efficiency
 
+The same processing contract is used for all six JJP subprocess samples. For
+the manifest-driven preflight, sharding, merging, and closure commands, see
+[`docs/TPS_Efficiency_Processing.md`](docs/TPS_Efficiency_Processing.md).
+
 The efficiency pipeline computes fiducial acceptance and per-step conditional efficiencies for J/ψ+J/ψ+φ events, binned in meson pT and rapidity. It works directly on GEN-level ntuples (not merged selected ROOT files). Raw per-object maps keep signed rapidity `y`; factorized correction maps and stacked J/ψ derived maps use `(pT, |y|)`.
 
 ### Efficiency step schema
@@ -341,11 +345,18 @@ Each Pri_* step is conditional on `four_muon_vtx` (parallel, not sequential amon
 source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
 
 # One-file efficiency test
+SAMPLE=JJP_DPS2_CS
 python3 run_efficiency.py --analysis-mode JpsiJpsiPhi \
-  --output-dir /tmp/chiw/eff_test --max-files 1 --samples JJP_DPS2_CS --skip-plots
+  --input-file-manifest configs/efficiency/manifests/${SAMPLE}.manifest.json \
+  --samples ${SAMPLE} \
+  --output-dir /tmp/chiw/${SAMPLE}_eff_test \
+  --max-files 1 \
+  --tree-path auto \
+  --efficiency-config configs/efficiency/tps_nominal.yaml \
+  --config-policy strict --skip-plots
 
 # Build derived products
-python3 build_derived_efficiency.py --input-dir /tmp/chiw/eff_test
+python3 build_derived_efficiency.py --input-dir /tmp/chiw/${SAMPLE}_eff_test
 ```
 
 ### Audit efficiency event membership
@@ -389,10 +400,22 @@ matching QA uncertainty panels are needed.
 
 ### Full run
 
+Process each formal manifest with the same command and a separate output
+directory. The loop below covers the complete checked-in JJP sample set:
+
 ```bash
-./run_assoc_efficiency.sh \
-  --samples JJP_DPS1,JJP_DPS2_CS,JJP_DPS2_G,JJP_SPS_CS,JJP_SPS_G \
-  --output-dir /tmp/chiw/jjp_efficiency_v1
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+for SAMPLE in JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G JJP_TPS_MC_v4_1; do
+  python3 run_efficiency.py \
+    --analysis-mode JpsiJpsiPhi \
+    --input-file-manifest configs/efficiency/manifests/${SAMPLE}.manifest.json \
+    --samples ${SAMPLE} \
+    --output-dir /tmp/chiw/jjp_efficiency_v1 \
+    --tree-path auto \
+    --efficiency-config configs/efficiency/tps_nominal.yaml \
+    --config-policy strict \
+    --skip-plots
+done
 ```
 
 ### Rebuild merged maps
@@ -407,14 +430,14 @@ next to the rebuilt maps for traceability.
 python3 rebuild_efficiency_maps.py \
   --input-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged \
   --output-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601 \
-  --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G
+  --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G JJP_TPS_MC_v4_1
 
 python3 build_derived_efficiency.py \
   --input-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601
 
 python3 -m efficiency_workflow.build_factorized_maps \
   --input-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601 \
-  --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G
+  --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G JJP_TPS_MC_v4_1
 ```
 
 ### Correction modes

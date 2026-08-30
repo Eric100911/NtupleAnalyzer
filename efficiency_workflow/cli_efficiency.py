@@ -457,7 +457,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--step-size", default="100 MB", help="uproot.iterate chunk size for the vectorized backend.")
     parser.add_argument("--worker-timeout", type=int, default=180, help="Seconds allowed for one file read attempt before trying the next access method; use 0 to disable.")
     parser.add_argument("--worker-efficiency-json", default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--efficiency-config", default=None, help="Versioned YAML efficiency definition; use configs/efficiency/tps_nominal.yaml for TPS.")
+    parser.add_argument("--efficiency-config", default=None, help="Versioned YAML efficiency definition; use configs/efficiency/tps_nominal.yaml for the JJP sample contract.")
     parser.add_argument("--config-policy", default=None, choices=("strict", "legacy"), help="X_config/schema policy; defaults to strict with --efficiency-config and legacy otherwise.")
     parser.add_argument("--cms-caption", default="Simulation Preliminary")
     parser.add_argument("--cms-energy", type=float, default=13.6)
