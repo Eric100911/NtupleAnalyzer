@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 
+from .config import efficiency_definition_from_dict
 from .efficiency import (
     PAIR_LEVEL_MAP_SPECS,
     PAIR_LEVEL_MAP_SPECS_NO_TRIG_MATCH,
@@ -113,10 +114,19 @@ def write_efficiency_sample_bundle(
     event_df: pd.DataFrame,
     counts_df: pd.DataFrame,
     cutflow_df: pd.DataFrame,
+    coverage_df: pd.DataFrame | None = None,
+    ancestry_df: pd.DataFrame | None = None,
+    configuration_metadata: dict[str, Any] | None = None,
+    coverage_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     sample_dir = ensure_dir(output_dir / sample)
     write_json(
-        {"sample": sample, "n_input_files": len(input_files), "input_files": input_files},
+        {
+            "sample": sample,
+            "n_input_files": len(input_files),
+            "input_files": input_files,
+            "coverage": coverage_summary or {},
+        },
         sample_dir / "sample_manifest.json",
     )
     write_parquet(gen_df, sample_dir / "gen_systems.parquet")
@@ -124,6 +134,11 @@ def write_efficiency_sample_bundle(
     write_parquet(counts_df, sample_dir / "efficiency_counts.parquet")
     write_parquet(counts_df, sample_dir / "efficiency_maps.parquet")
     cutflow_df.to_csv(sample_dir / "cutflow.csv", index=False)
+    coverage_df = coverage_df if coverage_df is not None else pd.DataFrame()
+    ancestry_df = ancestry_df if ancestry_df is not None else pd.DataFrame()
+    write_parquet(coverage_df, sample_dir / "file_coverage.parquet")
+    write_parquet(ancestry_df, sample_dir / "gen_ancestry_qa.parquet")
+    write_json(configuration_metadata or {}, sample_dir / "configuration_metadata.json")
 
     artifacts: dict[str, Any] = {
         "sample_manifest": "sample_manifest.json",
@@ -132,6 +147,9 @@ def write_efficiency_sample_bundle(
         "efficiency_counts": {"path": "efficiency_counts.parquet", "n_rows": int(len(counts_df))},
         "efficiency_maps": {"path": "efficiency_maps.parquet", "n_rows": int(len(counts_df))},
         "cutflow": {"path": "cutflow.csv", "n_rows": int(len(cutflow_df))},
+        "file_coverage": {"path": "file_coverage.parquet", "n_rows": int(len(coverage_df))},
+        "gen_ancestry_qa": {"path": "gen_ancestry_qa.parquet", "n_rows": int(len(ancestry_df))},
+        "configuration_metadata": "configuration_metadata.json",
     }
     write_json({"stage": "efficiency", "sample": sample, "artifacts": artifacts}, sample_dir / "manifest.json")
     return artifacts
@@ -151,10 +169,133 @@ def merge_efficiency_shards(
 
     gen_df = pd.concat((pd.read_parquet(path / "gen_systems.parquet") for path in sample_dirs), ignore_index=True)
     event_df = pd.concat((pd.read_parquet(path / "event_step_flags.parquet") for path in sample_dirs), ignore_index=True)
-    counts_df = build_efficiency_counts(gen_df, event_df, binning or EfficiencyBinning())
-    cutflow_df = build_cutflow(event_df)
-    input_files = collect_shard_input_files(sample_dirs)
-    artifacts = write_efficiency_sample_bundle(output_dir, sample, input_files, gen_df, event_df, counts_df, cutflow_df)
+
+    coverage_parts: list[pd.DataFrame] = []
+    ancestry_parts: list[pd.DataFrame] = []
+    declared_files: list[str] = []
+    configuration_payloads: list[dict[str, Any]] = []
+    master_n_files_values: set[int] = set()
+    master_manifest_ids: set[str] = set()
+    for sample_dir in sample_dirs:
+        coverage_path = sample_dir / "file_coverage.parquet"
+        if not coverage_path.exists():
+            raise RuntimeError(f"Missing file coverage product: {coverage_path}")
+        coverage_parts.append(pd.read_parquet(coverage_path))
+        ancestry_path = sample_dir / "gen_ancestry_qa.parquet"
+        if ancestry_path.exists():
+            ancestry_parts.append(pd.read_parquet(ancestry_path))
+        sample_manifest = read_json(sample_dir / "sample_manifest.json")
+        shard_files = [str(item) for item in sample_manifest.get("input_files", [])]
+        if len(shard_files) != len(set(shard_files)):
+            raise RuntimeError(f"Duplicate input file inside shard manifest: {sample_dir}")
+        declared_files.extend(shard_files)
+        coverage_summary = sample_manifest.get("coverage", {})
+        if coverage_summary.get("master_n_files") is not None:
+            master_n_files_values.add(int(coverage_summary["master_n_files"]))
+        if coverage_summary.get("master_manifest_id"):
+            master_manifest_ids.add(str(coverage_summary["master_manifest_id"]))
+        metadata_path = sample_dir / "configuration_metadata.json"
+        if metadata_path.exists():
+            configuration_payloads.append(read_json(metadata_path))
+
+    if len(declared_files) != len(set(declared_files)):
+        raise RuntimeError("The same input file is declared by more than one efficiency shard")
+    coverage_df = pd.concat(coverage_parts, ignore_index=True)
+    if coverage_df["source_file"].duplicated().any():
+        raise RuntimeError("The same input file has more than one processing coverage row")
+    if set(coverage_df["source_file"].astype(str)) != set(declared_files):
+        raise RuntimeError("Merged coverage rows do not match the union of shard input manifests")
+    if not (coverage_df["status"] == "success").all():
+        raise RuntimeError("At least one shard coverage row is not successful")
+    if coverage_df["entries_scanned"].sum() != coverage_df["source_entries"].sum():
+        raise RuntimeError("Merged coverage proves that not all source entries were scanned")
+    if coverage_df["compatibility_hash"].nunique() != 1:
+        raise RuntimeError("Refusing to merge shards with incompatible X_config settings")
+    if coverage_df["efficiency_config_hash"].nunique() != 1:
+        raise RuntimeError("Refusing to merge shards with different efficiency definitions")
+    if len(master_n_files_values) > 1 or len(master_manifest_ids) > 1:
+        raise RuntimeError("Shard manifests disagree on their master TPS manifest")
+    master_n_files = next(iter(master_n_files_values), len(declared_files))
+    coverage_scope = "complete" if len(declared_files) == master_n_files else "partial"
+    coverage_df["coverage_scope"] = coverage_scope
+
+    ancestry_df = pd.concat(ancestry_parts, ignore_index=True) if ancestry_parts else pd.DataFrame()
+    if not ancestry_df.empty:
+        ancestry_df = (
+            ancestry_df.groupby(
+                ["source_file", "particle", "mother_pdg_id", "has_required_daughters"],
+                as_index=False,
+            )["count"].sum()
+        )
+
+    configuration_metadata: dict[str, Any] = {}
+    if configuration_payloads:
+        efficiency_definition = configuration_payloads[0].get("efficiency_definition", {})
+        input_metadata: list[dict[str, Any]] = []
+        for payload in configuration_payloads:
+            if payload.get("efficiency_definition", {}).get("config_hash") != efficiency_definition.get("config_hash"):
+                raise RuntimeError("Shard configuration metadata contains different efficiency definitions")
+            input_metadata.extend(payload.get("input_metadata", []))
+        metadata_sources = [str(item.get("source_file")) for item in input_metadata]
+        if input_metadata and len(metadata_sources) != len(set(metadata_sources)):
+            raise RuntimeError("The same input file has more than one configuration snapshot")
+        if input_metadata and set(metadata_sources) != set(declared_files):
+            raise RuntimeError("Configuration snapshots do not match the merged input files")
+
+        configurations_by_hash: dict[str, dict[str, Any]] = {}
+        for item in input_metadata:
+            config_hash = str(item.get("production_config_hash", ""))
+            record = configurations_by_hash.setdefault(config_hash, {
+                "production_config_hash": config_hash,
+                "compatibility_hash": item.get("compatibility_hash"),
+                "data_tree_path": item.get("data_tree_path"),
+                "config_tree_path": item.get("config_tree_path"),
+                "production_config": item.get("production_config", {}),
+                "trigger_requirements": item.get("trigger_requirements", []),
+                "source_files": [],
+            })
+            record["source_files"].append(str(item["source_file"]))
+        for record in configurations_by_hash.values():
+            record["source_files"].sort()
+        configuration_metadata = {
+            "efficiency_definition": efficiency_definition,
+            "input_metadata": input_metadata,
+            "production_configurations": list(configurations_by_hash.values()),
+        }
+    active_binning = binning
+    if active_binning is None and configuration_metadata.get("efficiency_definition"):
+        definition = efficiency_definition_from_dict(
+            configuration_metadata["efficiency_definition"],
+            source="merged-shards",
+        )
+        active_binning = EfficiencyBinning(**definition.binning)
+    active_binning = active_binning or EfficiencyBinning()
+    counts_df = build_efficiency_counts(gen_df, event_df, active_binning)
+    cutflow_df = build_cutflow(event_df, active_binning)
+    input_files = declared_files
+    coverage_summary = {
+        "sample": sample,
+        "coverage_scope": coverage_scope,
+        "n_processed_files": len(declared_files),
+        "master_n_files": master_n_files,
+        "entries_scanned": int(coverage_df["entries_scanned"].sum()),
+        "retained_candidate_events": int(coverage_df["retained_candidate_events"].sum()),
+        "full_gen_events": int(coverage_df["full_gen_events"].sum()),
+        "master_manifest_id": next(iter(master_manifest_ids), None),
+    }
+    artifacts = write_efficiency_sample_bundle(
+        output_dir,
+        sample,
+        input_files,
+        gen_df,
+        event_df,
+        counts_df,
+        cutflow_df,
+        coverage_df=coverage_df,
+        ancestry_df=ancestry_df,
+        configuration_metadata=configuration_metadata,
+        coverage_summary=coverage_summary,
+    )
 
     inclusive_final = cutflow_df.loc[cutflow_df["step"] == "Pri_trackPVPass"]
     summary_df = pd.DataFrame(
@@ -215,7 +356,17 @@ def build_derived_sample_products(
 
     sample = sample_dir.name
     counts_df = pd.read_parquet(counts_path)
-    active_binning = binning or EfficiencyBinning()
+    active_binning = binning
+    metadata_path = sample_dir / "configuration_metadata.json"
+    if active_binning is None and metadata_path.exists():
+        metadata = read_json(metadata_path)
+        if metadata.get("efficiency_definition"):
+            definition = efficiency_definition_from_dict(
+                metadata["efficiency_definition"],
+                source=str(metadata_path),
+            )
+            active_binning = EfficiencyBinning(**definition.binning)
+    active_binning = active_binning or EfficiencyBinning()
     acc_df = build_acceptance_maps(counts_df)
 
     # Read gen+event data for AND-intersection conditional maps + derived products

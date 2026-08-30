@@ -20,8 +20,10 @@ def test_read_tps_inventory_and_build_manifest(tmp_path) -> None:
     payload = build_tps_manifest(rows, "JJP_TPS", str(inventory))
 
     assert payload["files"] == ["root://cceos.ihep.ac.cn//store/a.root", "/tmp/b.root"]
-    assert payload["inventory_totals"] == {"total_entries": 120, "retained_events": 9}
-    assert payload["inventory"][0]["retained_events"] == 7
+    assert payload["inventory_totals"] == {"total_entries": 120, "retained_candidate_events": 9}
+    assert payload["inventory"][0]["retained_candidate_events"] == 7
+    assert payload["schema_version"] == "ntuple-analyzer-tps-manifest/v1"
+    assert payload["master_manifest_id"] == payload["manifest_id"]
 
 
 def test_read_tps_inventory_rejects_bad_counts(tmp_path) -> None:

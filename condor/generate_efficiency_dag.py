@@ -144,7 +144,8 @@ Queue 1
 def _shard_args(sample: str, shard_index: str, manifest_path: str, output_dir: str,
                 remote_access_mode: str, efficiency_backend: str,
                 stage_retries: str, copy_timeout: str,
-                worker_timeout: str) -> str:
+                worker_timeout: str, tree_path: str,
+                efficiency_config: str | None, config_policy: str | None) -> str:
     return (
         f"run_jjp_efficiency_shard.sh "
         f"--sample {sample} "
@@ -156,7 +157,10 @@ def _shard_args(sample: str, shard_index: str, manifest_path: str, output_dir: s
         f"--stage-retries {stage_retries} "
         f"--copy-timeout {copy_timeout} "
         f"--worker-timeout {worker_timeout} "
-        f"--skip-plots"
+        f"--tree-path {tree_path} "
+        + (f"--efficiency-config {efficiency_config} " if efficiency_config else "")
+        + (f"--config-policy {config_policy} " if config_policy else "")
+        + "--skip-plots"
     )
 
 
@@ -173,6 +177,9 @@ def build_dag(
     stage_retries: str = "3",
     copy_timeout: str = "180",
     worker_timeout: str = "180",
+    tree_path: str = "auto",
+    efficiency_config: str | None = None,
+    config_policy: str | None = None,
 ) -> Path:
     if not queue_file.exists():
         raise FileNotFoundError(f"Queue file not found: {queue_file}")
@@ -214,6 +221,7 @@ def build_dag(
                 sample, shard_index, manifest_path, output_dir,
                 remote_access_mode, efficiency_backend,
                 stage_retries, copy_timeout, worker_timeout,
+                tree_path, efficiency_config, config_policy,
             ),
             runtime_tarball=runtime_tarball,
             runtime_tarball_basename=tarball_basename,
@@ -270,6 +278,9 @@ def main() -> None:
     parser.add_argument("--stage-retries", default="3")
     parser.add_argument("--copy-timeout", default="180")
     parser.add_argument("--worker-timeout", default="180")
+    parser.add_argument("--tree-path", default="auto")
+    parser.add_argument("--efficiency-config", default=None)
+    parser.add_argument("--config-policy", choices=("strict", "legacy"), default=None)
     args = parser.parse_args()
 
     queue_file = Path(args.queue_file)
@@ -286,6 +297,9 @@ def main() -> None:
         stage_retries=args.stage_retries,
         copy_timeout=args.copy_timeout,
         worker_timeout=args.worker_timeout,
+        tree_path=args.tree_path,
+        efficiency_config=args.efficiency_config,
+        config_policy=args.config_policy,
     )
     print(f"Wrote DAG: {dag_path}")
 

@@ -13,7 +13,13 @@ import pandas as pd
 import uproot
 from scipy.stats import beta
 
-from .config import OfflineSelectionConfig
+from .config import (
+    DEFAULT_TRIGGER_REQUIREMENTS,
+    EfficiencyDefinitionConfig,
+    OfflineSelectionConfig,
+    default_efficiency_definition,
+)
+from .tps_input import ResolvedTriggerRequirement, resolve_input_context
 from .truth import first_ancestor_idx, to_int_idx
 
 
@@ -273,6 +279,12 @@ COMPOSITE_BRANCHES = sorted(
         "muJpsiMatchedTriggerIndices",
         "muJpsiMatchedFilterIndices",
         "muIsPatSoftMuon",
+        "MatchJpsiTriggerNames",
+        "DiOnia_fitValid",
+        "DiOnia_fitPass",
+        "DiOnia_commonRecVtxPass",
+        "DiOnia_passAny",
+        "DiOnia_VtxProb",
         "Pri_fitValid",
         "Pri_fitPass",
         "Pri_assocPVPass",
@@ -322,7 +334,7 @@ class EfficiencyBinning:
 @dataclass(frozen=True)
 class EfficiencyRunConfig:
     analysis_mode: str = "JpsiJpsiPhi"
-    tree_path: str = "mkcands/X_data"
+    tree_path: str = "auto"
     xrootd_host: str = "root://cceos.ihep.ac.cn//"
     sample_root: str = "/eos/ihep/cms/store/user/xcheng/MC_Production_v3/output"
     samples: tuple[str, ...] = ("JJP_DPS1", "JJP_DPS2_CS", "JJP_DPS2_G", "JJP_SPS_CS", "JJP_SPS_G")
@@ -1185,15 +1197,73 @@ def build_event_efficiency_row(
     return gen_row, event_row
 
 
-def process_efficiency_file(path: str, sample: str, cfg: OfflineSelectionConfig, tree_path: str = "mkcands/X_data") -> dict[str, pd.DataFrame]:
+def _count_retained_candidate_events(arrays: ak.Array) -> int:
+    """Count manifest-retained events using the stored Pri_passAny definition."""
+    if "Pri_passAny" in arrays.fields:
+        candidate_pass = arrays["Pri_passAny"] != 0
+    elif {"Pri_fitPass", "Pri_assocPVPass"}.issubset(arrays.fields):
+        candidate_pass = (arrays["Pri_fitPass"] != 0) | (arrays["Pri_assocPVPass"] != 0)
+    elif "Jpsi_1_mass" in arrays.fields:
+        # Legacy files predate the formal manifest definition.
+        return int(ak.sum(ak.num(arrays["Jpsi_1_mass"], axis=1) > 0))
+    else:
+        return 0
+    return int(ak.sum(ak.any(candidate_pass, axis=1)))
+
+
+def process_efficiency_file(
+    path: str,
+    sample: str,
+    cfg: OfflineSelectionConfig,
+    tree_path: str = "auto",
+    *,
+    definition: EfficiencyDefinitionConfig | None = None,
+    config_policy: str = "legacy",
+) -> dict[str, Any]:
+    definition = definition or default_efficiency_definition()
     with uproot.open(path, **_uproot_read_options(path)) as root_file:
-        tree = root_file[tree_path]
+        context = resolve_input_context(
+            root_file,
+            tree_path,
+            definition,
+            strict=config_policy == "strict",
+        )
+        tree = root_file[context.data_tree_path]
         available = set(tree.keys())
         branches = [branch for branch in ALL_KNOWN_BRANCHES if branch in available]
         arrays = tree.arrays(branches, library="ak")
 
     if _detect_ntuple_format(set(arrays.fields)) != "v1.0":
-        return _process_efficiency_chunk_vectorized(arrays, path, sample, cfg, 0)
+        chunk = _process_efficiency_chunk_vectorized(
+            arrays,
+            path,
+            sample,
+            cfg,
+            0,
+            context.trigger_filter_map,
+            context.trigger_requirements,
+            definition.dionia_vtxprob_diagnostic_min,
+        )
+        event_df = chunk["event_step_flags"]
+        chunk["file_coverage"] = pd.DataFrame([{
+            "source_file": path,
+            "tree_path": context.data_tree_path,
+            "config_tree_path": context.config_tree_path,
+            "source_entries": context.source_entries,
+            "entries_scanned": context.source_entries,
+            "retained_candidate_events": _count_retained_candidate_events(arrays),
+            "full_gen_events": int(len(event_df)),
+            "output_event_rows": int(len(event_df)),
+            "production_config_hash": context.production_config_hash,
+            "compatibility_hash": context.compatibility_hash,
+            "efficiency_config_hash": definition.config_hash,
+            "status": "success",
+            "error": "",
+            "warnings": json.dumps(list(context.warnings), sort_keys=True),
+        }])
+        chunk["gen_ancestry_qa"] = _gen_ancestry_qa_chunk(arrays, path)
+        chunk["input_metadata"] = [{"source_file": path, **context.to_metadata()}]
+        return chunk
 
     gen_rows: list[dict[str, Any]] = []
     event_rows: list[dict[str, Any]] = []
@@ -1204,48 +1274,44 @@ def process_efficiency_file(path: str, sample: str, cfg: OfflineSelectionConfig,
         if gen_row is not None and event_row is not None:
             gen_rows.append(gen_row)
             event_rows.append(event_row)
+    gen_df = pd.DataFrame(gen_rows)
+    event_df = pd.DataFrame(event_rows)
     return {
-        "gen_systems": pd.DataFrame(gen_rows),
-        "event_step_flags": pd.DataFrame(event_rows),
+        "gen_systems": gen_df,
+        "event_step_flags": event_df,
+        "file_coverage": pd.DataFrame([{
+            "source_file": path,
+            "tree_path": context.data_tree_path,
+            "config_tree_path": context.config_tree_path,
+            "source_entries": context.source_entries,
+            "entries_scanned": n_entries,
+            "retained_candidate_events": _count_retained_candidate_events(arrays),
+            "full_gen_events": int(len(event_df)),
+            "output_event_rows": int(len(event_df)),
+            "production_config_hash": context.production_config_hash,
+            "compatibility_hash": context.compatibility_hash,
+            "efficiency_config_hash": definition.config_hash,
+            "status": "success",
+            "error": "",
+            "warnings": json.dumps(list(context.warnings), sort_keys=True),
+        }]),
+        "gen_ancestry_qa": _gen_ancestry_qa_chunk(arrays, path),
+        "input_metadata": [{"source_file": path, **context.to_metadata()}],
     }
 
 
-def _event_trigger_path_or_array(arrays: ak.Array, like: ak.Array) -> ak.Array:
+def _event_trigger_path_or_array(
+    arrays: ak.Array,
+    like: ak.Array,
+    patterns: tuple[str, ...] | None = None,
+) -> ak.Array:
     if "TrigNames" not in arrays.fields or "TrigRes" not in arrays.fields:
         return ak.zeros_like(like, dtype=np.int8)
-    hlt_name_match = ak.str.find_substring(arrays["TrigNames"], "HLT_Dimuon0_Jpsi3p5_Muon2_v") >= 0
-    hlt_name_match = hlt_name_match | (ak.str.find_substring(arrays["TrigNames"], "HLT_DoubleMu4_3_LowMass_v") >= 0)
+    active_patterns = patterns or tuple(item.path_pattern for item in DEFAULT_TRIGGER_REQUIREMENTS)
+    hlt_name_match = ak.zeros_like(arrays["TrigRes"], dtype=np.int8) != 0
+    for pattern in active_patterns:
+        hlt_name_match = hlt_name_match | (ak.str.find_substring(arrays["TrigNames"], pattern) >= 0)
     return ak.values_astype(ak.any(hlt_name_match & (arrays["TrigRes"] != 0), axis=1), np.int8)
-
-
-def _read_trigger_filter_config(path: str) -> dict[str, int]:
-    """Read TriggersForJpsi and FiltersForJpsi from X_config tree.
-
-    Returns a dict mapping trigger pattern key → filter index, e.g.:
-    {"dimuon0": 0, "doublemu": 1}  where the int is the filter index
-    and also {"dimuon0_trig": 0, "doublemu_trig": 1} for trigger indices.
-    """
-    import uproot
-    config_tree = f"{path}:mkcands/X_config"
-    try:
-        with uproot.open(config_tree) as f:
-            triggers = f["TriggersForJpsi"].array()[0]
-            filters = f["FiltersForJpsi"].array()[0]
-    except Exception:
-        return {}
-
-    result: dict[str, int] = {}
-    for i, name in enumerate(triggers):
-        if "Dimuon0_Jpsi3p5_Muon2" in str(name):
-            result["dimuon0_trig"] = i
-        elif "DoubleMu4_3_LowMass" in str(name):
-            result["doublemu_trig"] = i
-    for i, name in enumerate(filters):
-        if "hltJpsiMuonL3Filtered3p5" in str(name):
-            result["dimuon0_filt"] = i
-        elif "hltDoubleMu43LowMassL3Filtered" in str(name):
-            result["doublemu_filt"] = i
-    return result
 
 
 def _compute_full_hlt_match_vectorized(
@@ -1256,72 +1322,55 @@ def _compute_full_hlt_match_vectorized(
     j2_mu2_idx: ak.Array,
     trig_filt_map: dict[str, int],
     like: ak.Array,
+    trigger_requirements: tuple[ResolvedTriggerRequirement, ...] | None = None,
 ) -> ak.Array:
-    """Return the full trigger/filter match mask for each composite candidate.
-
-    Requires BOTH trigger index AND filter index present for each matched muon.
-    Filters are pair-level: both muons of at least one J/psi dimuon pair must match.
-
-    The returned shape is ``(event, candidate)``.  The caller must combine it
-    with the event trigger-path bit and the triple-GEN-match mask before the
-    only event-level ``ak.any`` reduction.
-    """
+    """Return the configured candidate-level trigger/filter match mask."""
     zero = ak.values_astype(ak.zeros_like(like), bool)
-
-    if ("muJpsiMatchedTriggerIndices" not in arrays.fields
+    if (
+        "muJpsiMatchedTriggerIndices" not in arrays.fields
         or "muJpsiMatchedFilterIndices" not in arrays.fields
-        or not trig_filt_map):
+        or not trig_filt_map
+    ):
         return zero
 
-    dimuon0_trig = trig_filt_map.get("dimuon0_trig")
-    dimuon0_filt = trig_filt_map.get("dimuon0_filt")
-    doublemu_trig = trig_filt_map.get("doublemu_trig")
-    doublemu_filt = trig_filt_map.get("doublemu_filt")
+    if trigger_requirements is None:
+        trigger_requirements = tuple(
+            ResolvedTriggerRequirement(
+                key=item.key,
+                path_pattern=item.path_pattern,
+                filter_label=item.filter_label,
+                rule=item.rule,
+                trigger_index=int(trig_filt_map[f"{item.key}_trig"]),
+                filter_index=int(trig_filt_map[f"{item.key}_filt"]),
+            )
+            for item in DEFAULT_TRIGGER_REQUIREMENTS
+            if f"{item.key}_trig" in trig_filt_map and f"{item.key}_filt" in trig_filt_map
+        )
 
     mu_trig_indices = arrays["muJpsiMatchedTriggerIndices"]
     mu_filt_indices = arrays["muJpsiMatchedFilterIndices"]
 
-    def _mu_has_both(mu_idx: ak.Array, trig_val: int | None, filt_val: int | None) -> ak.Array:
-        """Check if muon at mu_idx has both trigger and filter indices."""
-        if trig_val is None or filt_val is None:
-            return ak.values_astype(ak.zeros_like(mu_idx), bool)
-        # _safe_take_jagged can return irreducible UnionArrays (union of list and scalar)
-        # when the muon-index arrays have irregular lengths. Collapse to uniform jagged.
+    def _mu_has_both(mu_idx: ak.Array, trig_val: int, filt_val: int) -> ak.Array:
         t = ak.Array(ak.to_list(_safe_take_jagged(mu_trig_indices, mu_idx, -1)))
         f = ak.Array(ak.to_list(_safe_take_jagged(mu_filt_indices, mu_idx, -1)))
-        trig_match = ak.any(t == trig_val, axis=-1)
-        filt_match = ak.any(f == filt_val, axis=-1)
-        return trig_match & filt_match
+        return ak.any(t == trig_val, axis=-1) & ak.any(f == filt_val, axis=-1)
 
-    # Per-muon match flags for each trigger path
-    j1_mu1_d0 = _mu_has_both(j1_mu1_idx, dimuon0_trig, dimuon0_filt)
-    j1_mu2_d0 = _mu_has_both(j1_mu2_idx, dimuon0_trig, dimuon0_filt)
-    j2_mu1_d0 = _mu_has_both(j2_mu1_idx, dimuon0_trig, dimuon0_filt)
-    j2_mu2_d0 = _mu_has_both(j2_mu2_idx, dimuon0_trig, dimuon0_filt)
-
-    j1_mu1_dm = _mu_has_both(j1_mu1_idx, doublemu_trig, doublemu_filt)
-    j1_mu2_dm = _mu_has_both(j1_mu2_idx, doublemu_trig, doublemu_filt)
-    j2_mu1_dm = _mu_has_both(j2_mu1_idx, doublemu_trig, doublemu_filt)
-    j2_mu2_dm = _mu_has_both(j2_mu2_idx, doublemu_trig, doublemu_filt)
-
-    # 3-muon trigger (Dimuon0): >=3 muons matched AND pair-level filter in >=1 J/psi pair
-    n_d0 = (
-        ak.values_astype(j1_mu1_d0, np.int8)
-        + ak.values_astype(j1_mu2_d0, np.int8)
-        + ak.values_astype(j2_mu1_d0, np.int8)
-        + ak.values_astype(j2_mu2_d0, np.int8)
-    )
-    j1_pair_d0 = j1_mu1_d0 & j1_mu2_d0
-    j2_pair_d0 = j2_mu1_d0 & j2_mu2_d0
-    match_dimuon0 = (n_d0 >= 3) & (j1_pair_d0 | j2_pair_d0)
-
-    # 2-muon trigger (DoubleMu): both muons of >=1 J/psi pair matched
-    j1_pair_dm = j1_mu1_dm & j1_mu2_dm
-    j2_pair_dm = j2_mu1_dm & j2_mu2_dm
-    match_doublemu = j1_pair_dm | j2_pair_dm
-
-    return match_dimuon0 | match_doublemu
-
+    result = zero
+    for requirement in trigger_requirements:
+        matched = [
+            _mu_has_both(index, requirement.trigger_index, requirement.filter_index)
+            for index in (j1_mu1_idx, j1_mu2_idx, j2_mu1_idx, j2_mu2_idx)
+        ]
+        pair = (matched[0] & matched[1]) | (matched[2] & matched[3])
+        if requirement.rule == "dimuon_pair":
+            requirement_pass = pair
+        elif requirement.rule == "three_muons_with_dimuon_pair":
+            n_matched = sum(ak.values_astype(item, np.int8) for item in matched)
+            requirement_pass = (n_matched >= 3) & pair
+        else:
+            raise ValueError(f"Unsupported trigger matching rule: {requirement.rule!r}")
+        result = result | requirement_pass
+    return result
 
 def _daughter_reco_passes(
     reco_gen_match: ak.Array,
@@ -1477,6 +1526,8 @@ def _process_efficiency_chunk_vectorized(
     cfg: OfflineSelectionConfig,
     entry_start: int,
     trig_filt_map: dict[str, int] | None = None,
+    trigger_requirements: tuple[ResolvedTriggerRequirement, ...] | None = None,
+    dionia_vtxprob_diagnostic_min: float = 0.005,
 ) -> dict[str, pd.DataFrame]:
     n_events = len(_record_field(arrays, "evtNum"))
     if n_events == 0:
@@ -1593,7 +1644,10 @@ def _process_efficiency_chunk_vectorized(
             & per_obj_raw["phi_fiducial"] & per_obj_raw["phi_kaonRECO"]
             & per_obj_raw["phi_kaonID"] & per_obj_raw["phi_dikaon"]
         )
-        hlt_event_path_or = _event_trigger_path_or_array(arrays, has_full_gen)
+        hlt_event_path_or = _event_trigger_path_or_array(
+            arrays, has_full_gen,
+            tuple(item.path_pattern for item in trigger_requirements) if trigger_requirements else None,
+        )
         hlt_event = s_cand & (hlt_event_path_or != 0)
         # hlt_muon_matched folded into hlt_event; singles-only ntuples lack
         # composite candidates for per-muon trigger-object matching
@@ -1605,6 +1659,10 @@ def _process_efficiency_chunk_vectorized(
             "hlt_muon_matched": hlt_event,
             "four_muon_vtx": false_event,
             "four_muon_vtx_noTrigMatch": false_event,
+            "four_muon_vtx_legacy_muVertexId": false_event,
+            "four_muon_vtx_commonRecVtxPass": false_event,
+            "four_muon_vtx_passAny": false_event,
+            "four_muon_vtx_vtxprob": false_event,
             "Pri_fitValid": false_event,
             "Pri_fitValid_noTrigMatch": false_event,
             "Pri_fitPass": false_event,
@@ -1869,10 +1927,36 @@ def _process_efficiency_chunk_vectorized(
         kv2 = ak.full_like(mu_v1, -3)
     four_muon_same = (mu_v1 >= 0) & (mu_v1 == mu_v2) & (mu_v1 == mu_v3) & (mu_v1 == mu_v4)
     tri_onia_same = four_muon_same & (mu_v1 == kv1) & (mu_v1 == kv2)
-    # Old alias
+    # Legacy aliases remain diagnostics; the nominal four-muon stage is DiOnia.
     same_vtx = tri_onia_same
+    if {"DiOnia_fitValid", "DiOnia_fitPass"}.issubset(arrays.fields):
+        dionia_nominal = (
+            (_as_index_array(arrays["DiOnia_fitValid"]) != 0)
+            & (_as_index_array(arrays["DiOnia_fitPass"]) != 0)
+        )
+        dionia_common = (
+            _as_index_array(arrays["DiOnia_commonRecVtxPass"]) != 0
+            if "DiOnia_commonRecVtxPass" in arrays.fields else dionia_nominal
+        )
+        dionia_pass_any = (
+            _as_index_array(arrays["DiOnia_passAny"]) != 0
+            if "DiOnia_passAny" in arrays.fields else dionia_nominal
+        )
+        dionia_vtxprob = (
+            arrays["DiOnia_VtxProb"] > dionia_vtxprob_diagnostic_min
+            if "DiOnia_VtxProb" in arrays.fields else dionia_nominal
+        )
+    else:
+        # Explicit legacy compatibility only; strict TPS validation requires DiOnia.
+        dionia_nominal = four_muon_same
+        dionia_common = four_muon_same
+        dionia_pass_any = four_muon_same
+        dionia_vtxprob = four_muon_same
 
-    hlt_event_path_or = _event_trigger_path_or_array(arrays, has_full_gen)
+    hlt_event_path_or = _event_trigger_path_or_array(
+        arrays, has_full_gen,
+        tuple(item.path_pattern for item in trigger_requirements) if trigger_requirements else None,
+    )
 
     # ── Per-object step flags (Efficiency_scheme.md) ──
     # muonRECO and muonID: prefer per-muon block; fall back to composite legs
@@ -1974,7 +2058,7 @@ def _process_efficiency_chunk_vectorized(
 
     _full_hlt_match = _compute_full_hlt_match_vectorized(
         arrays, j1_mu1_idx, j1_mu2_idx, j2_mu1_idx, j2_mu2_idx,
-        trig_filt_map or {}, s_cand,
+        trig_filt_map or {}, s_cand, trigger_requirements,
     )
     _has_trigger_indices = "muJpsiMatchedTriggerIndices" in arrays.fields
     if _has_trigger_indices and trig_filt_map:
@@ -1985,7 +2069,11 @@ def _process_efficiency_chunk_vectorized(
         # v1.6 fallback: heuristic trigger matching as separate step
         candidate_hlt_matched = candidate_hlt_path & candidate_hlt
 
-    candidate_four_muon_vtx = candidate_hlt_matched & four_muon_same
+    candidate_four_muon_vtx = candidate_hlt_matched & dionia_nominal
+    candidate_four_legacy = candidate_hlt_matched & four_muon_same
+    candidate_four_common = candidate_hlt_matched & dionia_common
+    candidate_four_pass_any = candidate_hlt_matched & dionia_pass_any
+    candidate_four_vtxprob = candidate_hlt_matched & dionia_vtxprob
     candidate_pri_valid = candidate_four_muon_vtx & (_as_index_array(arrays["Pri_fitValid"]) == 1)
     candidate_pri_pass = candidate_four_muon_vtx & (_as_index_array(arrays["Pri_fitPass"]) == 1)
     candidate_pri_assoc = candidate_four_muon_vtx & (_as_index_array(arrays["Pri_assocPVPass"]) == 1)
@@ -1997,6 +2085,10 @@ def _process_efficiency_chunk_vectorized(
     hlt_event = s_cand & _trigger_or
     hlt_muon_matched = ak.any(candidate_hlt_matched, axis=1)
     four_muon_vtx = ak.any(candidate_four_muon_vtx, axis=1)
+    four_muon_vtx_legacy = ak.any(candidate_four_legacy, axis=1)
+    four_muon_vtx_common = ak.any(candidate_four_common, axis=1)
+    four_muon_vtx_pass_any = ak.any(candidate_four_pass_any, axis=1)
+    four_muon_vtx_vtxprob = ak.any(candidate_four_vtxprob, axis=1)
     # Pri_* are parallel endpoints, each evaluated on the same 4-muon candidate.
     Pri_fitValid = ak.any(candidate_pri_valid, axis=1)
     Pri_fitPass = ak.any(candidate_pri_pass, axis=1)
@@ -2004,7 +2096,7 @@ def _process_efficiency_chunk_vectorized(
     Pri_trackPVPass = ak.any(candidate_pri_track, axis=1)
 
     # Chain A: without trigger matching (_noTrigMatch suffixed columns)
-    candidate_four_no_trig = candidate_hlt_path & four_muon_same
+    candidate_four_no_trig = candidate_hlt_path & dionia_nominal
     four_muon_vtx_noTrigMatch = ak.any(candidate_four_no_trig, axis=1)
     Pri_fitValid_noTrigMatch = ak.any(candidate_four_no_trig & (_as_index_array(arrays["Pri_fitValid"]) == 1), axis=1)
     Pri_fitPass_noTrigMatch = ak.any(candidate_four_no_trig & (_as_index_array(arrays["Pri_fitPass"]) == 1), axis=1)
@@ -2035,6 +2127,10 @@ def _process_efficiency_chunk_vectorized(
         "hlt_muon_matched": hlt_muon_matched,
         "four_muon_vtx": four_muon_vtx,
         "four_muon_vtx_noTrigMatch": four_muon_vtx_noTrigMatch,
+        "four_muon_vtx_legacy_muVertexId": four_muon_vtx_legacy,
+        "four_muon_vtx_commonRecVtxPass": four_muon_vtx_common,
+        "four_muon_vtx_passAny": four_muon_vtx_pass_any,
+        "four_muon_vtx_vtxprob": four_muon_vtx_vtxprob,
         "Pri_fitValid": Pri_fitValid,
         "Pri_fitValid_noTrigMatch": Pri_fitValid_noTrigMatch,
         "Pri_fitPass": Pri_fitPass,
@@ -2106,24 +2202,68 @@ def _process_efficiency_chunk_vectorized(
     }
 
 
+def _gen_ancestry_qa_chunk(arrays: ak.Array, source_file: str) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    pdg_events = ak.to_list(arrays["MC_GenPart_pdgId"])
+    mother_events = ak.to_list(arrays["MC_GenPart_motherGenIdx"])
+    for pdgs, mothers in zip(pdg_events, mother_events):
+        for index, pdg_id in enumerate(pdgs):
+            abs_id = abs(int(pdg_id))
+            if abs_id not in {443, 333}:
+                continue
+            daughter_id = 13 if abs_id == 443 else 321
+            n_required = sum(
+                1
+                for child, parent in enumerate(mothers)
+                if to_int_idx(parent, -1) == index and abs(int(pdgs[child])) == daughter_id
+            )
+            mother_index = to_int_idx(mothers[index], -1)
+            mother_pdg_id = int(pdgs[mother_index]) if 0 <= mother_index < len(pdgs) else 0
+            rows.append(
+                {
+                    "source_file": source_file,
+                    "particle": "jpsi" if abs_id == 443 else "phi",
+                    "mother_pdg_id": mother_pdg_id,
+                    "has_required_daughters": n_required >= 2,
+                    "count": 1,
+                }
+            )
+    if not rows:
+        return pd.DataFrame(columns=["source_file", "particle", "mother_pdg_id", "has_required_daughters", "count"])
+    return (
+        pd.DataFrame(rows)
+        .groupby(["source_file", "particle", "mother_pdg_id", "has_required_daughters"], as_index=False)["count"]
+        .sum()
+    )
+
+
 def process_efficiency_file_vectorized(
     path: str,
     sample: str,
     cfg: OfflineSelectionConfig,
-    tree_path: str = "mkcands/X_data",
+    tree_path: str = "auto",
     step_size: str = "100 MB",
-) -> dict[str, pd.DataFrame]:
+    *,
+    definition: EfficiencyDefinitionConfig | None = None,
+    config_policy: str = "legacy",
+) -> dict[str, Any]:
+    definition = definition or default_efficiency_definition()
+    strict = config_policy == "strict"
+    if config_policy not in {"strict", "legacy"}:
+        raise ValueError(f"Unsupported config_policy: {config_policy!r}")
+
     gen_parts: list[pd.DataFrame] = []
     event_parts: list[pd.DataFrame] = []
-    trig_filt_map = _read_trigger_filter_config(path)
-    # Resolve aliases against this file before asking uproot to deserialize.
-    # Passing absent branch names as expressions is not portable across uproot
-    # versions (and fails for legitimate v2.1 files that omit legacy aliases).
+    ancestry_parts: list[pd.DataFrame] = []
     with uproot.open(path, **_uproot_read_options(path)) as root_file:
-        available_branches = set(root_file[tree_path].keys())
+        context = resolve_input_context(root_file, tree_path, definition, strict=strict)
+        selected_tree_path = context.data_tree_path
+        available_branches = set(root_file[selected_tree_path].keys())
     selected_branches = [name for name in ALL_KNOWN_BRANCHES if name in available_branches]
+    entries_scanned = 0
+    retained_candidate_events = 0
     iterator = uproot.iterate(
-        f"{path}:{tree_path}",
+        f"{path}:{selected_tree_path}",
         filter_name=selected_branches,
         library="ak",
         step_size=step_size,
@@ -2131,14 +2271,61 @@ def process_efficiency_file_vectorized(
         **_uproot_read_options(path),
     )
     for arrays, report in iterator:
-        chunk = _process_efficiency_chunk_vectorized(arrays, path, sample, cfg, int(report.start), trig_filt_map)
+        n_chunk = len(arrays["evtNum"])
+        entries_scanned += n_chunk
+        retained_candidate_events += _count_retained_candidate_events(arrays)
+        ancestry_parts.append(_gen_ancestry_qa_chunk(arrays, path))
+        chunk = _process_efficiency_chunk_vectorized(
+            arrays,
+            path,
+            sample,
+            cfg,
+            int(report.start),
+            context.trigger_filter_map,
+            context.trigger_requirements,
+            definition.dionia_vtxprob_diagnostic_min,
+        )
         if not chunk["gen_systems"].empty:
             gen_parts.append(chunk["gen_systems"])
         if not chunk["event_step_flags"].empty:
             event_parts.append(chunk["event_step_flags"])
+
+    gen_df = pd.concat(gen_parts, ignore_index=True) if gen_parts else pd.DataFrame()
+    event_df = pd.concat(event_parts, ignore_index=True) if event_parts else pd.DataFrame()
+    ancestry_df = pd.concat(ancestry_parts, ignore_index=True) if ancestry_parts else pd.DataFrame()
+    if not ancestry_df.empty:
+        ancestry_df = (
+            ancestry_df.groupby(
+                ["source_file", "particle", "mother_pdg_id", "has_required_daughters"],
+                as_index=False,
+            )["count"].sum()
+        )
+    coverage_df = pd.DataFrame(
+        [
+            {
+                "source_file": path,
+                "tree_path": context.data_tree_path,
+                "config_tree_path": context.config_tree_path,
+                "source_entries": context.source_entries,
+                "entries_scanned": entries_scanned,
+                "retained_candidate_events": retained_candidate_events,
+                "full_gen_events": int(len(event_df)),
+                "output_event_rows": int(len(event_df)),
+                "production_config_hash": context.production_config_hash,
+                "compatibility_hash": context.compatibility_hash,
+                "efficiency_config_hash": definition.config_hash,
+                "status": "success",
+                "error": "",
+                "warnings": json.dumps(list(context.warnings), sort_keys=True),
+            }
+        ]
+    )
     return {
-        "gen_systems": pd.concat(gen_parts, ignore_index=True) if gen_parts else pd.DataFrame(),
-        "event_step_flags": pd.concat(event_parts, ignore_index=True) if event_parts else pd.DataFrame(),
+        "gen_systems": gen_df,
+        "event_step_flags": event_df,
+        "file_coverage": coverage_df,
+        "gen_ancestry_qa": ancestry_df,
+        "input_metadata": [{"source_file": path, **context.to_metadata()}],
     }
 
 
@@ -2146,32 +2333,53 @@ def run_efficiency_for_sample(
     files: list[str],
     sample: str,
     cfg: OfflineSelectionConfig | None = None,
-    tree_path: str = "mkcands/X_data",
+    tree_path: str = "auto",
     backend: str = "vectorized",
     step_size: str = "100 MB",
     include_trigger_matching: bool = True,
-) -> dict[str, pd.DataFrame]:
-    cfg = cfg or OfflineSelectionConfig()
-    binning = EfficiencyBinning(include_trigger_matching=include_trigger_matching)
-    gen_parts: list[pd.DataFrame] = []
-    event_parts: list[pd.DataFrame] = []
+    *,
+    definition: EfficiencyDefinitionConfig | None = None,
+    config_policy: str = "legacy",
+) -> dict[str, Any]:
+    definition = definition or default_efficiency_definition()
+    cfg = cfg or definition.offline_selection
+    binning = EfficiencyBinning(include_trigger_matching=include_trigger_matching, **definition.binning)
+    parts: dict[str, list[pd.DataFrame]] = {
+        "gen_systems": [],
+        "event_step_flags": [],
+        "file_coverage": [],
+        "gen_ancestry_qa": [],
+    }
+    input_metadata: list[dict[str, Any]] = []
     for path in files:
         if backend == "python-loop":
-            tables = process_efficiency_file(path, sample, cfg, tree_path=tree_path)
+            tables = process_efficiency_file(
+                path, sample, cfg, tree_path=tree_path,
+                definition=definition, config_policy=config_policy,
+            )
         elif backend == "vectorized":
-            tables = process_efficiency_file_vectorized(path, sample, cfg, tree_path=tree_path, step_size=step_size)
+            tables = process_efficiency_file_vectorized(
+                path, sample, cfg, tree_path=tree_path, step_size=step_size,
+                definition=definition, config_policy=config_policy,
+            )
         else:
             raise ValueError(f"Unsupported efficiency backend: {backend}")
-        if not tables["gen_systems"].empty:
-            gen_parts.append(tables["gen_systems"])
-        if not tables["event_step_flags"].empty:
-            event_parts.append(tables["event_step_flags"])
-    gen_df = pd.concat(gen_parts, ignore_index=True) if gen_parts else pd.DataFrame()
-    event_df = pd.concat(event_parts, ignore_index=True) if event_parts else pd.DataFrame()
+        for key in parts:
+            if not tables[key].empty:
+                parts[key].append(tables[key])
+        input_metadata.extend(tables.get("input_metadata", []))
+
+    combined = {
+        key: pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        for key, frames in parts.items()
+    }
+    gen_df = combined["gen_systems"]
+    event_df = combined["event_step_flags"]
     counts_df = build_efficiency_counts(gen_df, event_df, binning)
     return {
-        "gen_systems": gen_df,
-        "event_step_flags": event_df,
+        **combined,
+        "input_metadata": input_metadata,
+        "efficiency_definition": definition.to_dict(),
         "efficiency_counts": counts_df,
         "cutflow": build_cutflow(event_df, binning),
     }

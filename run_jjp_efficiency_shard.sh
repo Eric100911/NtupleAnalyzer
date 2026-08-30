@@ -12,6 +12,9 @@ EFFICIENCY_BACKEND="vectorized"
 STAGE_RETRIES=3
 COPY_TIMEOUT=180
 WORKER_TIMEOUT=180
+TREE_PATH=auto
+EFFICIENCY_CONFIG=""
+CONFIG_POLICY=""
 SKIP_PLOTS=false
 
 while [[ $# -gt 0 ]]; do
@@ -25,6 +28,9 @@ while [[ $# -gt 0 ]]; do
     --stage-retries) STAGE_RETRIES="$2"; shift 2 ;;
     --copy-timeout) COPY_TIMEOUT="$2"; shift 2 ;;
     --worker-timeout) WORKER_TIMEOUT="$2"; shift 2 ;;
+    --tree-path) TREE_PATH="$2"; shift 2 ;;
+    --efficiency-config) EFFICIENCY_CONFIG="$2"; shift 2 ;;
+    --config-policy) CONFIG_POLICY="$2"; shift 2 ;;
     --skip-plots) SKIP_PLOTS=true; shift ;;
     -h|--help)
       echo "Usage: $0 --sample SAMPLE --shard-index N --shard-manifest FILE [options]"
@@ -49,7 +55,15 @@ ARGS=(
   --stage-retries "$STAGE_RETRIES"
   --copy-timeout "$COPY_TIMEOUT"
   --worker-timeout "$WORKER_TIMEOUT"
+  --tree-path "$TREE_PATH"
 )
+
+if [[ -n "$EFFICIENCY_CONFIG" ]]; then
+  ARGS+=(--efficiency-config "$EFFICIENCY_CONFIG")
+fi
+if [[ -n "$CONFIG_POLICY" ]]; then
+  ARGS+=(--config-policy "$CONFIG_POLICY")
+fi
 
 if [[ "$SKIP_PLOTS" == true ]]; then
   ARGS+=(--skip-plots)

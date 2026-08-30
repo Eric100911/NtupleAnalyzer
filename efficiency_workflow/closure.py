@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -22,7 +23,7 @@ from .corrections import (
     load_hybrid_correction_map,
 )
 from .efficiency import _merged_gen_events
-from .io import ensure_dir, write_json, write_parquet
+from .io import ensure_dir, read_json, write_json, write_parquet
 
 
 DEFAULT_CLOSURE_SAMPLES = ("JJP_DPS1", "JJP_DPS2_CS", "JJP_DPS2_G", "JJP_SPS_CS", "JJP_SPS_G")
@@ -507,6 +508,151 @@ def run_closure_hybrid(
     )
     return result_df
 
+# ---------------------------------------------------------------------------
+# file-disjoint closure
+# ---------------------------------------------------------------------------
+
+
+def partition_source_files(
+    source_files: Sequence[str],
+    *,
+    sample: str,
+    modulus: int = 5,
+    remainder: int = 0,
+) -> tuple[list[str], list[str]]:
+    """Deterministically split complete source files into train and holdout sets."""
+    if modulus < 2:
+        raise ValueError("holdout modulus must be at least 2")
+    if remainder < 0 or remainder >= modulus:
+        raise ValueError("holdout remainder must satisfy 0 <= remainder < modulus")
+    unique_files = sorted({str(path) for path in source_files})
+    holdout: list[str] = []
+    training: list[str] = []
+    for source_file in unique_files:
+        digest = hashlib.sha256(f"{sample}\0{source_file}".encode("utf-8")).digest()
+        target = holdout if int.from_bytes(digest[:8], "big") % modulus == remainder else training
+        target.append(source_file)
+    if not training or not holdout:
+        raise RuntimeError(
+            f"File partition produced training={len(training)} and holdout={len(holdout)} files; "
+            "choose another modulus/remainder"
+        )
+    return training, holdout
+
+
+def run_file_disjoint_closure(
+    input_dir: str | Path,
+    *,
+    sample: str,
+    selected_col: str = "Pri_assocPVPass",
+    map_type: str = "factorized",
+    output_dir: str | Path | None = None,
+    holdout_modulus: int = 5,
+    holdout_remainder: int = 0,
+    n_min_fine: int = 30,
+    n_min_coarse: int = 50,
+) -> pd.DataFrame:
+    """Build maps on whole input files and evaluate them on disjoint files."""
+    if map_type not in {"factorized", "hybrid"}:
+        raise ValueError("File-disjoint closure supports factorized and hybrid maps")
+    input_path = Path(input_dir)
+    sample_dir = input_path / sample
+    output_path = Path(output_dir) if output_dir is not None else sample_dir / f"closure_file_disjoint_{map_type}"
+    if output_path.exists() and any(output_path.iterdir()):
+        raise FileExistsError(f"Refusing to overwrite non-empty closure directory: {output_path}")
+    output_path = ensure_dir(output_path)
+
+    gen, event = _load_sample_inputs(input_path, [sample])
+    coverage_path = sample_dir / "file_coverage.parquet"
+    if coverage_path.exists():
+        source_files = pd.read_parquet(coverage_path, columns=["source_file"])["source_file"].astype(str).tolist()
+    else:
+        source_files = gen[sample]["source_file"].astype(str).tolist()
+    training_files, holdout_files = partition_source_files(
+        source_files,
+        sample=sample,
+        modulus=holdout_modulus,
+        remainder=holdout_remainder,
+    )
+    training_set = set(training_files)
+    holdout_set = set(holdout_files)
+    training_gen = gen[sample].loc[gen[sample]["source_file"].astype(str).isin(training_set)].reset_index(drop=True)
+    training_event = event[sample].loc[event[sample]["source_file"].astype(str).isin(training_set)].reset_index(drop=True)
+    holdout_gen = gen[sample].loc[gen[sample]["source_file"].astype(str).isin(holdout_set)].reset_index(drop=True)
+    holdout_event = event[sample].loc[event[sample]["source_file"].astype(str).isin(holdout_set)].reset_index(drop=True)
+    if training_gen.empty or holdout_gen.empty:
+        raise RuntimeError("File partition produced an empty training or holdout event sample")
+
+    training_dir = ensure_dir(output_path / "training_sample")
+    write_parquet(training_gen, training_dir / "gen_systems.parquet")
+    write_parquet(training_event, training_dir / "event_step_flags.parquet")
+    metadata_path = sample_dir / "configuration_metadata.json"
+    if metadata_path.exists():
+        metadata = read_json(metadata_path)
+        metadata["input_metadata"] = [
+            item for item in metadata.get("input_metadata", [])
+            if str(item.get("source_file")) in training_set
+        ]
+        training_configurations = []
+        for item in metadata.get("production_configurations", []):
+            record = dict(item)
+            record["source_files"] = [
+                source_file for source_file in item.get("source_files", [])
+                if str(source_file) in training_set
+            ]
+            if record["source_files"]:
+                training_configurations.append(record)
+        metadata["production_configurations"] = training_configurations
+        write_json(metadata, training_dir / "configuration_metadata.json")
+
+    maps_dir = training_dir / "maps"
+    build_factorized_maps_for_sample(training_dir, maps_dir, event_end_step=selected_col)
+    holdout_merged = _merged_gen_events(holdout_gen, holdout_event)
+    label = f"{sample}_train_on_file_holdout"
+    if map_type == "factorized":
+        correction_map = load_factorized_correction_map(
+            training_dir,
+            n_min_fine=n_min_fine,
+            n_min_coarse=n_min_coarse,
+        )
+        result = _closure_result_from_merged(label, correction_map, holdout_merged, selected_col=selected_col)
+    else:
+        build_post_acceptance_5d_map(training_dir, maps_dir, event_end_step=selected_col)
+        correction_map = load_hybrid_correction_map(
+            training_dir,
+            n_min_fine=n_min_fine,
+            n_min_coarse=n_min_coarse,
+        )
+        result = _closure_result_from_merged_hybrid(label, correction_map, holdout_merged, selected_col=selected_col)
+
+    result_df = pd.DataFrame([{
+        "closure_type": "file_disjoint",
+        "map_sample": sample,
+        "target_sample": sample,
+        **result.to_dict(),
+    }])
+    write_parquet(result_df, output_path / "closure_results.parquet")
+    result_df.to_csv(output_path / "closure_results.csv", index=False)
+    write_json({
+        "stage": "file_disjoint_closure",
+        "input_dir": str(input_path.resolve()),
+        "sample": sample,
+        "map_type": map_type,
+        "selected_col": selected_col,
+        "partition": {
+            "algorithm": "sha256(sample + NUL + source_file) modulo modulus",
+            "modulus": holdout_modulus,
+            "remainder": holdout_remainder,
+            "training_files": training_files,
+            "holdout_files": holdout_files,
+        },
+        "n_training_rows": int(len(training_gen)),
+        "n_holdout_rows": int(len(holdout_gen)),
+        "artifacts": {"parquet": "closure_results.parquet", "csv": "closure_results.csv"},
+    }, output_path / "closure_manifest.json")
+    return result_df
+
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -527,6 +673,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--n-min-coarse", type=int, default=50, help="Minimum MC total for coarse factorized bins")
     parser.add_argument("--min-total-fine", type=int, default=0, help="Minimum MC total for fine 5D bin (non-factorized mode)")
     parser.add_argument("--min-total-coarse", type=int, default=0, help="Minimum MC total before falling back to 3D coarse (non-factorized mode)")
+    parser.add_argument("--file-disjoint", action="store_true", help="Build maps on a deterministic whole-file training split and evaluate the holdout split")
+    parser.add_argument("--holdout-modulus", type=int, default=5, help="Deterministic file-split modulus (default: 5, approximately 20 percent holdout)")
+    parser.add_argument("--holdout-remainder", type=int, default=0, help="Remainder assigned to the file holdout split")
     return parser.parse_args(argv)
 
 
@@ -536,7 +685,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     is_factorized = map_type == "factorized"
     is_hybrid = map_type == "hybrid"
 
-    if is_factorized:
+    if args.file_disjoint:
+        if len(args.samples) != 1:
+            raise ValueError("--file-disjoint requires exactly one --samples value")
+        if not (is_factorized or is_hybrid):
+            raise ValueError("--file-disjoint supports --map-type factorized or hybrid")
+        output_dir = Path(args.output_dir) if args.output_dir else Path(args.input_dir) / args.samples[0] / f"closure_file_disjoint_{map_type}"
+    elif is_factorized:
         output_dir = Path(args.output_dir) if args.output_dir else Path(args.input_dir) / "closure"
     elif is_hybrid:
         output_dir = Path(args.output_dir) if args.output_dir else Path(args.input_dir) / "closure_hybrid"
@@ -552,7 +707,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Output dir  : {output_dir}", flush=True)
     print(f"Self only   : {args.self_only}", flush=True)
 
-    if is_hybrid:
+    if args.file_disjoint:
+        result_df = run_file_disjoint_closure(
+            args.input_dir,
+            sample=args.samples[0],
+            selected_col=args.selected_col,
+            map_type=map_type,
+            output_dir=output_dir,
+            holdout_modulus=args.holdout_modulus,
+            holdout_remainder=args.holdout_remainder,
+            n_min_fine=args.n_min_fine,
+            n_min_coarse=args.n_min_coarse,
+        )
+    elif is_hybrid:
         if hasattr(args, "build_maps"):
             print(f"Build maps  : {args.build_maps}", flush=True)
         result_df = run_closure_hybrid(

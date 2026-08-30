@@ -320,8 +320,21 @@ def build_factorized_maps_for_sample(
     output_maps_dir: Path,
     *,
     binning: EfficiencyBinning | None = None,
-    event_end_step: str = DEFAULT_EVENT_END_STEP,
+    event_end_step: str | None = None,
 ) -> dict[str, Path]:
+    definition = None
+    metadata_path = input_sample_dir / "configuration_metadata.json"
+    if metadata_path.exists() and (binning is None or event_end_step is None):
+        metadata = read_json(metadata_path)
+        if metadata.get("efficiency_definition"):
+            definition = efficiency_definition_from_dict(
+                metadata["efficiency_definition"],
+                source=str(metadata_path),
+            )
+    if binning is None and definition is not None:
+        binning = EfficiencyBinning(**definition.binning)
+    if event_end_step is None:
+        event_end_step = definition.event_endpoint if definition is not None else DEFAULT_EVENT_END_STEP
     binning = binning or EfficiencyBinning()
     gen_path = input_sample_dir / "gen_systems.parquet"
     event_path = input_sample_dir / "event_step_flags.parquet"
@@ -374,15 +387,13 @@ def build_factorized_maps(
     input_dir: Path,
     *,
     samples: Iterable[str],
-    event_end_step: str = DEFAULT_EVENT_END_STEP,
+    event_end_step: str | None = None,
 ) -> dict[str, dict[str, Path]]:
-    binning = EfficiencyBinning()
     outputs: dict[str, dict[str, Path]] = {}
     for sample in samples:
         outputs[sample] = build_factorized_maps_for_sample(
             input_dir / sample,
             input_dir / sample / "maps",
-            binning=binning,
             event_end_step=event_end_step,
         )
     return outputs
@@ -404,7 +415,7 @@ def build_post_acceptance_5d_map(
     output_maps_dir: Path,
     *,
     binning: EfficiencyBinning | None = None,
-    event_end_step: str = DEFAULT_EVENT_END_STEP,
+    event_end_step: str | None = None,
 ) -> Path:
     """Build a 5D post-acceptance conditional efficiency map.
 
@@ -421,6 +432,19 @@ def build_post_acceptance_5d_map(
     """
     from .efficiency import _efficiency_row as _eff_row, _bin_label
 
+    definition = None
+    metadata_path = input_sample_dir / "configuration_metadata.json"
+    if metadata_path.exists() and (binning is None or event_end_step is None):
+        metadata = read_json(metadata_path)
+        if metadata.get("efficiency_definition"):
+            definition = efficiency_definition_from_dict(
+                metadata["efficiency_definition"],
+                source=str(metadata_path),
+            )
+    if binning is None and definition is not None:
+        binning = EfficiencyBinning(**definition.binning)
+    if event_end_step is None:
+        event_end_step = definition.event_endpoint if definition is not None else DEFAULT_EVENT_END_STEP
     binning = binning or EfficiencyBinning()
 
     gen_path = input_sample_dir / "gen_systems.parquet"
@@ -556,7 +580,7 @@ def build_post_acceptance_maps(
     input_dir: Path,
     *,
     samples: Iterable[str],
-    event_end_step: str = DEFAULT_EVENT_END_STEP,
+    event_end_step: str | None = None,
 ) -> dict[str, Path]:
     """Build post-acceptance 5D maps for multiple samples."""
     outputs: dict[str, Path] = {}
@@ -578,7 +602,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build factorized efficiency correction maps from merged parquet products")
     parser.add_argument("--input-dir", required=True, help="Merged efficiency directory containing sample subdirectories")
     parser.add_argument("--samples", nargs="+", required=True, help="Sample directories to process")
-    parser.add_argument("--event-end-step", default=DEFAULT_EVENT_END_STEP, help="Final event/PV numerator step")
+    parser.add_argument("--event-end-step", default=None, help="Final event/PV numerator step; defaults to the persisted efficiency definition")
     parser.add_argument("--build-post-acceptance", action="store_true",
                         help="Build post-acceptance 5D conditional maps instead of factorized maps")
     return parser.parse_args()

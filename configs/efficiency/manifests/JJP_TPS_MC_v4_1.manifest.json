@@ -1,0 +1,1924 @@
+{
+  "schema_version": "ntuple-analyzer-tps-manifest/v1",
+  "sample": "JJP_TPS_MC_v4_1",
+  "files": [
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000000/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000001/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000002/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000003/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000004/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000005/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000006/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000007/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000008/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000009/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000010/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000011/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000012/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000013/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000014/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000015/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000016/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000017/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000018/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000019/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000020/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000021/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000022/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000024/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000025/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000026/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000027/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000028/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000035/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000040/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000042/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000043/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000044/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000046/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000361/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000362/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000363/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000364/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000365/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000366/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000367/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000368/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000369/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000377/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000378/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000380/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000389/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000390/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000391/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000392/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000393/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000394/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000395/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000396/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000397/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000398/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000399/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000000/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000001/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000002/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000003/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000004/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000005/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000006/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000007/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000008/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000009/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000010/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000011/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000012/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000013/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000014/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000015/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000016/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000017/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000018/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000019/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000020/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000021/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000022/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000023/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000024/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000025/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000026/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000027/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000028/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000031/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000036/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000044/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000046/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000047/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000048/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000049/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000052/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000364/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000366/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000367/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000368/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000369/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000371/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000372/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000379/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000381/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000382/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000384/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000390/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000391/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000392/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000393/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000394/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000395/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000396/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000397/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000398/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000399/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000000/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000001/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000002/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000003/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000004/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000005/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000006/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000007/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000008/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000009/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000010/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000011/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000012/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000013/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000014/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000015/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000016/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000017/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000018/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000019/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000020/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000021/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000022/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000023/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000024/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000025/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000026/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000027/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000028/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000039/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000045/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000046/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000048/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000049/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000050/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000051/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000052/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000053/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000054/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000005/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000006/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000007/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000008/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000009/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000010/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000011/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000012/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000013/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000014/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000015/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000016/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000017/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000366/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000367/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000370/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000024/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000025/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000026/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000027/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000028/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000029/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000031/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000398/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000399/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000000/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000001/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000002/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000003/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000004/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000005/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000006/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000007/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000008/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000376/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000377/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000378/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000379/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000386/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000387/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000388/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000389/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000043/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000044/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000045/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000046/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000047/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000048/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000049/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000050/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000051/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000052/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000053/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000054/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000108/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000109/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000110/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000111/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000112/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000113/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000114/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000115/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000169/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000170/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000171/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000172/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000173/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000174/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000175/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000229/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000230/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000231/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000232/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000233/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000234/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000235/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000236/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000237/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000238/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000239/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000292/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000293/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000346/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000398/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000399/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000000/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000001/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000002/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000003/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000004/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000005/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000006/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000007/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000008/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000009/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000010/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000011/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000012/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000013/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000014/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000015/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000016/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000018/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000019/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000020/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000021/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000022/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000023/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000381/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000382/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000383/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000390/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000008_MERGE000044/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000007/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000008/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000009/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000010/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000011/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000012/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000013/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000014/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000015/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000016/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000395/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000396/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000397/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000398/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000399/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000000/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000001/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000002/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000003/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000004/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000005/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000006/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000007/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000362/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000363/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000365/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000366/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000018/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000019/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000020/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000021/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000022/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000023/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000024/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000025/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000026/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000027/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000028/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000029/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000389/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000390/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000391/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000392/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000393/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000394/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000395/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000396/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000397/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000398/output_ntuple.root",
+    "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000399/output_ntuple.root"
+  ],
+  "n_files": 317,
+  "master_n_files": 317,
+  "source_inventory": "docs/tps_retained_ntuple_events.txt",
+  "inventory_columns": [
+    "source_file",
+    "total_entries",
+    "retained_candidate_events"
+  ],
+  "inventory_totals": {
+    "total_entries": 1472109,
+    "retained_candidate_events": 93901
+  },
+  "inventory": [
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000000/output_ntuple.root",
+      "total_entries": 4649,
+      "retained_candidate_events": 316
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000001/output_ntuple.root",
+      "total_entries": 4645,
+      "retained_candidate_events": 270
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000002/output_ntuple.root",
+      "total_entries": 4662,
+      "retained_candidate_events": 316
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000003/output_ntuple.root",
+      "total_entries": 4638,
+      "retained_candidate_events": 275
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000004/output_ntuple.root",
+      "total_entries": 4642,
+      "retained_candidate_events": 313
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000005/output_ntuple.root",
+      "total_entries": 4658,
+      "retained_candidate_events": 303
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000006/output_ntuple.root",
+      "total_entries": 4624,
+      "retained_candidate_events": 314
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000007/output_ntuple.root",
+      "total_entries": 4635,
+      "retained_candidate_events": 298
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000008/output_ntuple.root",
+      "total_entries": 4639,
+      "retained_candidate_events": 305
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000009/output_ntuple.root",
+      "total_entries": 4679,
+      "retained_candidate_events": 286
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000010/output_ntuple.root",
+      "total_entries": 4629,
+      "retained_candidate_events": 288
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000011/output_ntuple.root",
+      "total_entries": 4637,
+      "retained_candidate_events": 295
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000012/output_ntuple.root",
+      "total_entries": 4610,
+      "retained_candidate_events": 305
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000013/output_ntuple.root",
+      "total_entries": 4648,
+      "retained_candidate_events": 303
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000014/output_ntuple.root",
+      "total_entries": 4649,
+      "retained_candidate_events": 263
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000015/output_ntuple.root",
+      "total_entries": 4662,
+      "retained_candidate_events": 318
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000016/output_ntuple.root",
+      "total_entries": 4656,
+      "retained_candidate_events": 266
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000017/output_ntuple.root",
+      "total_entries": 4643,
+      "retained_candidate_events": 307
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000018/output_ntuple.root",
+      "total_entries": 4653,
+      "retained_candidate_events": 311
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000019/output_ntuple.root",
+      "total_entries": 4640,
+      "retained_candidate_events": 317
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000020/output_ntuple.root",
+      "total_entries": 4662,
+      "retained_candidate_events": 297
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000021/output_ntuple.root",
+      "total_entries": 4652,
+      "retained_candidate_events": 324
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000022/output_ntuple.root",
+      "total_entries": 4633,
+      "retained_candidate_events": 311
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000024/output_ntuple.root",
+      "total_entries": 4647,
+      "retained_candidate_events": 288
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000025/output_ntuple.root",
+      "total_entries": 4682,
+      "retained_candidate_events": 285
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000026/output_ntuple.root",
+      "total_entries": 4653,
+      "retained_candidate_events": 293
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000027/output_ntuple.root",
+      "total_entries": 4651,
+      "retained_candidate_events": 306
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000028/output_ntuple.root",
+      "total_entries": 4666,
+      "retained_candidate_events": 288
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000035/output_ntuple.root",
+      "total_entries": 4635,
+      "retained_candidate_events": 299
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000040/output_ntuple.root",
+      "total_entries": 4660,
+      "retained_candidate_events": 282
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000042/output_ntuple.root",
+      "total_entries": 4649,
+      "retained_candidate_events": 285
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000043/output_ntuple.root",
+      "total_entries": 4640,
+      "retained_candidate_events": 280
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000044/output_ntuple.root",
+      "total_entries": 4652,
+      "retained_candidate_events": 303
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000046/output_ntuple.root",
+      "total_entries": 4641,
+      "retained_candidate_events": 306
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000361/output_ntuple.root",
+      "total_entries": 4617,
+      "retained_candidate_events": 300
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000362/output_ntuple.root",
+      "total_entries": 4636,
+      "retained_candidate_events": 314
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000363/output_ntuple.root",
+      "total_entries": 4633,
+      "retained_candidate_events": 254
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000364/output_ntuple.root",
+      "total_entries": 4624,
+      "retained_candidate_events": 281
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000365/output_ntuple.root",
+      "total_entries": 4647,
+      "retained_candidate_events": 269
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000366/output_ntuple.root",
+      "total_entries": 4672,
+      "retained_candidate_events": 308
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000367/output_ntuple.root",
+      "total_entries": 4644,
+      "retained_candidate_events": 271
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000368/output_ntuple.root",
+      "total_entries": 4631,
+      "retained_candidate_events": 285
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000369/output_ntuple.root",
+      "total_entries": 4648,
+      "retained_candidate_events": 292
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000377/output_ntuple.root",
+      "total_entries": 4647,
+      "retained_candidate_events": 296
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000378/output_ntuple.root",
+      "total_entries": 4640,
+      "retained_candidate_events": 299
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000380/output_ntuple.root",
+      "total_entries": 4637,
+      "retained_candidate_events": 306
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000389/output_ntuple.root",
+      "total_entries": 4634,
+      "retained_candidate_events": 316
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000390/output_ntuple.root",
+      "total_entries": 4635,
+      "retained_candidate_events": 278
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000391/output_ntuple.root",
+      "total_entries": 4644,
+      "retained_candidate_events": 303
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000392/output_ntuple.root",
+      "total_entries": 4649,
+      "retained_candidate_events": 284
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000393/output_ntuple.root",
+      "total_entries": 4650,
+      "retained_candidate_events": 271
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000394/output_ntuple.root",
+      "total_entries": 4663,
+      "retained_candidate_events": 277
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000395/output_ntuple.root",
+      "total_entries": 4661,
+      "retained_candidate_events": 308
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000396/output_ntuple.root",
+      "total_entries": 4642,
+      "retained_candidate_events": 268
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000397/output_ntuple.root",
+      "total_entries": 4641,
+      "retained_candidate_events": 314
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000398/output_ntuple.root",
+      "total_entries": 4645,
+      "retained_candidate_events": 294
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000000_MERGE000399/output_ntuple.root",
+      "total_entries": 4636,
+      "retained_candidate_events": 310
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000000/output_ntuple.root",
+      "total_entries": 4627,
+      "retained_candidate_events": 300
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000001/output_ntuple.root",
+      "total_entries": 4645,
+      "retained_candidate_events": 279
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000002/output_ntuple.root",
+      "total_entries": 4660,
+      "retained_candidate_events": 319
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000003/output_ntuple.root",
+      "total_entries": 4619,
+      "retained_candidate_events": 320
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000004/output_ntuple.root",
+      "total_entries": 4641,
+      "retained_candidate_events": 285
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000005/output_ntuple.root",
+      "total_entries": 4661,
+      "retained_candidate_events": 311
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000006/output_ntuple.root",
+      "total_entries": 4623,
+      "retained_candidate_events": 307
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000007/output_ntuple.root",
+      "total_entries": 4657,
+      "retained_candidate_events": 294
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000008/output_ntuple.root",
+      "total_entries": 4666,
+      "retained_candidate_events": 304
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000009/output_ntuple.root",
+      "total_entries": 4628,
+      "retained_candidate_events": 307
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000010/output_ntuple.root",
+      "total_entries": 4641,
+      "retained_candidate_events": 281
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000011/output_ntuple.root",
+      "total_entries": 4658,
+      "retained_candidate_events": 301
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000012/output_ntuple.root",
+      "total_entries": 4661,
+      "retained_candidate_events": 305
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000013/output_ntuple.root",
+      "total_entries": 4651,
+      "retained_candidate_events": 261
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000014/output_ntuple.root",
+      "total_entries": 4663,
+      "retained_candidate_events": 311
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000015/output_ntuple.root",
+      "total_entries": 4659,
+      "retained_candidate_events": 309
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000016/output_ntuple.root",
+      "total_entries": 4643,
+      "retained_candidate_events": 293
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000017/output_ntuple.root",
+      "total_entries": 4631,
+      "retained_candidate_events": 313
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000018/output_ntuple.root",
+      "total_entries": 4643,
+      "retained_candidate_events": 281
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000019/output_ntuple.root",
+      "total_entries": 4660,
+      "retained_candidate_events": 291
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000020/output_ntuple.root",
+      "total_entries": 4635,
+      "retained_candidate_events": 292
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000021/output_ntuple.root",
+      "total_entries": 4652,
+      "retained_candidate_events": 291
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000022/output_ntuple.root",
+      "total_entries": 4640,
+      "retained_candidate_events": 300
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000023/output_ntuple.root",
+      "total_entries": 4634,
+      "retained_candidate_events": 284
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000024/output_ntuple.root",
+      "total_entries": 4664,
+      "retained_candidate_events": 293
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000025/output_ntuple.root",
+      "total_entries": 4654,
+      "retained_candidate_events": 312
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000026/output_ntuple.root",
+      "total_entries": 4670,
+      "retained_candidate_events": 312
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000027/output_ntuple.root",
+      "total_entries": 4664,
+      "retained_candidate_events": 311
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000028/output_ntuple.root",
+      "total_entries": 4638,
+      "retained_candidate_events": 280
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000031/output_ntuple.root",
+      "total_entries": 4615,
+      "retained_candidate_events": 286
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000036/output_ntuple.root",
+      "total_entries": 4631,
+      "retained_candidate_events": 299
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000044/output_ntuple.root",
+      "total_entries": 4653,
+      "retained_candidate_events": 316
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000046/output_ntuple.root",
+      "total_entries": 4674,
+      "retained_candidate_events": 299
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000047/output_ntuple.root",
+      "total_entries": 4645,
+      "retained_candidate_events": 298
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000048/output_ntuple.root",
+      "total_entries": 4629,
+      "retained_candidate_events": 286
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000049/output_ntuple.root",
+      "total_entries": 4647,
+      "retained_candidate_events": 336
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000052/output_ntuple.root",
+      "total_entries": 4637,
+      "retained_candidate_events": 258
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000364/output_ntuple.root",
+      "total_entries": 4110,
+      "retained_candidate_events": 277
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000366/output_ntuple.root",
+      "total_entries": 4642,
+      "retained_candidate_events": 303
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000367/output_ntuple.root",
+      "total_entries": 4642,
+      "retained_candidate_events": 316
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000368/output_ntuple.root",
+      "total_entries": 4658,
+      "retained_candidate_events": 329
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000369/output_ntuple.root",
+      "total_entries": 4640,
+      "retained_candidate_events": 272
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000371/output_ntuple.root",
+      "total_entries": 4660,
+      "retained_candidate_events": 312
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000372/output_ntuple.root",
+      "total_entries": 4638,
+      "retained_candidate_events": 309
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000379/output_ntuple.root",
+      "total_entries": 4644,
+      "retained_candidate_events": 269
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000381/output_ntuple.root",
+      "total_entries": 4662,
+      "retained_candidate_events": 337
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000382/output_ntuple.root",
+      "total_entries": 4642,
+      "retained_candidate_events": 316
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000384/output_ntuple.root",
+      "total_entries": 4657,
+      "retained_candidate_events": 297
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000390/output_ntuple.root",
+      "total_entries": 4633,
+      "retained_candidate_events": 280
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000391/output_ntuple.root",
+      "total_entries": 4655,
+      "retained_candidate_events": 300
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000392/output_ntuple.root",
+      "total_entries": 4632,
+      "retained_candidate_events": 326
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000393/output_ntuple.root",
+      "total_entries": 4653,
+      "retained_candidate_events": 264
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000394/output_ntuple.root",
+      "total_entries": 4658,
+      "retained_candidate_events": 286
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000395/output_ntuple.root",
+      "total_entries": 4645,
+      "retained_candidate_events": 304
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000396/output_ntuple.root",
+      "total_entries": 4665,
+      "retained_candidate_events": 288
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000397/output_ntuple.root",
+      "total_entries": 4625,
+      "retained_candidate_events": 303
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000398/output_ntuple.root",
+      "total_entries": 4666,
+      "retained_candidate_events": 321
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000001_MERGE000399/output_ntuple.root",
+      "total_entries": 4662,
+      "retained_candidate_events": 323
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000000/output_ntuple.root",
+      "total_entries": 4640,
+      "retained_candidate_events": 293
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000001/output_ntuple.root",
+      "total_entries": 4636,
+      "retained_candidate_events": 287
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000002/output_ntuple.root",
+      "total_entries": 4638,
+      "retained_candidate_events": 297
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000003/output_ntuple.root",
+      "total_entries": 4663,
+      "retained_candidate_events": 299
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000004/output_ntuple.root",
+      "total_entries": 4666,
+      "retained_candidate_events": 301
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000005/output_ntuple.root",
+      "total_entries": 4635,
+      "retained_candidate_events": 300
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000006/output_ntuple.root",
+      "total_entries": 4645,
+      "retained_candidate_events": 310
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000007/output_ntuple.root",
+      "total_entries": 4655,
+      "retained_candidate_events": 328
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000008/output_ntuple.root",
+      "total_entries": 4615,
+      "retained_candidate_events": 317
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000009/output_ntuple.root",
+      "total_entries": 4618,
+      "retained_candidate_events": 304
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000010/output_ntuple.root",
+      "total_entries": 4638,
+      "retained_candidate_events": 299
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000011/output_ntuple.root",
+      "total_entries": 4640,
+      "retained_candidate_events": 296
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000012/output_ntuple.root",
+      "total_entries": 4654,
+      "retained_candidate_events": 300
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000013/output_ntuple.root",
+      "total_entries": 4648,
+      "retained_candidate_events": 292
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000014/output_ntuple.root",
+      "total_entries": 4653,
+      "retained_candidate_events": 308
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000015/output_ntuple.root",
+      "total_entries": 4648,
+      "retained_candidate_events": 296
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000016/output_ntuple.root",
+      "total_entries": 4656,
+      "retained_candidate_events": 304
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000017/output_ntuple.root",
+      "total_entries": 4628,
+      "retained_candidate_events": 277
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000018/output_ntuple.root",
+      "total_entries": 4660,
+      "retained_candidate_events": 306
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000019/output_ntuple.root",
+      "total_entries": 4662,
+      "retained_candidate_events": 297
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000020/output_ntuple.root",
+      "total_entries": 4659,
+      "retained_candidate_events": 293
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000021/output_ntuple.root",
+      "total_entries": 4660,
+      "retained_candidate_events": 323
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000022/output_ntuple.root",
+      "total_entries": 4650,
+      "retained_candidate_events": 300
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000023/output_ntuple.root",
+      "total_entries": 4647,
+      "retained_candidate_events": 311
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000024/output_ntuple.root",
+      "total_entries": 4652,
+      "retained_candidate_events": 298
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000025/output_ntuple.root",
+      "total_entries": 4652,
+      "retained_candidate_events": 290
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000026/output_ntuple.root",
+      "total_entries": 4633,
+      "retained_candidate_events": 297
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000027/output_ntuple.root",
+      "total_entries": 4633,
+      "retained_candidate_events": 303
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000028/output_ntuple.root",
+      "total_entries": 4634,
+      "retained_candidate_events": 298
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000039/output_ntuple.root",
+      "total_entries": 4652,
+      "retained_candidate_events": 334
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000045/output_ntuple.root",
+      "total_entries": 4667,
+      "retained_candidate_events": 296
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000046/output_ntuple.root",
+      "total_entries": 4655,
+      "retained_candidate_events": 285
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000048/output_ntuple.root",
+      "total_entries": 4591,
+      "retained_candidate_events": 305
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000049/output_ntuple.root",
+      "total_entries": 4656,
+      "retained_candidate_events": 297
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000050/output_ntuple.root",
+      "total_entries": 4654,
+      "retained_candidate_events": 319
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000051/output_ntuple.root",
+      "total_entries": 4649,
+      "retained_candidate_events": 282
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000052/output_ntuple.root",
+      "total_entries": 4649,
+      "retained_candidate_events": 288
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000053/output_ntuple.root",
+      "total_entries": 4636,
+      "retained_candidate_events": 285
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000054/output_ntuple.root",
+      "total_entries": 4651,
+      "retained_candidate_events": 302
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000005/output_ntuple.root",
+      "total_entries": 4653,
+      "retained_candidate_events": 290
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000006/output_ntuple.root",
+      "total_entries": 4668,
+      "retained_candidate_events": 310
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000007/output_ntuple.root",
+      "total_entries": 4672,
+      "retained_candidate_events": 306
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000008/output_ntuple.root",
+      "total_entries": 4649,
+      "retained_candidate_events": 295
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000009/output_ntuple.root",
+      "total_entries": 4645,
+      "retained_candidate_events": 282
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000010/output_ntuple.root",
+      "total_entries": 4633,
+      "retained_candidate_events": 284
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000011/output_ntuple.root",
+      "total_entries": 4641,
+      "retained_candidate_events": 255
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000012/output_ntuple.root",
+      "total_entries": 4655,
+      "retained_candidate_events": 287
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000013/output_ntuple.root",
+      "total_entries": 4644,
+      "retained_candidate_events": 286
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000014/output_ntuple.root",
+      "total_entries": 4635,
+      "retained_candidate_events": 298
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000015/output_ntuple.root",
+      "total_entries": 4654,
+      "retained_candidate_events": 288
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000016/output_ntuple.root",
+      "total_entries": 4618,
+      "retained_candidate_events": 293
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000017/output_ntuple.root",
+      "total_entries": 4657,
+      "retained_candidate_events": 328
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000366/output_ntuple.root",
+      "total_entries": 4656,
+      "retained_candidate_events": 286
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000367/output_ntuple.root",
+      "total_entries": 4647,
+      "retained_candidate_events": 297
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000003_MERGE000370/output_ntuple.root",
+      "total_entries": 4672,
+      "retained_candidate_events": 299
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000024/output_ntuple.root",
+      "total_entries": 4670,
+      "retained_candidate_events": 298
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000025/output_ntuple.root",
+      "total_entries": 4632,
+      "retained_candidate_events": 316
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000026/output_ntuple.root",
+      "total_entries": 4640,
+      "retained_candidate_events": 281
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000027/output_ntuple.root",
+      "total_entries": 4631,
+      "retained_candidate_events": 302
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000028/output_ntuple.root",
+      "total_entries": 4660,
+      "retained_candidate_events": 307
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000029/output_ntuple.root",
+      "total_entries": 4668,
+      "retained_candidate_events": 318
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000031/output_ntuple.root",
+      "total_entries": 4646,
+      "retained_candidate_events": 347
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000398/output_ntuple.root",
+      "total_entries": 4630,
+      "retained_candidate_events": 281
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000004_MERGE000399/output_ntuple.root",
+      "total_entries": 4650,
+      "retained_candidate_events": 269
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000000/output_ntuple.root",
+      "total_entries": 4635,
+      "retained_candidate_events": 300
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000001/output_ntuple.root",
+      "total_entries": 4653,
+      "retained_candidate_events": 302
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000002/output_ntuple.root",
+      "total_entries": 4627,
+      "retained_candidate_events": 252
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000003/output_ntuple.root",
+      "total_entries": 4635,
+      "retained_candidate_events": 300
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000004/output_ntuple.root",
+      "total_entries": 4651,
+      "retained_candidate_events": 302
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000005/output_ntuple.root",
+      "total_entries": 4640,
+      "retained_candidate_events": 289
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000006/output_ntuple.root",
+      "total_entries": 4621,
+      "retained_candidate_events": 282
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000007/output_ntuple.root",
+      "total_entries": 4626,
+      "retained_candidate_events": 278
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000008/output_ntuple.root",
+      "total_entries": 4612,
+      "retained_candidate_events": 274
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000376/output_ntuple.root",
+      "total_entries": 4628,
+      "retained_candidate_events": 290
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000377/output_ntuple.root",
+      "total_entries": 4653,
+      "retained_candidate_events": 269
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000378/output_ntuple.root",
+      "total_entries": 4646,
+      "retained_candidate_events": 319
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000379/output_ntuple.root",
+      "total_entries": 4643,
+      "retained_candidate_events": 327
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000386/output_ntuple.root",
+      "total_entries": 4658,
+      "retained_candidate_events": 292
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000387/output_ntuple.root",
+      "total_entries": 4644,
+      "retained_candidate_events": 280
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000388/output_ntuple.root",
+      "total_entries": 4634,
+      "retained_candidate_events": 290
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000005_MERGE000389/output_ntuple.root",
+      "total_entries": 4647,
+      "retained_candidate_events": 274
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000043/output_ntuple.root",
+      "total_entries": 4643,
+      "retained_candidate_events": 304
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000044/output_ntuple.root",
+      "total_entries": 4647,
+      "retained_candidate_events": 311
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000045/output_ntuple.root",
+      "total_entries": 4651,
+      "retained_candidate_events": 291
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000046/output_ntuple.root",
+      "total_entries": 4642,
+      "retained_candidate_events": 290
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000047/output_ntuple.root",
+      "total_entries": 4652,
+      "retained_candidate_events": 272
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000048/output_ntuple.root",
+      "total_entries": 4650,
+      "retained_candidate_events": 284
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000049/output_ntuple.root",
+      "total_entries": 4673,
+      "retained_candidate_events": 298
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000050/output_ntuple.root",
+      "total_entries": 4627,
+      "retained_candidate_events": 312
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000051/output_ntuple.root",
+      "total_entries": 4654,
+      "retained_candidate_events": 307
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000052/output_ntuple.root",
+      "total_entries": 4654,
+      "retained_candidate_events": 313
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000053/output_ntuple.root",
+      "total_entries": 4638,
+      "retained_candidate_events": 284
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000054/output_ntuple.root",
+      "total_entries": 4662,
+      "retained_candidate_events": 271
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000108/output_ntuple.root",
+      "total_entries": 4641,
+      "retained_candidate_events": 306
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000109/output_ntuple.root",
+      "total_entries": 4642,
+      "retained_candidate_events": 301
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000110/output_ntuple.root",
+      "total_entries": 4620,
+      "retained_candidate_events": 289
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000111/output_ntuple.root",
+      "total_entries": 4668,
+      "retained_candidate_events": 297
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000112/output_ntuple.root",
+      "total_entries": 4615,
+      "retained_candidate_events": 299
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000113/output_ntuple.root",
+      "total_entries": 4641,
+      "retained_candidate_events": 305
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000114/output_ntuple.root",
+      "total_entries": 4662,
+      "retained_candidate_events": 307
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000115/output_ntuple.root",
+      "total_entries": 4638,
+      "retained_candidate_events": 286
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000169/output_ntuple.root",
+      "total_entries": 4619,
+      "retained_candidate_events": 307
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000170/output_ntuple.root",
+      "total_entries": 4664,
+      "retained_candidate_events": 299
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000171/output_ntuple.root",
+      "total_entries": 4671,
+      "retained_candidate_events": 307
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000172/output_ntuple.root",
+      "total_entries": 4629,
+      "retained_candidate_events": 281
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000173/output_ntuple.root",
+      "total_entries": 4612,
+      "retained_candidate_events": 296
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000174/output_ntuple.root",
+      "total_entries": 4658,
+      "retained_candidate_events": 294
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000175/output_ntuple.root",
+      "total_entries": 4632,
+      "retained_candidate_events": 290
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000229/output_ntuple.root",
+      "total_entries": 4636,
+      "retained_candidate_events": 271
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000230/output_ntuple.root",
+      "total_entries": 4659,
+      "retained_candidate_events": 286
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000231/output_ntuple.root",
+      "total_entries": 4638,
+      "retained_candidate_events": 307
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000232/output_ntuple.root",
+      "total_entries": 4655,
+      "retained_candidate_events": 316
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000233/output_ntuple.root",
+      "total_entries": 4621,
+      "retained_candidate_events": 294
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000234/output_ntuple.root",
+      "total_entries": 4657,
+      "retained_candidate_events": 277
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000235/output_ntuple.root",
+      "total_entries": 4651,
+      "retained_candidate_events": 309
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000236/output_ntuple.root",
+      "total_entries": 4663,
+      "retained_candidate_events": 288
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000237/output_ntuple.root",
+      "total_entries": 4658,
+      "retained_candidate_events": 311
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000238/output_ntuple.root",
+      "total_entries": 4645,
+      "retained_candidate_events": 308
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000239/output_ntuple.root",
+      "total_entries": 4627,
+      "retained_candidate_events": 311
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000292/output_ntuple.root",
+      "total_entries": 4657,
+      "retained_candidate_events": 298
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000293/output_ntuple.root",
+      "total_entries": 4651,
+      "retained_candidate_events": 300
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000346/output_ntuple.root",
+      "total_entries": 4641,
+      "retained_candidate_events": 257
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000398/output_ntuple.root",
+      "total_entries": 4633,
+      "retained_candidate_events": 303
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000006_MERGE000399/output_ntuple.root",
+      "total_entries": 4643,
+      "retained_candidate_events": 285
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000000/output_ntuple.root",
+      "total_entries": 4640,
+      "retained_candidate_events": 307
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000001/output_ntuple.root",
+      "total_entries": 4659,
+      "retained_candidate_events": 302
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000002/output_ntuple.root",
+      "total_entries": 4658,
+      "retained_candidate_events": 280
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000003/output_ntuple.root",
+      "total_entries": 4674,
+      "retained_candidate_events": 304
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000004/output_ntuple.root",
+      "total_entries": 4657,
+      "retained_candidate_events": 330
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000005/output_ntuple.root",
+      "total_entries": 4643,
+      "retained_candidate_events": 322
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000006/output_ntuple.root",
+      "total_entries": 4669,
+      "retained_candidate_events": 289
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000007/output_ntuple.root",
+      "total_entries": 4637,
+      "retained_candidate_events": 295
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000008/output_ntuple.root",
+      "total_entries": 4665,
+      "retained_candidate_events": 283
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000009/output_ntuple.root",
+      "total_entries": 4656,
+      "retained_candidate_events": 310
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000010/output_ntuple.root",
+      "total_entries": 4659,
+      "retained_candidate_events": 286
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000011/output_ntuple.root",
+      "total_entries": 4646,
+      "retained_candidate_events": 280
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000012/output_ntuple.root",
+      "total_entries": 4637,
+      "retained_candidate_events": 291
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000013/output_ntuple.root",
+      "total_entries": 4658,
+      "retained_candidate_events": 298
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000014/output_ntuple.root",
+      "total_entries": 4643,
+      "retained_candidate_events": 266
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000015/output_ntuple.root",
+      "total_entries": 4631,
+      "retained_candidate_events": 295
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000016/output_ntuple.root",
+      "total_entries": 4624,
+      "retained_candidate_events": 316
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000018/output_ntuple.root",
+      "total_entries": 4641,
+      "retained_candidate_events": 276
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000019/output_ntuple.root",
+      "total_entries": 4624,
+      "retained_candidate_events": 306
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000020/output_ntuple.root",
+      "total_entries": 4630,
+      "retained_candidate_events": 260
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000021/output_ntuple.root",
+      "total_entries": 4640,
+      "retained_candidate_events": 289
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000022/output_ntuple.root",
+      "total_entries": 4617,
+      "retained_candidate_events": 322
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000023/output_ntuple.root",
+      "total_entries": 4644,
+      "retained_candidate_events": 298
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000381/output_ntuple.root",
+      "total_entries": 4659,
+      "retained_candidate_events": 267
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000382/output_ntuple.root",
+      "total_entries": 4644,
+      "retained_candidate_events": 305
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000383/output_ntuple.root",
+      "total_entries": 4663,
+      "retained_candidate_events": 287
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000390/output_ntuple.root",
+      "total_entries": 4641,
+      "retained_candidate_events": 282
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000008_MERGE000044/output_ntuple.root",
+      "total_entries": 4645,
+      "retained_candidate_events": 312
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000007/output_ntuple.root",
+      "total_entries": 4673,
+      "retained_candidate_events": 315
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000008/output_ntuple.root",
+      "total_entries": 4660,
+      "retained_candidate_events": 273
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000009/output_ntuple.root",
+      "total_entries": 4634,
+      "retained_candidate_events": 308
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000010/output_ntuple.root",
+      "total_entries": 4629,
+      "retained_candidate_events": 283
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000011/output_ntuple.root",
+      "total_entries": 4654,
+      "retained_candidate_events": 283
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000012/output_ntuple.root",
+      "total_entries": 4633,
+      "retained_candidate_events": 270
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000013/output_ntuple.root",
+      "total_entries": 4642,
+      "retained_candidate_events": 279
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000014/output_ntuple.root",
+      "total_entries": 4631,
+      "retained_candidate_events": 281
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000015/output_ntuple.root",
+      "total_entries": 4649,
+      "retained_candidate_events": 303
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000016/output_ntuple.root",
+      "total_entries": 4640,
+      "retained_candidate_events": 310
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000395/output_ntuple.root",
+      "total_entries": 4662,
+      "retained_candidate_events": 301
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000396/output_ntuple.root",
+      "total_entries": 4646,
+      "retained_candidate_events": 284
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000397/output_ntuple.root",
+      "total_entries": 4638,
+      "retained_candidate_events": 309
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000398/output_ntuple.root",
+      "total_entries": 4656,
+      "retained_candidate_events": 315
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000009_MERGE000399/output_ntuple.root",
+      "total_entries": 4644,
+      "retained_candidate_events": 284
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000000/output_ntuple.root",
+      "total_entries": 4668,
+      "retained_candidate_events": 308
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000001/output_ntuple.root",
+      "total_entries": 4647,
+      "retained_candidate_events": 268
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000002/output_ntuple.root",
+      "total_entries": 4659,
+      "retained_candidate_events": 309
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000003/output_ntuple.root",
+      "total_entries": 4679,
+      "retained_candidate_events": 309
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000004/output_ntuple.root",
+      "total_entries": 4616,
+      "retained_candidate_events": 300
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000005/output_ntuple.root",
+      "total_entries": 4630,
+      "retained_candidate_events": 309
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000006/output_ntuple.root",
+      "total_entries": 4613,
+      "retained_candidate_events": 282
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000007/output_ntuple.root",
+      "total_entries": 4640,
+      "retained_candidate_events": 330
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000362/output_ntuple.root",
+      "total_entries": 4655,
+      "retained_candidate_events": 272
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000363/output_ntuple.root",
+      "total_entries": 4644,
+      "retained_candidate_events": 315
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000365/output_ntuple.root",
+      "total_entries": 4617,
+      "retained_candidate_events": 303
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000010_MERGE000366/output_ntuple.root",
+      "total_entries": 4667,
+      "retained_candidate_events": 275
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000018/output_ntuple.root",
+      "total_entries": 4644,
+      "retained_candidate_events": 289
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000019/output_ntuple.root",
+      "total_entries": 4633,
+      "retained_candidate_events": 284
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000020/output_ntuple.root",
+      "total_entries": 4680,
+      "retained_candidate_events": 286
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000021/output_ntuple.root",
+      "total_entries": 4652,
+      "retained_candidate_events": 293
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000022/output_ntuple.root",
+      "total_entries": 4643,
+      "retained_candidate_events": 301
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000023/output_ntuple.root",
+      "total_entries": 4606,
+      "retained_candidate_events": 306
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000024/output_ntuple.root",
+      "total_entries": 4641,
+      "retained_candidate_events": 298
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000025/output_ntuple.root",
+      "total_entries": 4636,
+      "retained_candidate_events": 282
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000026/output_ntuple.root",
+      "total_entries": 4671,
+      "retained_candidate_events": 310
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000027/output_ntuple.root",
+      "total_entries": 4641,
+      "retained_candidate_events": 310
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000028/output_ntuple.root",
+      "total_entries": 4630,
+      "retained_candidate_events": 282
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000029/output_ntuple.root",
+      "total_entries": 4672,
+      "retained_candidate_events": 301
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000389/output_ntuple.root",
+      "total_entries": 4636,
+      "retained_candidate_events": 262
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000390/output_ntuple.root",
+      "total_entries": 4670,
+      "retained_candidate_events": 308
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000391/output_ntuple.root",
+      "total_entries": 4650,
+      "retained_candidate_events": 289
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000392/output_ntuple.root",
+      "total_entries": 4625,
+      "retained_candidate_events": 281
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000393/output_ntuple.root",
+      "total_entries": 4644,
+      "retained_candidate_events": 299
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000394/output_ntuple.root",
+      "total_entries": 4653,
+      "retained_candidate_events": 300
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000395/output_ntuple.root",
+      "total_entries": 4612,
+      "retained_candidate_events": 280
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000396/output_ntuple.root",
+      "total_entries": 4641,
+      "retained_candidate_events": 281
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000397/output_ntuple.root",
+      "total_entries": 4631,
+      "retained_candidate_events": 301
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000398/output_ntuple.root",
+      "total_entries": 4658,
+      "retained_candidate_events": 318
+    },
+    {
+      "source_file": "root://cceos.ihep.ac.cn//store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000399/output_ntuple.root",
+      "total_entries": 4608,
+      "retained_candidate_events": 271
+    }
+  ],
+  "manifest_id": "3dcd439fdf3d2d18b7548f82e91b467e3ea624b05214f5da4948d8e0fd9f532a",
+  "master_manifest_id": "3dcd439fdf3d2d18b7548f82e91b467e3ea624b05214f5da4948d8e0fd9f532a"
+}

@@ -412,11 +412,11 @@ def test_runb_fixtures_cover_event_level_numerators_and_rejections():
         "s_cand": 13,
         "hlt_event": 8,
         "hlt_muon_matched": 7,
-        "four_muon_vtx": 5,
-        "Pri_fitValid": 5,
-        "Pri_fitPass": 5,
+        "four_muon_vtx": 7,
+        "Pri_fitValid": 7,
+        "Pri_fitPass": 7,
         "Pri_assocPVPass": 5,
-        "Pri_trackPVPass": 5,
+        "Pri_trackPVPass": 7,
     }
     memberships = classify_memberships(event_df)
     rejected = {
@@ -431,7 +431,7 @@ def test_runb_fixtures_cover_event_level_numerators_and_rejections():
         "s_cand": 67,
         "hlt_event": 5,
         "hlt_muon_matched": 1,
-        "four_muon_vtx": 2,
+        "four_muon_vtx": 0,
     }
     assert all(
         info["trigger_filter_map"]

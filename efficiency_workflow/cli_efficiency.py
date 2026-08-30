@@ -13,7 +13,12 @@ from typing import Any
 
 import pandas as pd
 
-from efficiency_workflow.config import CmsPlotStyleConfig, OfflineSelectionConfig
+from efficiency_workflow.config import (
+    CmsPlotStyleConfig,
+    EfficiencyDefinitionConfig,
+    efficiency_definition_from_dict,
+    load_efficiency_definition,
+)
 from efficiency_workflow.efficiency import (
     EfficiencyBinning,
     EfficiencyRunConfig,
@@ -106,33 +111,32 @@ def worker_script_path() -> Path:
 def run_efficiency_worker(spec_path: Path) -> None:
     spec = read_json(spec_path)
     output_dir = ensure_dir(Path(spec["output_dir"]))
-    cfg = OfflineSelectionConfig()
-    gen_parts: list[pd.DataFrame] = []
-    event_parts: list[pd.DataFrame] = []
-    for path in spec["files"]:
-        tables = run_efficiency_for_sample(
-            [path],
-            spec["sample"],
-            cfg=cfg,
-            tree_path=spec["tree_path"],
-            backend=spec.get("efficiency_backend", "vectorized"),
-            step_size=spec.get("step_size", "100 MB"),
-        )
-        if not tables["gen_systems"].empty:
-            gen_parts.append(tables["gen_systems"])
-        if not tables["event_step_flags"].empty:
-            event_parts.append(tables["event_step_flags"])
-    gen_df = pd.concat(gen_parts, ignore_index=True) if gen_parts else pd.DataFrame()
-    event_df = pd.concat(event_parts, ignore_index=True) if event_parts else pd.DataFrame()
-    write_parquet(gen_df, output_dir / "gen_systems.parquet")
-    write_parquet(event_df, output_dir / "event_step_flags.parquet")
+    definition = efficiency_definition_from_dict(
+        spec["efficiency_definition"],
+        source=spec["efficiency_definition"].get("source", "worker-spec"),
+    )
+    tables = run_efficiency_for_sample(
+        list(spec["files"]),
+        spec["sample"],
+        cfg=definition.offline_selection,
+        tree_path=spec["tree_path"],
+        backend=spec.get("efficiency_backend", "vectorized"),
+        step_size=spec.get("step_size", "100 MB"),
+        definition=definition,
+        config_policy=spec.get("config_policy", "legacy"),
+    )
+    for key in ("gen_systems", "event_step_flags", "file_coverage", "gen_ancestry_qa"):
+        write_parquet(tables[key], output_dir / f"{key}.parquet")
     write_json(
         {
             "sample": spec["sample"],
             "files": spec["files"],
             "tree_path": spec["tree_path"],
-            "n_gen_rows": int(len(gen_df)),
-            "n_event_rows": int(len(event_df)),
+            "efficiency_definition": tables["efficiency_definition"],
+            "input_metadata": tables["input_metadata"],
+            "n_gen_rows": int(len(tables["gen_systems"])),
+            "n_event_rows": int(len(tables["event_step_flags"])),
+            "n_coverage_rows": int(len(tables["file_coverage"])),
         },
         output_dir / "worker_manifest.json",
     )
@@ -146,7 +150,9 @@ def run_worker_attempt(
     efficiency_backend: str,
     step_size: str,
     worker_timeout: int,
-) -> dict[str, pd.DataFrame]:
+    definition: EfficiencyDefinitionConfig,
+    config_policy: str,
+) -> dict[str, Any]:
     ensure_dir(attempt_dir)
     spec_path = attempt_dir / "worker_spec.json"
     write_json(
@@ -157,6 +163,8 @@ def run_worker_attempt(
             "output_dir": str(attempt_dir),
             "efficiency_backend": efficiency_backend,
             "step_size": step_size,
+            "efficiency_definition": definition.to_dict(),
+            "config_policy": config_policy,
         },
         spec_path,
     )
@@ -170,9 +178,14 @@ def run_worker_attempt(
         check=True,
         timeout=worker_timeout if worker_timeout > 0 else None,
     )
+    worker_manifest = read_json(attempt_dir / "worker_manifest.json")
     return {
         "gen_systems": read_parquet(attempt_dir / "gen_systems.parquet"),
         "event_step_flags": read_parquet(attempt_dir / "event_step_flags.parquet"),
+        "file_coverage": read_parquet(attempt_dir / "file_coverage.parquet"),
+        "gen_ancestry_qa": read_parquet(attempt_dir / "gen_ancestry_qa.parquet"),
+        "input_metadata": worker_manifest.get("input_metadata", []),
+        "efficiency_definition": worker_manifest.get("efficiency_definition", definition.to_dict()),
     }
 
 
@@ -198,7 +211,9 @@ def process_file_with_fallback(
     step_size: str,
     worker_timeout: int,
     copy_timeout: int,
-) -> tuple[dict[str, pd.DataFrame], dict[str, str], str]:
+    definition: EfficiencyDefinitionConfig,
+    config_policy: str,
+) -> tuple[dict[str, Any], dict[str, str], str]:
     source_by_staged: dict[str, str] = {}
     last_error: Exception | None = None
     attempts = fallback_attempts(source, stage_dir, index) if is_remote_file(source) else [("local", source, None)]
@@ -208,7 +223,10 @@ def process_file_with_fallback(
             if method in {"xrdcp", "gfal"}:
                 assert staged_path is not None
                 copy_remote_file(source, staged_path, method, retries, copy_timeout)
-            tables = run_worker_attempt([path], sample, tree_path, method_attempt_dir, efficiency_backend, step_size, worker_timeout)
+            tables = run_worker_attempt(
+                [path], sample, tree_path, method_attempt_dir, efficiency_backend,
+                step_size, worker_timeout, definition, config_policy,
+            )
             if staged_path is not None:
                 source_by_staged[path] = source
             print(f"[INFO] access method: {method} succeeded for {source}")
@@ -236,9 +254,17 @@ def run_efficiency_with_fallback(
     worker_timeout: int,
     copy_timeout: int,
     include_trigger_matching: bool = True,
-) -> tuple[dict[str, pd.DataFrame], dict[str, str], dict[str, int]]:
-    gen_parts: list[pd.DataFrame] = []
-    event_parts: list[pd.DataFrame] = []
+    definition: EfficiencyDefinitionConfig | None = None,
+    config_policy: str = "legacy",
+) -> tuple[dict[str, Any], dict[str, str], dict[str, int]]:
+    definition = definition or load_efficiency_definition(None)
+    frame_parts: dict[str, list[pd.DataFrame]] = {
+        "gen_systems": [],
+        "event_step_flags": [],
+        "file_coverage": [],
+        "gen_ancestry_qa": [],
+    }
+    input_metadata: list[dict[str, Any]] = []
     source_by_staged: dict[str, str] = {}
     method_counts: dict[str, int] = {}
     failed_files: list[str] = []
@@ -258,17 +284,20 @@ def run_efficiency_with_fallback(
                 step_size,
                 worker_timeout,
                 copy_timeout,
+                definition,
+                config_policy,
             )
         except RuntimeError:
             print(f"[WARN] Skipping {source}: all {retries + 1} access methods failed")
             failed_files.append(source)
             continue
         method_counts[method] = method_counts.get(method, 0) + 1
+        tables["file_coverage"]["access_method"] = method
         source_by_staged.update(source_map)
-        if not tables["gen_systems"].empty:
-            gen_parts.append(tables["gen_systems"])
-        if not tables["event_step_flags"].empty:
-            event_parts.append(tables["event_step_flags"])
+        for key in frame_parts:
+            if not tables[key].empty:
+                frame_parts[key].append(tables[key])
+        input_metadata.extend(tables.get("input_metadata", []))
     if failed_files:
         failed_preview = ", ".join(failed_files[:3])
         if len(failed_files) > 3:
@@ -277,14 +306,19 @@ def run_efficiency_with_fallback(
             f"Refusing incomplete efficiency sample {sample}: "
             f"{len(failed_files)}/{len(files)} input files failed. Failed files: {failed_preview}"
         )
-    if not gen_parts:
+    if not frame_parts["gen_systems"]:
         raise RuntimeError(f"No files could be processed for {sample}")
-    gen_df = pd.concat(gen_parts, ignore_index=True) if gen_parts else pd.DataFrame()
-    event_df = pd.concat(event_parts, ignore_index=True) if event_parts else pd.DataFrame()
-    binning = EfficiencyBinning(include_trigger_matching=include_trigger_matching)
+    combined = {
+        key: pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+        for key, parts in frame_parts.items()
+    }
+    gen_df = combined["gen_systems"]
+    event_df = combined["event_step_flags"]
+    binning = EfficiencyBinning(include_trigger_matching=include_trigger_matching, **definition.binning)
     tables = {
-        "gen_systems": gen_df,
-        "event_step_flags": event_df,
+        **combined,
+        "input_metadata": input_metadata,
+        "efficiency_definition": definition.to_dict(),
         "efficiency_counts": build_efficiency_counts(gen_df, event_df, binning),
         "cutflow": build_cutflow(event_df, binning),
     }
@@ -308,12 +342,89 @@ def stage_remote_files(files: list[str], sample: str, stage_dir: Path, copy_tool
     return staged_files, source_by_staged
 
 
-def restore_source_file_labels(tables: dict[str, pd.DataFrame], source_by_staged: dict[str, str]) -> None:
+def restore_source_file_labels(tables: dict[str, Any], source_by_staged: dict[str, str]) -> None:
     if not source_by_staged:
         return
     for frame in tables.values():
-        if "source_file" in frame:
+        if isinstance(frame, pd.DataFrame) and "source_file" in frame:
             frame["source_file"] = frame["source_file"].replace(source_by_staged)
+    for metadata in tables.get("input_metadata", []):
+        if metadata.get("source_file") in source_by_staged:
+            metadata["source_file"] = source_by_staged[metadata["source_file"]]
+
+
+def apply_manifest_coverage(
+    tables: dict[str, Any],
+    sample: str,
+    manifest: dict[str, Any] | None,
+) -> dict[str, Any]:
+    coverage = tables["file_coverage"].copy()
+    if coverage.empty:
+        raise RuntimeError(f"No file coverage rows were produced for {sample}")
+    if coverage["source_file"].duplicated().any():
+        duplicates = coverage.loc[coverage["source_file"].duplicated(), "source_file"].tolist()
+        raise RuntimeError(f"Duplicate processed files for {sample}: {duplicates[:3]}")
+
+    manifest = manifest or {}
+    expected_rows = {
+        str(item["source_file"]): item
+        for item in manifest.get("inventory", [])
+        if isinstance(item, dict) and "source_file" in item
+    }
+    if expected_rows:
+        observed = set(coverage["source_file"].astype(str))
+        expected = set(expected_rows)
+        if observed != expected:
+            raise RuntimeError(
+                f"Coverage mismatch for {sample}: missing={sorted(expected - observed)[:3]}, "
+                f"unexpected={sorted(observed - expected)[:3]}"
+            )
+        coverage["expected_total_entries"] = coverage["source_file"].map(
+            lambda item: int(expected_rows[str(item)]["total_entries"])
+        )
+        coverage["expected_retained_candidate_events"] = coverage["source_file"].map(
+            lambda item: int(
+                expected_rows[str(item)].get(
+                    "retained_candidate_events",
+                    expected_rows[str(item)].get("retained_events", -1),
+                )
+            )
+        )
+        bad_entries = coverage["entries_scanned"] != coverage["expected_total_entries"]
+        bad_retained = (
+            (coverage["expected_retained_candidate_events"] >= 0)
+            & (coverage["retained_candidate_events"] != coverage["expected_retained_candidate_events"])
+        )
+        if bad_entries.any() or bad_retained.any():
+            bad = coverage.loc[bad_entries | bad_retained, [
+                "source_file", "entries_scanned", "expected_total_entries",
+                "retained_candidate_events", "expected_retained_candidate_events",
+            ]]
+            raise RuntimeError(f"Inventory count mismatch for {sample}: {bad.head(3).to_dict(orient='records')}")
+
+    if coverage["compatibility_hash"].nunique() != 1:
+        raise RuntimeError(f"Refusing to combine incompatible X_config settings for {sample}")
+    if coverage["efficiency_config_hash"].nunique() != 1:
+        raise RuntimeError(f"Refusing to combine different efficiency definitions for {sample}")
+
+    master_n_files = int(manifest.get("master_n_files", manifest.get("n_files", len(coverage))))
+    coverage_scope = "complete" if len(coverage) == master_n_files else "partial"
+    coverage["master_manifest_id"] = manifest.get("master_manifest_id", manifest.get("manifest_id", ""))
+    coverage["coverage_scope"] = coverage_scope
+    if "shard_index" in manifest:
+        coverage["shard_index"] = int(manifest["shard_index"])
+    tables["file_coverage"] = coverage
+    tables["coverage_summary"] = {
+        "sample": sample,
+        "coverage_scope": coverage_scope,
+        "n_processed_files": int(len(coverage)),
+        "master_n_files": master_n_files,
+        "entries_scanned": int(coverage["entries_scanned"].sum()),
+        "retained_candidate_events": int(coverage["retained_candidate_events"].sum()),
+        "full_gen_events": int(coverage["full_gen_events"].sum()),
+        "master_manifest_id": manifest.get("master_manifest_id", manifest.get("manifest_id")),
+    }
+    return tables
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -332,7 +443,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--sample-root", default="/eos/ihep/cms/store/user/xcheng/MC_Production_v3/output")
     parser.add_argument("--samples", default=None, help="Comma-separated samples for XRootD discovery, or a manifest filter when --input-file-manifest is used.")
     parser.add_argument("--max-files", type=int, default=None)
-    parser.add_argument("--tree-path", default="mkcands/X_data")
+    parser.add_argument("--tree-path", default="auto", help="Data tree path or auto for X_data/mkcands/X_data detection.")
     parser.add_argument("--min-plot-total", type=int, default=1)
     parser.add_argument("--skip-plots", action="store_true")
     parser.add_argument("--stage-mode", default="auto", choices=("auto", "always", "never"), help="Stage remote root:// inputs to local scratch before reading.")
@@ -346,6 +457,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--step-size", default="100 MB", help="uproot.iterate chunk size for the vectorized backend.")
     parser.add_argument("--worker-timeout", type=int, default=180, help="Seconds allowed for one file read attempt before trying the next access method; use 0 to disable.")
     parser.add_argument("--worker-efficiency-json", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--efficiency-config", default=None, help="Versioned YAML efficiency definition; use configs/efficiency/tps_nominal.yaml for TPS.")
+    parser.add_argument("--config-policy", default=None, choices=("strict", "legacy"), help="X_config/schema policy; defaults to strict with --efficiency-config and legacy otherwise.")
     parser.add_argument("--cms-caption", default="Simulation Preliminary")
     parser.add_argument("--cms-energy", type=float, default=13.6)
     parser.add_argument("--cms-lumi", type=float, default=None)
@@ -370,10 +483,18 @@ def _write_sample_bundle(
 ) -> dict[str, Any]:
     ensure_dir(sample_dir)
     artifacts: dict[str, Any] = {}
-    write_json({"sample": sample, "n_input_files": len(files), "input_files": files}, sample_dir / "sample_manifest.json")
+    write_json(
+        {
+            "sample": sample,
+            "n_input_files": len(files),
+            "input_files": files,
+            "coverage": tables.get("coverage_summary", {}),
+        },
+        sample_dir / "sample_manifest.json",
+    )
     artifacts["sample_manifest"] = "sample_manifest.json"
 
-    for key in ("gen_systems", "event_step_flags", "efficiency_counts"):
+    for key in ("gen_systems", "event_step_flags", "efficiency_counts", "file_coverage", "gen_ancestry_qa"):
         path = sample_dir / f"{key}.parquet"
         write_parquet(tables[key], path)
         artifacts[key] = {"path": path.name, "n_rows": int(len(tables[key]))}
@@ -384,6 +505,41 @@ def _write_sample_bundle(
     cutflow_path = sample_dir / "cutflow.csv"
     tables["cutflow"].to_csv(cutflow_path, index=False)
     artifacts["cutflow"] = {"path": cutflow_path.name, "n_rows": int(len(tables["cutflow"]))}
+
+    event_df = tables["event_step_flags"]
+    comparison_rows: list[dict[str, Any]] = []
+    if not event_df.empty:
+        nominal = event_df["four_muon_vtx"].astype(bool)
+        denominator = event_df["hlt_muon_matched"].astype(bool)
+        for column in (
+            "four_muon_vtx_legacy_muVertexId",
+            "four_muon_vtx_commonRecVtxPass",
+            "four_muon_vtx_passAny",
+            "four_muon_vtx_vtxprob",
+        ):
+            alternative = event_df[column].astype(bool)
+            comparison_rows.append({
+                "definition": column,
+                "denominator": int(denominator.sum()),
+                "nominal_passed": int((denominator & nominal).sum()),
+                "alternative_passed": int((denominator & alternative).sum()),
+                "both": int((denominator & nominal & alternative).sum()),
+                "nominal_only": int((denominator & nominal & ~alternative).sum()),
+                "alternative_only": int((denominator & ~nominal & alternative).sum()),
+                "neither": int((denominator & ~nominal & ~alternative).sum()),
+            })
+    comparison = pd.DataFrame(comparison_rows)
+    comparison_path = sample_dir / "four_muon_definition_comparison.csv"
+    comparison.to_csv(comparison_path, index=False)
+    artifacts["four_muon_definition_comparison"] = {
+        "path": comparison_path.name,
+        "n_rows": int(len(comparison)),
+    }
+    write_json({
+        "efficiency_definition": tables.get("efficiency_definition", {}),
+        "input_metadata": tables.get("input_metadata", []),
+    }, sample_dir / "configuration_metadata.json")
+    artifacts["configuration_metadata"] = "configuration_metadata.json"
 
     if not skip_plots:
         plot_paths = write_efficiency_plots(
@@ -413,6 +569,8 @@ def main() -> None:
         return
     if args.output_dir is None:
         raise ValueError("--output-dir is required")
+    definition = load_efficiency_definition(args.efficiency_config)
+    config_policy = args.config_policy or ("strict" if args.efficiency_config else "legacy")
     output_dir = ensure_dir(Path(args.output_dir))
     samples_filter = _parse_csv(args.samples) if args.samples is not None else None
     run_samples = samples_filter if samples_filter is not None else EfficiencyRunConfig().samples
@@ -425,7 +583,7 @@ def main() -> None:
         max_files=args.max_files,
         min_plot_total=args.min_plot_total,
     )
-    offline_cfg = OfflineSelectionConfig()
+    offline_cfg = definition.offline_selection
     plot_style_cfg = CmsPlotStyleConfig(
         caption=args.cms_caption,
         energy_tev=args.cms_energy,
@@ -439,12 +597,16 @@ def main() -> None:
     if args.input_files is not None and not args.input_files:
         raise ValueError("--input-files requires at least one file.")
 
+    input_manifest_payload: dict[str, Any] | None = None
     if args.input_files is not None:
         input_source = "explicit"
         files_by_sample = {args.sample_name: list(args.input_files)}
     elif args.input_file_manifest:
         input_source = "manifest"
         print(f"Loading input file manifest {args.input_file_manifest}")
+        raw_manifest = read_json(Path(args.input_file_manifest))
+        if isinstance(raw_manifest, dict) and isinstance(raw_manifest.get("sample"), str):
+            input_manifest_payload = raw_manifest
         files_by_sample = load_efficiency_file_manifest(args.input_file_manifest, samples=samples_filter, max_files=run_cfg.max_files)
     else:
         input_source = "xrootd_discovery"
@@ -476,7 +638,8 @@ def main() -> None:
             "efficiency_backend": args.efficiency_backend,
             "step_size": args.step_size,
             "worker_timeout": args.worker_timeout,
-            "offline_selection": offline_cfg.__dict__,
+            "efficiency_config": definition.to_dict(),
+            "config_policy": config_policy,
             "cms_plot_style": plot_style_cfg.__dict__,
         },
         output_dir / "run_metadata.json",
@@ -511,6 +674,8 @@ def main() -> None:
                     worker_timeout=args.worker_timeout,
                     copy_timeout=args.copy_timeout,
                     include_trigger_matching=include_trig_match,
+                    definition=definition,
+                    config_policy=config_policy,
                 )
             finally:
                 if sample_stage_dir is not None and not args.keep_staged_files:
@@ -536,6 +701,8 @@ def main() -> None:
                     backend=args.efficiency_backend,
                     step_size=args.step_size,
                     include_trigger_matching=include_trig_match,
+                    definition=definition,
+                    config_policy=config_policy,
                 )
             finally:
                 if sample_stage_dir is not None and not args.keep_staged_files:
@@ -550,8 +717,24 @@ def main() -> None:
                 backend=args.efficiency_backend,
                 step_size=args.step_size,
                 include_trigger_matching=include_trig_match,
+                definition=definition,
+                config_policy=config_policy,
             )
         restore_source_file_labels(tables, source_by_staged)
+        if "access_method" not in tables["file_coverage"]:
+            tables["file_coverage"]["access_method"] = (
+                "stage" if args.remote_access_mode == "stage" or args.stage_mode == "always" else "direct"
+            )
+        sample_manifest = None
+        if input_manifest_payload and input_manifest_payload.get("sample") == sample:
+            sample_manifest = dict(input_manifest_payload)
+            selected_files = set(files)
+            sample_manifest["inventory"] = [
+                item for item in input_manifest_payload.get("inventory", [])
+                if item.get("source_file") in selected_files
+            ]
+            sample_manifest["n_files"] = len(files)
+        apply_manifest_coverage(tables, sample, sample_manifest)
         sample_count_tables[sample] = tables["efficiency_counts"]
         sample_dir = ensure_dir(output_dir / sample)
         _write_sample_bundle(

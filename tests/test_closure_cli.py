@@ -5,7 +5,7 @@ import json
 import pandas as pd
 import pytest
 
-from efficiency_workflow.closure import main
+from efficiency_workflow.closure import main, partition_source_files
 
 
 def _sample_inputs(sample: str) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -167,3 +167,59 @@ def test_closure_cli_hybrid_self(tmp_path) -> None:
     manifest = json.loads(manifest_path.read_text())
     assert manifest["stage"] == "hybrid_closure"
     assert manifest["n_rows"] == 1
+
+
+def test_file_partition_is_stable_and_disjoint() -> None:
+    files = [f"file_{index}.root" for index in range(30)]
+    training, holdout = partition_source_files(
+        files,
+        sample="JJP_TPS_MC_v4_1",
+        modulus=5,
+        remainder=0,
+    )
+    training_again, holdout_again = partition_source_files(
+        reversed(files),
+        sample="JJP_TPS_MC_v4_1",
+        modulus=5,
+        remainder=0,
+    )
+    assert (training, holdout) == (training_again, holdout_again)
+    assert set(training).isdisjoint(holdout)
+    assert set(training) | set(holdout) == set(files)
+
+
+def test_file_disjoint_closure_builds_only_from_training_files(tmp_path) -> None:
+    sample = "JJP_TPS_MC_v4_1"
+    gen_parts = []
+    event_parts = []
+    for index in range(30):
+        gen_df, event_df = _sample_inputs(sample)
+        source_file = f"file_{index}.root"
+        gen_df["source_file"] = source_file
+        event_df["source_file"] = source_file
+        gen_parts.append(gen_df)
+        event_parts.append(event_df)
+    sample_dir = tmp_path / sample
+    sample_dir.mkdir()
+    pd.concat(gen_parts, ignore_index=True).to_parquet(sample_dir / "gen_systems.parquet")
+    pd.concat(event_parts, ignore_index=True).to_parquet(sample_dir / "event_step_flags.parquet")
+
+    output_dir = tmp_path / "file_disjoint"
+    rc = main([
+        "--input-dir", str(tmp_path),
+        "--samples", sample,
+        "--output-dir", str(output_dir),
+        "--file-disjoint",
+        "--n-min-fine", "0",
+        "--n-min-coarse", "0",
+    ])
+
+    assert rc == 0
+    result = pd.read_parquet(output_dir / "closure_results.parquet")
+    assert result.loc[0, "closure_type"] == "file_disjoint"
+    assert result.loc[0, "ratio"] == pytest.approx(1.0)
+    manifest = json.loads((output_dir / "closure_manifest.json").read_text())
+    training = set(manifest["partition"]["training_files"])
+    holdout = set(manifest["partition"]["holdout_files"])
+    assert training.isdisjoint(holdout)
+    assert (output_dir / "training_sample" / "maps" / "manifest.json").exists()

@@ -98,6 +98,14 @@ def main() -> None:
 
     samples = parse_csv(args.samples)
     files_by_sample = load_files_by_sample(args, samples)
+    source_manifest = read_json(Path(args.input_file_manifest)) if args.input_file_manifest else None
+    single_manifest = (
+        source_manifest
+        if isinstance(source_manifest, dict)
+        and isinstance(source_manifest.get("sample"), str)
+        and isinstance(source_manifest.get("files"), list)
+        else None
+    )
     manifest_root = Path(args.output_dir) / "manifests"
     queue_rows: list[str] = []
 
@@ -105,7 +113,26 @@ def main() -> None:
         if not files:
             raise RuntimeError(f"No files discovered for {sample}")
         sample_manifest_dir = manifest_root / sample
-        write_json({"sample": sample, "n_files": len(files), "files": files}, sample_manifest_dir / "files.json")
+        inherited = single_manifest if single_manifest and single_manifest.get("sample") == sample else {}
+        inventory_by_file = {
+            str(item["source_file"]): item
+            for item in inherited.get("inventory", [])
+            if isinstance(item, dict) and "source_file" in item
+        }
+        master_n_files = int(inherited.get("master_n_files", inherited.get("n_files", len(files))))
+        master_manifest_id = inherited.get("master_manifest_id", inherited.get("manifest_id"))
+        write_json(
+            {
+                "sample": sample,
+                "n_files": len(files),
+                "master_n_files": master_n_files,
+                "master_manifest_id": master_manifest_id,
+                "files": files,
+                "inventory": [inventory_by_file[item] for item in files if item in inventory_by_file],
+                "coverage_scope": "complete" if len(files) == master_n_files else "partial",
+            },
+            sample_manifest_dir / "files.json",
+        )
         shard_dir = sample_manifest_dir / "shards"
         n_shards = (len(files) + args.files_per_job - 1) // args.files_per_job
         for shard_index, start in enumerate(range(0, len(files), args.files_per_job)):
@@ -113,10 +140,16 @@ def main() -> None:
             shard_path = shard_dir / f"shard_{shard_index:04d}.json"
             write_json(
                 {
+                    "schema_version": inherited.get("schema_version"),
                     "sample": sample,
                     "shard_index": shard_index,
                     "n_shards": n_shards,
+                    "n_files": len(shard_files),
+                    "master_n_files": master_n_files,
+                    "master_manifest_id": master_manifest_id,
+                    "coverage_scope": "complete" if len(shard_files) == master_n_files else "partial",
                     "files": shard_files,
+                    "inventory": [inventory_by_file[item] for item in shard_files if item in inventory_by_file],
                 },
                 shard_path,
             )

@@ -11,13 +11,19 @@ import numpy as np
 import pandas as pd
 import uproot
 
-from .config import OfflineSelectionConfig
+from .config import OfflineSelectionConfig, default_efficiency_definition
 from .efficiency import (
     ALL_KNOWN_BRANCHES,
     EfficiencyBinning,
     _process_efficiency_chunk_vectorized,
     _uproot_read_options,
     build_cutflow,
+)
+from .tps_input import (
+    detect_tree_path as detect_tps_tree_path,
+    read_config_snapshot,
+    resolve_trigger_requirements,
+    sibling_config_tree_path,
 )
 
 
@@ -659,7 +665,10 @@ def _composite_candidate_evidence(
             or (dm[2] and dm[3])
         )
         vertex_ids = [_as_int(_value(event, "muVertexId", muon_index, -1)) for muon_index in muon_indices]
-        four_muon = bool(vertex_ids and vertex_ids[0] >= 0 and len(set(vertex_ids)) == 1)
+        legacy_four_muon = bool(vertex_ids and vertex_ids[0] >= 0 and len(set(vertex_ids)) == 1)
+        dionia_fit_valid = bool(_as_int(_value(event, "DiOnia_fitValid", index, 0), 0))
+        dionia_fit_pass = bool(_as_int(_value(event, "DiOnia_fitPass", index, 0), 0))
+        four_muon = dionia_fit_valid and dionia_fit_pass
         candidate_base = gen_matched and s_cand
         hlt_stage = candidate_base and path_fired and hlt_match
         four_stage = hlt_stage and four_muon
@@ -681,6 +690,7 @@ def _composite_candidate_evidence(
                 "trigger_match": {"dimuon0_muons": d0, "doublemu_muons": dm, "passed": hlt_match},
                 "muVertexId": vertex_ids,
                 "four_muon_current_predicate": four_muon,
+                "four_muon_legacy_muVertexId_predicate": legacy_four_muon,
                 "DiOnia_context": dionia,
                 "Pri": pri,
                 "stages": {
@@ -800,46 +810,31 @@ def evaluate_event_evidence(
         "pipeline_comparison": comparisons,
         "mismatched_flags": [column for column, item in comparisons.items() if not item["matches"]],
         "definition_context": {
-            "four_muon_current_reference": "all four composite-candidate muVertexId values are equal and non-negative",
-            "DiOnia_fields_are_context_only": True,
+            "four_muon_current_reference": "DiOnia_fitValid && DiOnia_fitPass on the same composite candidate",
+            "four_muon_legacy_reference": "all four composite-candidate muVertexId values are equal and non-negative",
+            "DiOnia_fields_are_context_only": False,
         },
     }
 
 
 def detect_tree_path(root_file: uproot.ReadOnlyDirectory, requested: str = "auto") -> str:
-    if requested != "auto":
-        if requested not in root_file:
-            raise KeyError(f"Missing requested tree {requested!r}")
-        return requested
-    for candidate in ("X_data", "mkcands/X_data"):
-        if candidate in root_file:
-            return candidate
-    raise KeyError("Could not find X_data or mkcands/X_data")
+    return detect_tps_tree_path(root_file, requested)
 
 
 def read_trigger_filter_map(
     root_file: uproot.ReadOnlyDirectory, data_tree_path: str
 ) -> dict[str, int]:
-    directory = data_tree_path.rsplit("/", 1)[0] if "/" in data_tree_path else ""
-    config_path = f"{directory}/X_config" if directory else "X_config"
-    if config_path not in root_file:
+    definition = default_efficiency_definition()
+    config_path = sibling_config_tree_path(data_tree_path)
+    try:
+        snapshot = read_config_snapshot(root_file, config_path)
+        resolved = resolve_trigger_requirements(snapshot, definition.trigger_requirements)
+    except (KeyError, ValueError):
         return {}
-    config = root_file[config_path]
-    if "TriggersForJpsi" not in config or "FiltersForJpsi" not in config:
-        return {}
-    triggers = ak.to_list(config["TriggersForJpsi"].array(library="ak"))[0]
-    filters = ak.to_list(config["FiltersForJpsi"].array(library="ak"))[0]
     result: dict[str, int] = {}
-    for index, name in enumerate(triggers):
-        if "Dimuon0_Jpsi3p5_Muon2" in str(name):
-            result["dimuon0_trig"] = index
-        elif "DoubleMu4_3_LowMass" in str(name):
-            result["doublemu_trig"] = index
-    for index, name in enumerate(filters):
-        if "hltJpsiMuonL3Filtered3p5" in str(name):
-            result["dimuon0_filt"] = index
-        elif "hltDoubleMu43LowMassL3Filtered" in str(name):
-            result["doublemu_filt"] = index
+    for item in resolved:
+        result[f"{item.key}_trig"] = item.trigger_index
+        result[f"{item.key}_filt"] = item.filter_index
     return result
 
 

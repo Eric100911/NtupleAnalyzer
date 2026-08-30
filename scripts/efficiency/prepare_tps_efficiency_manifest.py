@@ -24,7 +24,7 @@ def main() -> None:
     rows = read_tps_inventory(args.inventory)
     write_tps_manifest(rows, args.sample, str(args.inventory), args.output)
     total = sum(row.total_entries for row in rows)
-    retained = sum(row.retained_events for row in rows)
+    retained = sum(row.retained_candidate_events for row in rows)
     print(f"Wrote {len(rows)} files to {args.output}")
     print(f"Inventory totals: total_entries={total}, retained_events={retained}")
 

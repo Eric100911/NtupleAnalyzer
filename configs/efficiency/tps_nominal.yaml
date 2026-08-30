@@ -1,0 +1,46 @@
+schema_version: ntuple-analyzer-efficiency/v1
+analysis_mode: JpsiJpsiPhi
+
+offline_selection:
+  mu_pt_barrel_min: 3.5
+  mu_pt_endcap_min: 2.5
+  mu_abs_eta_max: 2.4
+  track_pt_min: 2.0
+  track_abs_eta_max: 2.5
+  kaon_chi2_max: 8.0
+  kaon_n_valid_hits_min: 4
+  kaon_require_highpurity: true
+  jpsi_mass_window: [2.9, 3.3]
+  jpsi_pt_min: 6.0
+  jpsi_abs_y_max: 2.5
+  jpsi_vtxprob_min: 0.01
+  ups_mass_window: [8.0, 12.0]
+  ups_pt_min: 6.0
+  ups_abs_y_max: 2.5
+  ups_vtxprob_min: null
+  phi_mass_window: [0.99, 1.07]
+  phi_pt_min: 4.0
+  phi_abs_y_max: 2.4
+  phi_vtxprob_min: 0.01
+
+trigger_requirements:
+  - key: dimuon0
+    path_pattern: HLT_Dimuon0_Jpsi3p5_Muon2_v
+    filter_label: hltJpsiMuonL3Filtered3p5
+    rule: three_muons_with_dimuon_pair
+  - key: doublemu
+    path_pattern: HLT_DoubleMu4_3_LowMass_v
+    filter_label: hltDoubleMu43LowMassL3Filtered
+    rule: dimuon_pair
+
+event_endpoint: Pri_assocPVPass
+dionia_vtxprob_diagnostic_min: 0.005
+
+binning:
+  jpsi_pt_edges: [6, 10, 15, 20, 30, 50, 100]
+  phi_pt_edges: [4, 6, 10, 20, 50]
+  object_abs_y_edges: [0, 0.6, 1.2, 1.8, 2.4]
+  object_y_edges: [-2.4, -1.8, -1.2, -0.6, 0, 0.6, 1.2, 1.8, 2.4]
+  triple_pt_edges: [0, 10, 20, 30, 50, 100, 200]
+  triple_abs_y_edges: [0, 0.6, 1.2, 1.8, 2.4]
+  triple_mass_edges: [0, 10, 15, 20, 30, 50, 100]
