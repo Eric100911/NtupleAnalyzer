@@ -20,7 +20,7 @@ from efficiency_workflow.audit import (
     write_root_skims,
 )
 from efficiency_workflow.config import OfflineSelectionConfig
-from efficiency_workflow.efficiency import EfficiencyBinning
+from efficiency_workflow.efficiency import EfficiencyBinning, build_cutflow
 
 
 V20_FIXTURE = Path("test_data/test_JpsiJpsiPhi_v2p0_patch1_numEvent118.root")
@@ -172,7 +172,7 @@ def test_membership_semantics_keep_cumulative_and_adjacent_raw_separate():
     assert examples["jpsi_lead/muonRECO/rejected"][0].entry == 2
 
 
-def test_summary_detects_pipeline_hybrid_non_binomial_row():
+def test_summary_matches_pairwise_pipeline_counts():
     event_df = _membership_frame()
     memberships = classify_memberships(event_df)
     summary = summarize_memberships(memberships, event_df)
@@ -181,9 +181,62 @@ def test_summary_detects_pipeline_hybrid_non_binomial_row():
     ].iloc[0]
     assert row["cumulative_total"] == 1
     assert row["adjacent_raw_total"] == 2
-    assert row["pipeline_conditional_total"] == 1
+    assert row["pipeline_conditional_total"] == 2
     assert row["pipeline_conditional_passed"] == 2
+    assert bool(row["pipeline_matches_adjacent_raw"])
+    assert not bool(row["pipeline_non_binomial"])
+
+
+def test_summary_detects_invalid_pipeline_counts(monkeypatch):
+    event_df = _membership_frame()
+    cutflow = build_cutflow(event_df)
+    invalid = (cutflow["object"] == "jpsi_lead") & (cutflow["step"] == "muonID")
+    cutflow.loc[invalid, "conditional_total"] = 1
+    cutflow.loc[invalid, "conditional_passed"] = 2
+    cutflow.loc[invalid, "conditional_efficiency"] = 2.0
+    monkeypatch.setattr("efficiency_workflow.audit.build_cutflow", lambda _: cutflow)
+    summary = summarize_memberships(classify_memberships(event_df), event_df)
+    row = summary[(summary["scope"] == "jpsi_lead") & (summary["step"] == "muonID")].iloc[0]
     assert bool(row["pipeline_non_binomial"])
+
+
+@pytest.mark.parametrize("object_name, steps", [
+    ("jpsi_lead", ("fiducial", "muonRECO", "muonID", "dimuon")),
+    ("jpsi_sublead", ("fiducial", "muonRECO", "muonID", "dimuon")),
+    ("phi", ("fiducial", "kaonRECO", "kaonID", "dikaon")),
+])
+@pytest.mark.parametrize("non_nested", [False, True])
+def test_object_cutflows_use_raw_previous_counts(object_name, steps, non_nested):
+    frame = _membership_frame()
+    values = [(1, 0, 1), (1, 1, 0), (1, 1, 0), (1, 0, 0)]
+    expected = [(3, 2), (2, 1), (2, 2), (2, 1)]
+    if non_nested:
+        values = [(1, 0, 1), (1, 0, 0), (1, 1, 0), (1, 1, 1)]
+        expected = [(3, 2), (2, 1), (1, 1), (2, 2)]
+    for step, flags in zip(steps, values):
+        frame[f"{object_name}_{step}"] = flags
+    cutflow = build_cutflow(frame)
+    rows = cutflow[cutflow["object"] == object_name].set_index("step")
+    for step, flags, (total, passed) in zip(steps, values, expected):
+        row = rows.loc[step]
+        assert row["conditional_total"] == total
+        assert row["conditional_passed"] == passed
+        assert row["conditional_efficiency"] == pytest.approx(passed / total)
+        assert row["total"] == 3
+        assert row["passed"] == sum(flags)
+
+
+@pytest.mark.parametrize("missing", ["fiducial", "muonRECO", "muonID", "dimuon"])
+def test_cutflow_missing_flags_have_zero_intersections(missing):
+    frame = _membership_frame()
+    column = f"jpsi_lead_{missing}"
+    actual = build_cutflow(frame.drop(columns=[column]))
+    frame[column] = 0
+    pd.testing.assert_frame_equal(actual, build_cutflow(frame))
+    rows = actual[actual["object"] == "jpsi_lead"]
+    empty = rows[rows["conditional_total"] == 0]
+    assert (empty["conditional_passed"] == 0).all()
+    assert empty["conditional_efficiency"].isna().all()
 
 
 def test_factor_summary_uses_explicit_intersections():
@@ -323,7 +376,9 @@ def test_real_fixture_baseline_and_branch_recomputation():
 
     memberships = classify_memberships(event_df)
     summary = summarize_memberships(memberships, event_df)
-    assert int(summary["pipeline_non_binomial"].fillna(False).sum()) == 3
+    assert int(summary["pipeline_non_binomial"].fillna(False).sum()) == 0
+    objects = summary[summary["scope"].isin(["jpsi_lead", "jpsi_sublead", "phi"])]
+    assert objects["pipeline_matches_adjacent_raw"].all()
 
     from efficiency_workflow.audit import load_selected_evidence
 

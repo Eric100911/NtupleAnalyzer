@@ -2541,7 +2541,7 @@ def _merged_gen_events(gen_df: pd.DataFrame, event_df: pd.DataFrame) -> pd.DataF
 
 
 def build_cutflow(event_df: pd.DataFrame, binning: EfficiencyBinning | None = None) -> pd.DataFrame:
-    """Build per-object + event-level cutflow with conditional efficiencies."""
+    """Build cutflows, conditioning object steps on the previous raw flag."""
     if event_df.empty:
         return pd.DataFrame(columns=["step", "total", "passed", "efficiency",
                                       "err_low", "err_high", "err_sym",
@@ -2562,17 +2562,19 @@ def build_cutflow(event_df: pd.DataFrame, binning: EfficiencyBinning | None = No
             # Raw efficiency vs full_gen
             row = _efficiency_row(
                 {"step": step, "object": object_name}, base_total, raw_passed)
-            # Conditional: AND-intersection with previous step
-            if prev_col and prev_col in frame.columns:
+            # Pairwise conditioning uses the immediately preceding raw flag.
+            if prev_col is None:
+                cond_passed = raw_passed
+            elif col in frame.columns and prev_col in frame.columns:
                 cond_passed = int((frame[col] & frame[prev_col]).sum())
             else:
-                cond_passed = raw_passed
+                cond_passed = 0
             row["conditional_total"] = prev_passed
             row["conditional_passed"] = cond_passed
             row["conditional_efficiency"] = float(cond_passed / prev_passed) if prev_passed > 0 else math.nan
             rows.append(row)
             prev_col = col
-            prev_passed = cond_passed
+            prev_passed = raw_passed
 
     total_full_gen = int(event_df["full_gen"].sum())
 
@@ -3033,9 +3035,9 @@ def build_stacked_jpsi_efficiency_maps(
 ) -> pd.DataFrame:
     """Build stacked J/psi per-object conditional efficiency maps in (pT, |y|).
 
-    Each step uses the AND-intersection with the previous step as numerator
-    and the previous step as denominator, matching the chained conditional
-    definition:
+    Each step uses the immediately preceding raw flag as denominator and its
+    AND-intersection with the current flag as numerator. These are pairwise
+    conditionals, without cumulative requirements from earlier steps:
 
         muonRECO  = N(muonRECO & fiducial)  / N(fiducial)
         muonID    = N(muonID & muonRECO)    / N(muonRECO)
@@ -3055,20 +3057,11 @@ def build_stacked_jpsi_efficiency_maps(
                 & (stacked["jpsi_abs_y"] >= y_edges[iy])
                 & (stacked["jpsi_abs_y"] < y_edges[iy + 1])
             ]
-            # Chain denominators: each step AND-intersection with previous
-            n_fiducial = int(subset["jpsi_fiducial_acceptance"].sum())
-            if "jpsi_muonRECO" in subset.columns:
-                n_muonRECO = int((subset["jpsi_muonRECO"] & subset["jpsi_fiducial_acceptance"]).sum())
-            else:
-                n_muonRECO = 0
-            if "jpsi_muonID" in subset.columns:
-                n_muonID = int((subset["jpsi_muonID"] & subset["jpsi_muonRECO"]).sum()) if "jpsi_muonRECO" in subset.columns else int(subset["jpsi_muonID"].sum())
-            else:
-                n_muonID = 0
-            if "jpsi_dimuon" in subset.columns:
-                n_dimuon = int((subset["jpsi_dimuon"] & subset["jpsi_muonID"]).sum()) if "jpsi_muonID" in subset.columns else int(subset["jpsi_dimuon"].sum())
-            else:
-                n_dimuon = 0
+            columns = [
+                "jpsi_fiducial_acceptance", "jpsi_muonRECO",
+                "jpsi_muonID", "jpsi_dimuon",
+            ]
+            flags = subset.reindex(columns=columns, fill_value=0).fillna(0).astype(bool)
 
             _base = {
                 "map_type": "stacked_jpsi_efficiency_2d",
@@ -3086,18 +3079,17 @@ def build_stacked_jpsi_efficiency_maps(
                 "quantity": "stacked_jpsi_efficiency",
             }
 
-            rows.append(_efficiency_row(
-                {**_base, "step": "muonRECO"},
-                n_fiducial, n_muonRECO,
-            ))
-            rows.append(_efficiency_row(
-                {**_base, "step": "muonID"},
-                n_muonRECO, n_muonID,
-            ))
-            rows.append(_efficiency_row(
-                {**_base, "step": "dimuon"},
-                n_muonID, n_dimuon,
-            ))
+            for step, previous in (
+                ("muonRECO", "fiducial_acceptance"),
+                ("muonID", "muonRECO"),
+                ("dimuon", "muonID"),
+            ):
+                denominator = flags[f"jpsi_{previous}"]
+                passed = denominator & flags[f"jpsi_{step}"]
+                rows.append(_efficiency_row(
+                    {**_base, "step": step},
+                    int(denominator.sum()), int(passed.sum()),
+                ))
     return pd.DataFrame(rows)
 
 
