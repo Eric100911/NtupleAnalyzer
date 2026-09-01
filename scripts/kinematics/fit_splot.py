@@ -583,11 +583,11 @@ def save_projection_plots(channel: str, plot_dir: str, data, model, observables,
         legend.SetTextSize(0.035)
         legend.SetFillStyle(0)
         legend.SetBorderSize(0)
-        legend.AddEntry(frame.input_filedObject("data"), "Data", "lep")
-        legend.AddEntry(frame.input_filedObject("model"), "Total fit", "l")
-        legend.AddEntry(frame.input_filedObject("signal"), "Signal", "l")
+        legend.AddEntry(frame.findObject("data"), "Data", "lep")
+        legend.AddEntry(frame.findObject("model"), "Total fit", "l")
+        legend.AddEntry(frame.findObject("signal"), "Signal", "l")
         if background_components:
-            legend.AddEntry(frame.input_filedObject("background"), "Background", "l")
+            legend.AddEntry(frame.findObject("background"), "Background", "l")
         legend.Draw()
 
         apply_cms_label_root(canvas, plot_style_cfg)

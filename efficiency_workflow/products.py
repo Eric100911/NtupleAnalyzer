@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 
 from .config import efficiency_definition_from_dict
+from .formal_merge import FormalMergeValidationError, validate_formal_merge
 from .efficiency import (
     PAIR_LEVEL_MAP_SPECS,
     PAIR_LEVEL_MAP_SPECS_NO_TRIG_MATCH,
@@ -161,6 +162,8 @@ def merge_efficiency_shards(
     output_dir: Path,
     *,
     binning: EfficiencyBinning | None = None,
+    formal_manifest: Path | None = None,
+    formal_shards_dir: Path | None = None,
 ) -> EfficiencyMergeResult:
     output_dir = ensure_dir(output_dir)
     sample_dirs = sorted(path / sample for path in shards_dir.glob("shard_*") if (path / sample).is_dir())
@@ -198,9 +201,27 @@ def merge_efficiency_shards(
         if metadata_path.exists():
             configuration_payloads.append(read_json(metadata_path))
 
+    coverage_df = pd.concat(coverage_parts, ignore_index=True)
+    formal_merge_report: dict[str, Any] | None = None
+    if (formal_manifest is None) != (formal_shards_dir is None):
+        raise ValueError("--formal-manifest and --formal-shards-dir must be supplied together")
+    if formal_manifest is not None and formal_shards_dir is not None:
+        report_path = output_dir / sample / "formal_merge_report.json"
+        try:
+            formal_merge_report = validate_formal_merge(
+                sample=sample,
+                sample_dirs=sample_dirs,
+                coverage_df=coverage_df,
+                declared_files=declared_files,
+                formal_manifest_path=formal_manifest,
+                formal_shards_dir=formal_shards_dir,
+            )
+        except FormalMergeValidationError as exc:
+            write_json(exc.report, report_path)
+            raise
+        write_json(formal_merge_report, report_path)
     if len(declared_files) != len(set(declared_files)):
         raise RuntimeError("The same input file is declared by more than one efficiency shard")
-    coverage_df = pd.concat(coverage_parts, ignore_index=True)
     if coverage_df["source_file"].duplicated().any():
         raise RuntimeError("The same input file has more than one processing coverage row")
     if set(coverage_df["source_file"].astype(str)) != set(declared_files):
@@ -296,6 +317,9 @@ def merge_efficiency_shards(
         configuration_metadata=configuration_metadata,
         coverage_summary=coverage_summary,
     )
+    if formal_merge_report is not None:
+        artifacts["formal_merge_report"] = "formal_merge_report.json"
+        update_sample_manifest_artifacts(output_dir / sample, {"formal_merge_report": "formal_merge_report.json"})
 
     inclusive_final = cutflow_df.loc[cutflow_df["step"] == "Pri_trackPVPass"]
     summary_df = pd.DataFrame(

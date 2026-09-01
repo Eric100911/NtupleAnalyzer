@@ -173,13 +173,13 @@ def test_file_partition_is_stable_and_disjoint() -> None:
     files = [f"file_{index}.root" for index in range(30)]
     training, holdout = partition_source_files(
         files,
-        sample="JJP_TPS_MC_v4_1",
+        sample="JJP_TPS",
         modulus=5,
         remainder=0,
     )
     training_again, holdout_again = partition_source_files(
         reversed(files),
-        sample="JJP_TPS_MC_v4_1",
+        sample="JJP_TPS",
         modulus=5,
         remainder=0,
     )
@@ -189,7 +189,7 @@ def test_file_partition_is_stable_and_disjoint() -> None:
 
 
 def test_file_disjoint_closure_builds_only_from_training_files(tmp_path) -> None:
-    sample = "JJP_TPS_MC_v4_1"
+    sample = "JJP_TPS"
     gen_parts = []
     event_parts = []
     for index in range(30):

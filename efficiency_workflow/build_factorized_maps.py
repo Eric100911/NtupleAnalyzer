@@ -8,13 +8,14 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
+from .config import efficiency_definition_from_dict
 from .efficiency import (
     EfficiencyBinning,
     _bin_label,
     _merged_gen_events,
     jeffreys_efficiency_uncertainty,
 )
-from .io import ensure_dir, write_json, write_parquet
+from .io import ensure_dir, read_json, write_json, write_parquet
 
 
 DEFAULT_FACTOR_NAMES = (

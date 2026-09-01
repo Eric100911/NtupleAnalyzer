@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections import OrderedDict
 
 import pytest
+import ROOT
 
-from scripts.kinematics.fit_splot import build_splot_weight_map
+from scripts.kinematics.fit_splot import build_splot_weight_map, save_projection_plots
 
 
 class _FakeRow:
@@ -47,3 +48,37 @@ def test_signal_effcorr_sw_rejects_length_mismatch() -> None:
 
     with pytest.raises(RuntimeError, match="Correction weight length mismatch"):
         build_splot_weight_map(data, yields, "yield_sss", [])
+
+
+def test_projection_plot_resolves_named_rooplot_objects(tmp_path) -> None:
+    mass = ROOT.RooRealVar("test_mass", "test mass", 0.0, 10.0)
+    mean = ROOT.RooRealVar("test_mean", "test mean", 5.0)
+    sigma = ROOT.RooRealVar("test_sigma", "test sigma", 1.0, 0.1, 5.0)
+    signal = ROOT.RooGaussian("pdf_signal", "signal", mass, mean, sigma)
+    background = ROOT.RooPolynomial("pdf_background", "background", mass)
+    signal_yield = ROOT.RooRealVar("yield_signal", "signal yield", 2.0)
+    background_yield = ROOT.RooRealVar("yield_background", "background yield", 1.0)
+    model = ROOT.RooAddPdf(
+        "test_model",
+        "test model",
+        ROOT.RooArgList(signal, background),
+        ROOT.RooArgList(signal_yield, background_yield),
+    )
+    data = ROOT.RooDataSet("test_data", "test data", ROOT.RooArgSet(mass))
+    for value in (4.5, 5.0, 7.5):
+        mass.setVal(value)
+        data.add(ROOT.RooArgSet(mass))
+
+    save_projection_plots(
+        "JJP",
+        str(tmp_path),
+        data,
+        model,
+        OrderedDict((("test_mass", mass),)),
+        "yield_signal",
+        OrderedDict((("yield_signal", signal_yield), ("yield_background", background_yield))),
+        dataset="mc",
+    )
+
+    assert (tmp_path / "test_mass_fit.pdf").is_file()
+    assert (tmp_path / "test_mass_fit.png").is_file()

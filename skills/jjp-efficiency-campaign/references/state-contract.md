@@ -15,6 +15,15 @@ draft -> inputs_frozen -> lxplus_preflight_passed -> lxplus_submitted
 Any non-terminal state may enter `blocked`. That records evidence and asks for
 a decision; it is not permission to retry.
 
+Optional IHEP-to-CERN-EOS raw-input staging is a sidecar gate between
+`inputs_frozen` and `lxplus_preflight_passed`; it does not replace the frozen
+formal manifest or add a shortcut around the normal state sequence.  Attach its
+plan SHA-256, staged manifest ID/SHA-256, original-manifest identity, per-file
+checksum results, detached PID/status/log, and explicit EOS-write authorization
+to the subsequent preflight evidence.  A staged manifest is usable only after
+that audit; a staging failure enters `blocked` rather than silently falling
+back to CCEOS URLs.
+
 ## Gate evidence
 
 - `inputs_frozen`: samples, manifest paths/IDs/totals, repo SHA, YAML hash, LCG
@@ -26,8 +35,8 @@ a decision; it is not permission to retry.
   immutable output, submission time, runtime hash.
 - `lxplus_merged`: complete sample manifests; expected/observed file, entry and
   retained totals; unique production/definition hashes; no duplicate/failures.
-- `handoff_verified`: transferred relative paths, sizes/SHA-256, exact roots,
-  transfer command, and destination readback.
+- `handoff_verified`: compact tar.gz path, whole-bundle SHA-256, readable
+  member list/sizes, fresh extraction verification, and exact destination.
 - `hepthu_analysis_started`: remote SHA, LCG view, PID, command hash, start time,
   persistent log, lock, exact input/output paths.
 - `validation_running`: report path and products under review.

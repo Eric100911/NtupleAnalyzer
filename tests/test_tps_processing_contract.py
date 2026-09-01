@@ -103,14 +103,14 @@ def test_strict_context_and_backend_parity_on_real_runb_fixture() -> None:
 
     vectorized = process_efficiency_file_vectorized(
         str(RUNB_FIXTURE),
-        "JJP_TPS_MC_v4_1",
+        "JJP_TPS",
         definition.offline_selection,
         definition=definition,
         config_policy="strict",
     )
     loop = process_efficiency_file(
         str(RUNB_FIXTURE),
-        "JJP_TPS_MC_v4_1",
+        "JJP_TPS",
         definition.offline_selection,
         definition=definition,
         config_policy="strict",
@@ -145,7 +145,7 @@ def _coverage_tables() -> dict:
 def test_manifest_coverage_marks_intentional_subset_partial() -> None:
     tables = _coverage_tables()
     manifest = {
-        "sample": "JJP_TPS_MC_v4_1",
+        "sample": "JJP_TPS",
         "n_files": 1,
         "master_n_files": 317,
         "master_manifest_id": "master",
@@ -155,7 +155,7 @@ def test_manifest_coverage_marks_intentional_subset_partial() -> None:
             "retained_candidate_events": 2,
         }],
     }
-    apply_manifest_coverage(tables, "JJP_TPS_MC_v4_1", manifest)
+    apply_manifest_coverage(tables, "JJP_TPS", manifest)
     assert tables["coverage_summary"]["coverage_scope"] == "partial"
     assert tables["coverage_summary"]["master_n_files"] == 317
 
@@ -163,7 +163,7 @@ def test_manifest_coverage_marks_intentional_subset_partial() -> None:
 def test_manifest_coverage_rejects_count_mismatch() -> None:
     tables = _coverage_tables()
     manifest = {
-        "sample": "JJP_TPS_MC_v4_1",
+        "sample": "JJP_TPS",
         "inventory": [{
             "source_file": "/tmp/a.root",
             "total_entries": 11,
@@ -171,4 +171,4 @@ def test_manifest_coverage_rejects_count_mismatch() -> None:
         }],
     }
     with pytest.raises(RuntimeError, match="Inventory count mismatch"):
-        apply_manifest_coverage(tables, "JJP_TPS_MC_v4_1", manifest)
+        apply_manifest_coverage(tables, "JJP_TPS", manifest)

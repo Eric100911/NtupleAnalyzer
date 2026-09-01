@@ -27,12 +27,24 @@ def main() -> None:
     parser.add_argument("--sample", required=True)
     parser.add_argument("--shards-dir", required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument(
+        "--formal-manifest",
+        type=Path,
+        help="Immutable formal master manifest; enables fail-closed completeness validation.",
+    )
+    parser.add_argument(
+        "--formal-shards-dir",
+        type=Path,
+        help="Directory containing formal shard_XXXX.json manifests; required with --formal-manifest.",
+    )
     args = parser.parse_args()
 
     result = merge_efficiency_shards(
         sample=args.sample,
         shards_dir=Path(args.shards_dir),
         output_dir=Path(args.output_dir),
+        formal_manifest=args.formal_manifest,
+        formal_shards_dir=args.formal_shards_dir,
     )
     print(f"Wrote merged efficiency outputs to {result.output_dir}")
 

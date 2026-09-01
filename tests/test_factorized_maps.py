@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from efficiency_workflow.build_factorized_maps import build_factorized_maps_for_sample
+from efficiency_workflow.io import write_json
 
 
 def _merged_inputs() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -57,6 +58,10 @@ def test_build_factorized_maps_uses_conditional_denominators(tmp_path) -> None:
     gen_df, event_df = _merged_inputs()
     gen_df.to_parquet(sample_dir / "gen_systems.parquet")
     event_df.to_parquet(sample_dir / "event_step_flags.parquet")
+    write_json(
+        {"efficiency_definition": {"schema_version": "ntuple-analyzer-efficiency/v1"}},
+        sample_dir / "configuration_metadata.json",
+    )
 
     written = build_factorized_maps_for_sample(sample_dir, sample_dir / "maps")
 

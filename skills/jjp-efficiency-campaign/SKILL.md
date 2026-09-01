@@ -43,6 +43,12 @@ workflow is currently specialized to the JJP efficiency samples.
    revisions differ.
 9. Full coverage, compatible hashes, successful merge, verified transfer, and
    independent validation are hard gates.
+10. Keep the orchestrator's main loop off complex remote debugging and iterative
+    fixes (SSH diagnostics, diagnostic job submission, trial-and-error repair).
+    Delegate that work to a worker subagent, and escalate to a higher-tier model
+    (deepseek-v4-pro) when a problem is complex or has failed repeatedly — do not
+    debug it in the main conversation, and do not restrict complex work to
+    lightweight worker models.
 
 ## Local helper
 

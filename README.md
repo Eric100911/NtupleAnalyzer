@@ -405,7 +405,7 @@ directory. The loop below covers the complete checked-in JJP sample set:
 
 ```bash
 source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
-for SAMPLE in JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G JJP_TPS_MC_v4_1; do
+for SAMPLE in JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G JJP_TPS; do
   python3 run_efficiency.py \
     --analysis-mode JpsiJpsiPhi \
     --input-file-manifest configs/efficiency/manifests/${SAMPLE}.manifest.json \
@@ -430,14 +430,14 @@ next to the rebuilt maps for traceability.
 python3 rebuild_efficiency_maps.py \
   --input-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged \
   --output-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601 \
-  --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G JJP_TPS_MC_v4_1
+  --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G JJP_TPS
 
 python3 build_derived_efficiency.py \
   --input-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601
 
 python3 -m efficiency_workflow.build_factorized_maps \
   --input-dir /eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/efficiency_HLTv2/merged_yieldcorr_20260601 \
-  --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G JJP_TPS_MC_v4_1
+  --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G JJP_TPS
 ```
 
 ### Correction modes
