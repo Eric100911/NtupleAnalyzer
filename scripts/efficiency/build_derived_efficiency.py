@@ -29,6 +29,15 @@ from efficiency_workflow.products import (
 )
 
 
+def _record_outputs(products, outputs: dict[str, object]) -> None:
+    """Persist plot outputs and keep the in-memory manifest in sync."""
+    if not outputs:
+        return
+    merged_manifest = update_manifest_outputs(products.derived_dir / "manifest.json", outputs)
+    products.manifest.clear()
+    products.manifest.update(merged_manifest)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build derived acceptance and conditional efficiency maps")
     parser.add_argument("--input-dir", required=True, help="Merge output directory (contains per-sample subdirs + manifest.json)")
@@ -36,14 +45,14 @@ def main() -> None:
     parser.add_argument("--skip-plots", action="store_true")
     parser.add_argument(
         "--plot-scope",
-        default="all",
-        choices=("all", "stacked-jpsi"),
-        help="Limit plot production. Use 'stacked-jpsi' to skip cumulative, conditional, and pair-level plots.",
+        default="separate-jpsi",
+        choices=("separate-jpsi", "stacked-jpsi-only", "both"),
+        help="Plot layout: separate-jpsi (full bundle), stacked-jpsi-only (dedicated stacked plots), or both.",
     )
     parser.add_argument(
         "--with-uncertainty-plots",
         action="store_true",
-        help="In --plot-scope stacked-jpsi mode, also write the uncertainty QA versions.",
+        help="For stacked-jpsi-only or both, also write uncertainty QA versions.",
     )
     parser.add_argument("--min-plot-total", type=int, default=1)
     parser.add_argument("--skip-trigger-matching", action="store_true",
@@ -59,7 +68,7 @@ def main() -> None:
     args = parser.parse_args()
 
     include_trig_match = not args.skip_trigger_matching
-    binning = EfficiencyBinning(include_trigger_matching=include_trig_match)
+    binning = EfficiencyBinning(include_trigger_matching=False) if not include_trig_match else None
 
     input_dir = Path(args.input_dir)
     output_dir = Path(args.output_dir) if args.output_dir else input_dir
@@ -68,7 +77,8 @@ def main() -> None:
 
     if not args.skip_plots:
         for products in products_by_sample.values():
-            if args.plot_scope == "all":
+            plot_outputs = {}
+            if args.plot_scope in {"separate-jpsi", "both"}:
                 print(f"[{products.sample}] Generating cumulative efficiency plots ...")
                 cumul_outputs = write_efficiency_plot_bundle(
                     products.derived_dir,
@@ -77,11 +87,10 @@ def main() -> None:
                     min_total=args.min_plot_total,
                 )
                 if cumul_outputs:
-                    products.manifest["outputs"].update(cumul_outputs)
-                    update_manifest_outputs(products.derived_dir / "manifest.json", cumul_outputs)
+                    _record_outputs(products, cumul_outputs)
 
                 print(f"[{products.sample}] Generating derived plots ...")
-                plot_outputs = write_derived_plot_bundle(
+                derived_outputs = write_derived_plot_bundle(
                     products.derived_dir,
                     acceptance_df=products.acceptance_df,
                     conditional_df=products.conditional_df,
@@ -92,7 +101,9 @@ def main() -> None:
                     plot_style_cfg=CmsPlotStyleConfig(is_data=False),
                     min_total=args.min_plot_total,
                 )
-            else:
+                _record_outputs(products, derived_outputs)
+
+            if args.plot_scope in {"stacked-jpsi-only", "both"}:
                 print(f"[{products.sample}] Generating stacked J/psi plots only ...")
                 style = with_subprocess_label(CmsPlotStyleConfig(is_data=False), products.sample)
                 regular = write_stacked_jpsi_plots(
@@ -104,7 +115,12 @@ def main() -> None:
                 )
                 plot_outputs = {}
                 if regular:
-                    plot_outputs["stacked_jpsi_plots"] = {
+                    output_key = (
+                        "stacked_jpsi_plots"
+                        if args.plot_scope == "stacked-jpsi-only"
+                        else "stacked_jpsi_only_plots"
+                    )
+                    plot_outputs[output_key] = {
                         key: str(path.relative_to(products.derived_dir))
                         for key, path in regular.items()
                     }
@@ -118,13 +134,17 @@ def main() -> None:
                         include_uncertainty=True,
                     )
                     if qa:
-                        plot_outputs["plots_with_uncertainty"] = {
+                        output_key = (
+                            "plots_with_uncertainty"
+                            if args.plot_scope == "stacked-jpsi-only"
+                            else "stacked_jpsi_only_plots_with_uncertainty"
+                        )
+                        plot_outputs[output_key] = {
                             f"stacked_jpsi_qa.{key}": str(path.relative_to(products.derived_dir))
                             for key, path in qa.items()
                         }
             if plot_outputs:
-                products.manifest["outputs"].update(plot_outputs)
-                update_manifest_outputs(products.derived_dir / "manifest.json", plot_outputs)
+                _record_outputs(products, plot_outputs)
         write_derived_products_manifest(input_dir, output_dir, products_by_sample)
 
     if args.systematics:

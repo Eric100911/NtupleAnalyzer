@@ -60,8 +60,12 @@ stacked_jpsi_efficiency_maps.parquet: muonRECO, muonID, dimuon
 ```
 
 When only these plots are needed, use `build_derived_efficiency.py
---plot-scope stacked-jpsi` to skip cumulative, conditional, pair-level, and
+--plot-scope stacked-jpsi-only` to skip cumulative, conditional, pair-level, and
 systematics plots.
+
+The `--plot-scope` choices are `separate-jpsi` for the full bundle,
+`stacked-jpsi-only` for the dedicated stacked-J/ψ layout, and `both` for both
+layouts.
 
 The correction workflow is:
 

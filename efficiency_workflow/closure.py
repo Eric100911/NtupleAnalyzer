@@ -22,11 +22,11 @@ from .corrections import (
     load_factorized_correction_map,
     load_hybrid_correction_map,
 )
-from .efficiency import _merged_gen_events
+from .efficiency import DEFAULT_JJP_SAMPLES, _merged_gen_events
 from .io import ensure_dir, read_json, write_json, write_parquet
 
 
-DEFAULT_CLOSURE_SAMPLES = ("JJP_DPS1", "JJP_DPS2_CS", "JJP_DPS2_G", "JJP_SPS_CS", "JJP_SPS_G")
+DEFAULT_CLOSURE_SAMPLES = DEFAULT_JJP_SAMPLES
 
 
 @dataclass(frozen=True)

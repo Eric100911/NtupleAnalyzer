@@ -14,11 +14,12 @@ from uncertainty_workflow.runners import (
     run_fit_variation,
     run_mc_stat_variation,
 )
+from efficiency_workflow.efficiency import DEFAULT_JJP_SAMPLES
 
 
 DEFAULT_CONFIG_DIR = Path("configs/systematics")
 DEFAULT_OUTPUT_DIR = Path("outputs/systematics")
-DEFAULT_YIELD_SAMPLES = ("JJP_DPS1", "JJP_DPS2_CS", "JJP_DPS2_G", "JJP_SPS_CS", "JJP_SPS_G")
+DEFAULT_YIELD_SAMPLES = DEFAULT_JJP_SAMPLES
 DEFAULT_NOMINAL_SAMPLE = "JJP_DPS1"
 
 

@@ -16,10 +16,12 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from efficiency_workflow.efficiency import DEFAULT_JJP_SAMPLES
+
 
 DEFAULT_SAMPLE_ROOT = "/eos/ihep/cms/store/user/xcheng/MC_Production_v3/output"
 DEFAULT_XROOTD_HOST = "root://cceos.ihep.ac.cn:1094//"
-DEFAULT_SAMPLES = ("JJP_DPS1", "JJP_DPS2_CS", "JJP_DPS2_G", "JJP_SPS_CS", "JJP_SPS_G")
+DEFAULT_SAMPLES = DEFAULT_JJP_SAMPLES
 
 
 def write_json(data: Any, path: Path) -> None:

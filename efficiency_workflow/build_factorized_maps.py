@@ -8,13 +8,18 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
+from .config import efficiency_definition_from_dict
 from .efficiency import (
     EfficiencyBinning,
+    OBJECT_SELECTION_SEMANTICS,
+    PER_JPSI_STEPS,
+    PER_PHI_STEPS,
     _bin_label,
     _merged_gen_events,
+    cumulative_object_masks,
     jeffreys_efficiency_uncertainty,
 )
-from .io import ensure_dir, write_json, write_parquet
+from .io import ensure_dir, read_json, write_json, write_parquet
 
 
 DEFAULT_FACTOR_NAMES = (
@@ -132,9 +137,8 @@ def _append_rows_for_axes(
     active_axes = tuple(axis for axis in axes if axis_names[axis] is not None and axis_edges[axis] is not None)
     values = {axis: _axis_values(frame, axis_names[axis]) for axis in active_axes}
 
-    # The explicit intersection makes every stored factor a conditional
-    # efficiency N(denominator AND numerator) / N(denominator), even if an
-    # upstream flag was not encoded as a strictly nested boolean.
+    # Object frames contain cumulative masks; event frames retain their
+    # existing selection. Intersect explicitly for both kinds of factor.
     if not active_axes:
         denom = frame[spec.denominator_col].to_numpy(dtype=bool)
         passed = denom & frame[spec.numerator_col].to_numpy(dtype=bool)
@@ -228,16 +232,14 @@ def _build_factor_map(frame: pd.DataFrame, spec: FactorSpec) -> pd.DataFrame:
 def _jpsi_object_frame(merged: pd.DataFrame) -> pd.DataFrame:
     frames = []
     for prefix in ("jpsi_lead", "jpsi_sublead"):
+        masks = cumulative_object_masks(merged, PER_JPSI_STEPS, prefix)
         frames.append(
             pd.DataFrame(
                 {
                     "pt": merged[f"{prefix}_pt"].to_numpy(dtype=float),
                     "abs_y": np.abs(merged[f"{prefix}_y"].to_numpy(dtype=float)),
                     "full_gen": merged["full_gen"].to_numpy(dtype=int),
-                    "fiducial": merged[f"{prefix}_fiducial"].to_numpy(dtype=int),
-                    "muonRECO": merged[f"{prefix}_muonRECO"].to_numpy(dtype=int),
-                    "muonID": merged[f"{prefix}_muonID"].to_numpy(dtype=int),
-                    "dimuon": merged[f"{prefix}_dimuon"].to_numpy(dtype=int),
+                    **{step: masks[step].to_numpy(dtype=bool) for step in PER_JPSI_STEPS},
                 }
             )
         )
@@ -245,15 +247,13 @@ def _jpsi_object_frame(merged: pd.DataFrame) -> pd.DataFrame:
 
 
 def _phi_object_frame(merged: pd.DataFrame) -> pd.DataFrame:
+    masks = cumulative_object_masks(merged, PER_PHI_STEPS, "phi")
     return pd.DataFrame(
         {
             "pt": merged["phi_pt"].to_numpy(dtype=float),
             "abs_y": np.abs(merged["phi_y"].to_numpy(dtype=float)),
             "full_gen": merged["full_gen"].to_numpy(dtype=int),
-            "fiducial": merged["phi_fiducial"].to_numpy(dtype=int),
-            "kaonRECO": merged["phi_kaonRECO"].to_numpy(dtype=int),
-            "kaonID": merged["phi_kaonID"].to_numpy(dtype=int),
-            "dikaon": merged["phi_dikaon"].to_numpy(dtype=int),
+            **{step: masks[step].to_numpy(dtype=bool) for step in PER_PHI_STEPS},
         }
     )
 
@@ -263,8 +263,8 @@ def factor_specs(
     *,
     event_end_step: str = DEFAULT_EVENT_END_STEP,
 ) -> dict[str, tuple[pd.DataFrame | None, FactorSpec]]:
-    # Read numerator/denominator pairs as the physics definition of each
-    # factor.  The product used later is an approximation: correlations between
+    # Object numerator/denominator columns are cumulative masks, rooted at
+    # full_gen. The product used later is an approximation: correlations between
     # the three object chains and event-level factors are intentionally not
     # retained in these maps (use the hybrid/correlated products to study them).
     return {
@@ -362,6 +362,24 @@ def build_factorized_maps_for_sample(
         written[factor_name] = out_path
 
     specs = {name: spec for name, (_, spec) in factor_specs(binning, event_end_step=event_end_step).items()}
+    def definition_for(spec: FactorSpec) -> dict[str, str]:
+        steps = {"jpsi": PER_JPSI_STEPS, "phi": PER_PHI_STEPS}.get(spec.object_name)
+        if steps is None:
+            return {
+                "numerator": spec.numerator_col,
+                "denominator": spec.denominator_col,
+                "definition": f"N({spec.denominator_col} AND {spec.numerator_col}) / N({spec.denominator_col})",
+            }
+        chain = ("full_gen", *steps)
+        numerator = " AND ".join(chain[:chain.index(spec.numerator_col) + 1])
+        denominator = " AND ".join(chain[:chain.index(spec.denominator_col) + 1])
+        return {
+            "numerator": numerator,
+            "denominator": denominator,
+            "definition": f"N({numerator}) / N({denominator})",
+            "selection_semantics": OBJECT_SELECTION_SEMANTICS,
+        }
+
     manifest = {
         "stage": "factorized_efficiency_maps",
         "source": str(input_sample_dir.resolve()),
@@ -371,11 +389,7 @@ def build_factorized_maps_for_sample(
         "n_merged_rows": int(len(merged)),
         "maps": {name: path.name for name, path in written.items()},
         "factor_definitions": {
-            name: {
-                "numerator": spec.numerator_col,
-                "denominator": spec.denominator_col,
-                "definition": f"N({spec.denominator_col} AND {spec.numerator_col}) / N({spec.denominator_col})",
-            }
+            name: definition_for(spec)
             for name, spec in specs.items()
         },
     }

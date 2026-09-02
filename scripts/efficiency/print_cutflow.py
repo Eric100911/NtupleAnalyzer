@@ -14,7 +14,7 @@ efficiencies, following the convention:
     Pri_trackPVPass in parallel (each conditional on four_muon_vtx).
 
 Usage:
-    source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc14-opt/setup.sh
+    source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
     python3 print_cutflow.py --input-dir <merged_output_dir> [--sample SAMPLE] [--format table|latex|csv]
 """
 
@@ -36,6 +36,8 @@ from typing import Any
 
 import pandas as pd
 from scipy.stats import beta
+
+from efficiency_workflow.efficiency import cumulative_object_masks
 
 # ---------------------------------------------------------------------------
 # Step definitions — mirror efficiency_workflow/efficiency.py constants
@@ -137,9 +139,6 @@ def build_cutflow_rows(event_df: pd.DataFrame) -> list[dict[str, Any]]:
     if n_total == 0:
         return []
 
-    def _col(obj: str, step: str) -> str:
-        return f"{obj}_{step}"
-
     def _passed(col: str) -> int:
         return int(event_df[col].sum()) if col in event_df.columns else 0
 
@@ -152,10 +151,10 @@ def build_cutflow_rows(event_df: pd.DataFrame) -> list[dict[str, Any]]:
         ("phi", PER_PHI_STEPS),
     ]:
         section = OBJECT_SECTIONS[obj_prefix]
+        masks = cumulative_object_masks(event_df, tuple(step for step, _ in steps), obj_prefix)
         prev_passed = n_total
         for step_col, step_label in steps:
-            col = _col(obj_prefix, step_col)
-            passed = _passed(col)
+            passed = int(masks[step_col].sum())
 
             rows.append(_make_row(section, step_col, step_label, prev_passed, passed, n_total))
             prev_passed = passed

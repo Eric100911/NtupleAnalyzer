@@ -16,7 +16,23 @@
 ### Current implementation notes
 
 The parquet efficiency workflow stores object-level reconstruction and ID steps
-as conditional chains, then switches to event-level flags. `s_cand` is the
+as cumulative conditional chains, then switches to event-level flags. For each
+object, define `C0 = full_gen` and `Ci = C(i-1) & raw_step_i`, with steps
+`fiducial → muonRECO → muonID → dimuon` for J/ψ and
+`fiducial → kaonRECO → kaonID → dikaon` for φ. Each conditional efficiency is
+`N(Ci) / N(C(i-1))`; every earlier requirement remains in the denominator.
+Flags in `event_step_flags.parquet` remain raw predicates and need not be nested.
+
+Object inclusive/2D counts and absolute cutflow efficiencies use `N(Ci) / N(C0)`.
+Derived conditional maps, stacked maps, printed cutflows, and all factorized
+fallback levels use the successive cumulative masks. Thus a conditional row's
+total equals the previous row's passed count in the same bin. Count products
+mark these object rows with `selection_semantics = cumulative_full_gen`.
+The factor manifest expands the full cumulative numerator and denominator.
+This identity concerns counts and observed efficiencies; independently smoothed
+estimates or factors selected from different fallback bins need not telescope.
+
+`s_cand` is the
 event-level conjunction of the three object chains. Its object successes may be
 found in different single-object candidates; it is not itself a common-composite
 selection. The nominal event chain is:
@@ -99,8 +115,9 @@ python3 scripts/efficiency/audit_efficiency_events.py \
   --output-dir /tmp/chiw/efficiency_audit
 ```
 
-The report keeps cumulative-chain membership, adjacent-raw factor membership,
-and the existing pipeline cutflow values separate. For each step it selects up
+The report keeps cumulative-chain membership, adjacent-raw diagnostic membership,
+and pipeline cutflow values separate. Object cutflows and the factor summary
+use the cumulative definition. For each step it selects up
 to five numerator, rejected, and raw-only examples and records the underlying
 GEN daughters, matched RECO objects, quality operands, trigger/filter indices,
 and composite-candidate witnesses. The output directory contains Markdown and
@@ -159,8 +176,12 @@ stacked_jpsi_efficiency_maps.parquet: muonRECO, muonID, dimuon
 ```
 
 When only these plots are needed, use `build_derived_efficiency.py
---plot-scope stacked-jpsi` to skip cumulative, conditional, pair-level, and
+--plot-scope stacked-jpsi-only` to skip cumulative, conditional, pair-level, and
 systematics plots.
+
+The `--plot-scope` choices are `separate-jpsi` for the full bundle,
+`stacked-jpsi-only` for the dedicated stacked-J/ψ layout, and `both` for both
+layouts.
 
 The correction workflow is:
 

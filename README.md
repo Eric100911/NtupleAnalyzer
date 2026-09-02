@@ -103,7 +103,7 @@ source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
 | [prepare_efficiency_shards.py](prepare_efficiency_shards.py) | 准备 Condor shard 列表 |
 | [merge_efficiency_shards.py](merge_efficiency_shards.py) | 合并 shard 输出 |
 | [rebuild_efficiency_maps.py](rebuild_efficiency_maps.py) | 从已有 gen/event parquet 重建 efficiency maps（非覆盖式） |
-| [build_derived_efficiency.py](build_derived_efficiency.py) | 构建 derived 产品: acceptance, conditional, per-object, stacked, pair-level maps + plots；`--plot-scope stacked-jpsi` 只画 stacked J/ψ |
+| [build_derived_efficiency.py](build_derived_efficiency.py) | 构建 derived 产品: acceptance, conditional, per-object, stacked, pair-level maps + plots；`--plot-scope stacked-jpsi-only` 只画 stacked J/ψ |
 | [build_systematic_uncertainty.py](build_systematic_uncertainty.py) | 计算 subprocess envelope systematics（ratio, envelope half-width, max-pull） |
 | [build_response_classification.py](build_response_classification.py) | 构建 response matrix 分类用于效率修正诊断 |
 | [print_cutflow.py](print_cutflow.py) | 打印格式化的 cutflow 表格（text / LaTeX / CSV） |
@@ -335,7 +335,7 @@ Each Pri_* step is conditional on `four_muon_vtx` (parallel, not sequential amon
 
 1. **`run_efficiency.py`** — per-file efficiency shard: finds gen J/ψ+J/ψ+φ systems, matches reco candidates, computes cumulative step flags. Supports `--efficiency-backend vectorized|python-loop`, `--max-files N` for testing.
 2. **`merge_efficiency_shards.py`** — merges shard outputs into per-sample files.
-3. **`build_derived_efficiency.py`** — produces derived maps and plots from merged output. Use `--plot-scope stacked-jpsi` when only the stacked J/ψ `(pT, |y|)` plots are needed.
+3. **`build_derived_efficiency.py`** — produces derived maps and plots from merged output. Use `--plot-scope stacked-jpsi-only` when only the stacked J/ψ `(pT, |y|)` plots are needed.
 4. **`build_systematic_uncertainty.py`** — computes subprocess envelope systematics (optional, for yield correction).
 5. **`compute_efficiency_corrected_yield.py`** — applies efficiency weights to data and computes corrected signal yield.
 
@@ -388,7 +388,7 @@ bash -c 'source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup
   python3 build_derived_efficiency.py \
     --input-dir ../merged_efficiency_output_20260601_01 \
     --output-dir stacked_jpsi_pt_absy_only_YYYYMMDD \
-    --plot-scope stacked-jpsi --min-plot-total 1'
+    --plot-scope stacked-jpsi-only --min-plot-total 1'
 ```
 
 Expected regular output is four PNGs per sample in

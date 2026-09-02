@@ -143,12 +143,12 @@ def _stacked_inputs(flag_rows, role="lead"):
 
 @pytest.mark.parametrize("role", ["lead", "sublead", "both"])
 @pytest.mark.parametrize("flag_rows, expected", [
-    ([(1, 1, 1, 1), (0, 1, 1, 0), (1, 0, 0, 0)], [(2, 1), (2, 2), (2, 1)]),
-    ([(1, 1, 1, 1), (0, 0, 1, 1), (1, 0, 0, 1)], [(2, 1), (1, 1), (2, 2)]),
+    ([(1, 1, 1, 1), (0, 1, 1, 0), (1, 0, 0, 0)], [(2, 1), (1, 1), (1, 1)]),
+    ([(1, 1, 1, 1), (0, 0, 1, 1), (1, 0, 0, 1)], [(2, 1), (1, 1), (1, 1)]),
     ([(1, 0, 0, 0)], [(1, 0), (0, 0), (0, 0)]),
     ([(1, 1, 1, 1)], [(1, 1), (1, 1), (1, 1)]),
 ])
-def test_stacked_pairwise_counts(role, flag_rows, expected):
+def test_stacked_cumulative_counts(role, flag_rows, expected):
     gen_df, event_df = _stacked_inputs(flag_rows, role)
     result = build_stacked_jpsi_efficiency_maps(gen_df, event_df, EfficiencyBinning())
     cell = result[(result["x_min"] <= 7.0) & (result["x_max"] > 8.0)

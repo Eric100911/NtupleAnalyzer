@@ -15,9 +15,12 @@ from .config import OfflineSelectionConfig, default_efficiency_definition
 from .efficiency import (
     ALL_KNOWN_BRANCHES,
     EfficiencyBinning,
+    PER_JPSI_STEPS,
+    PER_PHI_STEPS,
     _process_efficiency_chunk_vectorized,
     _uproot_read_options,
     build_cutflow,
+    cumulative_object_masks,
 )
 from .tps_input import (
     detect_tree_path as detect_tps_tree_path,
@@ -261,10 +264,20 @@ def build_factor_summary(event_df: pd.DataFrame) -> pd.DataFrame:
     )
     specs.extend((f"eff_{step}", "event", step, "four_muon_vtx") for step in PRI_ENDPOINTS)
 
+    object_masks = {
+        scope: cumulative_object_masks(event_df, steps, scope)
+        for scope, steps in (("jpsi_lead", PER_JPSI_STEPS),
+                             ("jpsi_sublead", PER_JPSI_STEPS), ("phi", PER_PHI_STEPS))
+    }
     rows: list[dict[str, Any]] = []
     for factor, scope, numerator_col, denominator_col in specs:
-        denominator = _bool_series(event_df, denominator_col)
-        numerator = denominator & _bool_series(event_df, numerator_col)
+        if scope in object_masks:
+            masks = object_masks[scope]
+            denominator = masks[denominator_col.removeprefix(f"{scope}_")]
+            numerator = masks[numerator_col.removeprefix(f"{scope}_")]
+        else:
+            denominator = _bool_series(event_df, denominator_col)
+            numerator = denominator & _bool_series(event_df, numerator_col)
         total = int(denominator.sum())
         passed = int(numerator.sum())
         rows.append(
@@ -1319,6 +1332,8 @@ def render_markdown(payload: dict[str, Any], *, include_branch_details: bool = T
         [
             "",
             "## Factor numerator/denominator summary",
+            "",
+            "Object column names below denote cumulative masks, including full GEN and all preceding object steps.",
             "",
             "| Factor | Numerator | Denominator | Passed/total | Efficiency |",
             "|---|---|---|---:|---:|",

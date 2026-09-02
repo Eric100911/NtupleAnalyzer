@@ -297,7 +297,12 @@ def test_build_factorized_weighted_mini_tree_uses_vectorized_arrays(monkeypatch,
         def __setitem__(self, name, value):
             written[name] = value
 
-    monkeypatch.setattr(yc.uproot, "open", lambda path: FakeReader())
+    def open_local(path, **kwargs):
+        assert kwargs["handler"] is yc.uproot.source.file.MemmapSource
+        return FakeReader()
+
+    (tmp_path / "input.root").touch()
+    monkeypatch.setattr(yc.uproot, "open", open_local)
     monkeypatch.setattr(yc.uproot, "recreate", lambda path: FakeWriter())
 
     maps = {factor_name: _factor_frame(factor_name) for factor_name in FactorizedCorrectionMap.REQUIRED_FACTORS}

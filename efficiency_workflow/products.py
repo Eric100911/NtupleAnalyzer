@@ -11,6 +11,7 @@ from .efficiency import (
     PAIR_LEVEL_MAP_SPECS,
     PAIR_LEVEL_MAP_SPECS_NO_TRIG_MATCH,
     EfficiencyBinning,
+    OBJECT_SELECTION_SEMANTICS,
     _merged_gen_events,
     build_acceptance_maps,
     build_conditional_maps,
@@ -67,9 +68,22 @@ class DerivedSampleProducts:
 
 def update_manifest_outputs(manifest_path: Path, outputs: dict[str, Any]) -> dict[str, Any]:
     manifest = read_json(manifest_path)
-    manifest.setdefault("outputs", {}).update(outputs)
+    manifest["outputs"] = _merge_manifest_values(manifest.get("outputs", {}), outputs)
     write_json(manifest, manifest_path)
     return manifest
+
+
+def _merge_manifest_values(existing: Any, updates: Any) -> Any:
+    """Recursively merge manifest mappings while replacing scalar values."""
+    if not isinstance(existing, dict) or not isinstance(updates, dict):
+        return updates
+    merged = dict(existing)
+    for key, value in updates.items():
+        if key in merged:
+            merged[key] = _merge_manifest_values(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def update_sample_manifest_artifacts(sample_dir: Path, artifacts: dict[str, Any]) -> dict[str, Any]:
@@ -356,6 +370,18 @@ def build_derived_sample_products(
 
     sample = sample_dir.name
     counts_df = pd.read_parquet(counts_path)
+    object_rows = counts_df.loc[
+        counts_df["map_type"].isin(["inclusive", "object_2d"])
+        & counts_df["object"].isin(["jpsi_lead", "jpsi_sublead", "phi"])
+    ]
+    if not object_rows.empty and (
+        "selection_semantics" not in object_rows.columns
+        or not object_rows["selection_semantics"].eq(OBJECT_SELECTION_SEMANTICS).all()
+    ):
+        raise ValueError(
+            f"Legacy raw object counts in {counts_path}; run rebuild_efficiency_maps.py "
+            "into a fresh directory before building cumulative derived products."
+        )
     active_binning = binning
     metadata_path = sample_dir / "configuration_metadata.json"
     if active_binning is None and metadata_path.exists():
@@ -369,7 +395,7 @@ def build_derived_sample_products(
     active_binning = active_binning or EfficiencyBinning()
     acc_df = build_acceptance_maps(counts_df)
 
-    # Read gen+event data for AND-intersection conditional maps + derived products
+    # Read gen+event data for cumulative conditional maps and derived products.
     gen_path = sample_dir / "gen_systems.parquet"
     event_path = sample_dir / "event_step_flags.parquet"
     merged_frame: pd.DataFrame | None = None

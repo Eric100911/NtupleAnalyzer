@@ -17,15 +17,19 @@ if str(_REPO_ROOT) not in sys.path:
 
 
 import argparse
+from dataclasses import replace
 import shutil
 from pathlib import Path
 from typing import Callable
 
 import pandas as pd
 
+from efficiency_workflow.config import efficiency_definition_from_dict
+
 from efficiency_workflow.efficiency import (
     CORRELATED_MAP_STEPS,
     CORRELATED_MAP_STEPS_NO_TRIG_MATCH,
+    DEFAULT_JJP_SAMPLES,
     EfficiencyBinning,
     build_cutflow,
     build_efficiency_counts,
@@ -34,7 +38,7 @@ from efficiency_workflow.efficiency import (
 from efficiency_workflow.io import ensure_dir, read_json, write_json, write_parquet
 
 
-DEFAULT_SAMPLES = ("JJP_DPS1", "JJP_DPS2_CS", "JJP_DPS2_G", "JJP_SPS_CS", "JJP_SPS_G")
+DEFAULT_SAMPLES = DEFAULT_JJP_SAMPLES
 
 
 def parse_args() -> argparse.Namespace:
@@ -92,6 +96,8 @@ def _sample_artifacts(sample_dir: Path, counts_df: pd.DataFrame, gen_df: pd.Data
         artifacts["sample_manifest"] = "sample_manifest.json"
     if (sample_dir / "cutflow.csv").exists():
         artifacts["cutflow"] = {"path": "cutflow.csv"}
+    if (sample_dir / "configuration_metadata.json").exists():
+        artifacts["configuration_metadata"] = "configuration_metadata.json"
     return artifacts
 
 
@@ -110,8 +116,9 @@ def _validate_event_schema(event_df: pd.DataFrame, binning: EfficiencyBinning, s
 def rebuild_efficiency_maps_for_sample(
     input_sample_dir: Path,
     output_sample_dir: Path,
-    binning: EfficiencyBinning,
+    binning: EfficiencyBinning | None = None,
     *,
+    skip_trigger_matching: bool = False,
     copy_existing_derived: bool = False,
     status_callback: Callable[[str], None] | None = None,
 ) -> Path:
@@ -122,6 +129,15 @@ def rebuild_efficiency_maps_for_sample(
 
     gen_path = input_sample_dir / "gen_systems.parquet"
     event_path = input_sample_dir / "event_step_flags.parquet"
+    metadata_path = input_sample_dir / "configuration_metadata.json"
+    if binning is None and metadata_path.exists():
+        metadata = read_json(metadata_path)
+        if metadata.get("efficiency_definition"):
+            definition = efficiency_definition_from_dict(metadata["efficiency_definition"], source=str(metadata_path))
+            binning = EfficiencyBinning(**definition.binning)
+    binning = binning or EfficiencyBinning()
+    if skip_trigger_matching:
+        binning = replace(binning, include_trigger_matching=False)
     if not gen_path.exists() or not event_path.exists():
         raise FileNotFoundError(f"Missing gen/event parquet inputs in {input_sample_dir}")
     if output_sample_dir.exists():
@@ -148,6 +164,7 @@ def rebuild_efficiency_maps_for_sample(
     _copy_if_exists(gen_path, output_sample_dir / "gen_systems.parquet")
     _copy_if_exists(event_path, output_sample_dir / "event_step_flags.parquet")
     _copy_if_exists(input_sample_dir / "sample_manifest.json", output_sample_dir / "sample_manifest.json")
+    _copy_if_exists(metadata_path, output_sample_dir / "configuration_metadata.json")
     if input_sample_dir / "cutflow.csv" != output_sample_dir / "cutflow.csv":
         cutflow_df.to_csv(output_sample_dir / "cutflow.csv", index=False)
     if copy_existing_derived:
@@ -193,7 +210,6 @@ def main() -> int:
         raise FileNotFoundError(f"Input directory does not exist: {input_dir}")
 
     ensure_dir(output_dir)
-    binning = EfficiencyBinning(include_trigger_matching=not args.skip_trigger_matching)
     samples = list(dict.fromkeys(args.samples))
     print(f"Rebuilding {len(samples)} sample(s)")
     print(f"  input : {input_dir}")
@@ -203,7 +219,7 @@ def main() -> int:
         out_path = rebuild_efficiency_maps_for_sample(
             input_dir / sample,
             output_dir / sample,
-            binning,
+            skip_trigger_matching=args.skip_trigger_matching,
             copy_existing_derived=args.copy_existing_derived,
             status_callback=lambda message, sample=sample: print(f"[{sample}] {message}", flush=True),
         )

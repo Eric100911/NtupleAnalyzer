@@ -28,6 +28,26 @@ from .truth import first_ancestor_idx, to_int_idx
 PER_JPSI_STEPS = ("fiducial", "muonRECO", "muonID", "dimuon")
 PER_PHI_STEPS = ("fiducial", "kaonRECO", "kaonID", "dikaon")
 
+OBJECT_SELECTION_SEMANTICS = "cumulative_full_gen"
+
+
+def cumulative_object_masks(
+    frame: pd.DataFrame, steps: tuple[str, ...], prefix: str = "",
+) -> pd.DataFrame:
+    """Return full-GEN and successive object-chain masks without changing raw flags.
+
+    Missing/NaN step flags fail that step and all subsequent steps.
+    Column names in the result are unprefixed step names.
+    """
+    columns = [f"{prefix}_{step}" if prefix else step for step in steps]
+    flags = frame.reindex(columns=["full_gen", *columns], fill_value=0).fillna(0).astype(bool)
+    cumulative = flags["full_gen"]
+    masks = {"full_gen": cumulative}
+    for step, column in zip(steps, columns):
+        cumulative = cumulative & flags[column]
+        masks[step] = cumulative
+    return pd.DataFrame(masks, index=frame.index)
+
 EVENT_STEPS = (
     "hlt_event",
     "hlt_muon_matched",
@@ -331,13 +351,23 @@ class EfficiencyBinning:
     triple_mass_edges: tuple[float, ...] = (0.0, 10.0, 15.0, 20.0, 30.0, 50.0, 100.0)
 
 
+DEFAULT_JJP_SAMPLES = (
+    "JJP_DPS1",
+    "JJP_DPS2_CS",
+    "JJP_DPS2_G",
+    "JJP_SPS_CS",
+    "JJP_SPS_G",
+    "JJP_TPS",
+)
+
+
 @dataclass(frozen=True)
 class EfficiencyRunConfig:
     analysis_mode: str = "JpsiJpsiPhi"
     tree_path: str = "auto"
     xrootd_host: str = "root://cceos.ihep.ac.cn//"
     sample_root: str = "/eos/ihep/cms/store/user/xcheng/MC_Production_v3/output"
-    samples: tuple[str, ...] = ("JJP_DPS1", "JJP_DPS2_CS", "JJP_DPS2_G", "JJP_SPS_CS", "JJP_SPS_G")
+    samples: tuple[str, ...] = DEFAULT_JJP_SAMPLES
     max_files: int | None = None
     min_plot_total: int = 1
 
@@ -2541,7 +2571,7 @@ def _merged_gen_events(gen_df: pd.DataFrame, event_df: pd.DataFrame) -> pd.DataF
 
 
 def build_cutflow(event_df: pd.DataFrame, binning: EfficiencyBinning | None = None) -> pd.DataFrame:
-    """Build cutflows, conditioning object steps on the previous raw flag."""
+    """Build cutflows, conditioning object steps on all preceding requirements."""
     if event_df.empty:
         return pd.DataFrame(columns=["step", "total", "passed", "efficiency",
                                       "err_low", "err_high", "err_sym",
@@ -2554,27 +2584,18 @@ def build_cutflow(event_df: pd.DataFrame, binning: EfficiencyBinning | None = No
 
     def _cutflow_chain(frame: pd.DataFrame, step_list: tuple[str, ...],
                        base_total: int, object_name: str = "") -> None:
-        prev_col: str | None = None
+        masks = cumulative_object_masks(frame, step_list, object_name)
         prev_passed: int = base_total
         for step in step_list:
-            col = step if not object_name else f"{object_name}_{step}"
-            raw_passed = int(frame[col].sum()) if col in frame.columns else 0
-            # Raw efficiency vs full_gen
+            passed = int(masks[step].sum())
             row = _efficiency_row(
-                {"step": step, "object": object_name}, base_total, raw_passed)
-            # Pairwise conditioning uses the immediately preceding raw flag.
-            if prev_col is None:
-                cond_passed = raw_passed
-            elif col in frame.columns and prev_col in frame.columns:
-                cond_passed = int((frame[col] & frame[prev_col]).sum())
-            else:
-                cond_passed = 0
+                {"step": step, "object": object_name,
+                 "selection_semantics": OBJECT_SELECTION_SEMANTICS}, base_total, passed)
             row["conditional_total"] = prev_passed
-            row["conditional_passed"] = cond_passed
-            row["conditional_efficiency"] = float(cond_passed / prev_passed) if prev_passed > 0 else math.nan
+            row["conditional_passed"] = passed
+            row["conditional_efficiency"] = float(passed / prev_passed) if prev_passed > 0 else math.nan
             rows.append(row)
-            prev_col = col
-            prev_passed = raw_passed
+            prev_passed = passed
 
     total_full_gen = int(event_df["full_gen"].sum())
 
@@ -2621,12 +2642,14 @@ def _inclusive_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[d
     total = int(frame["full_gen"].sum())
 
     # Per-object step columns
-    for col in per_object_step_columns():
-        if col in frame.columns:
-            obj, step = col.rsplit("_", 1)
+    for obj, steps in (("jpsi_lead", PER_JPSI_STEPS), ("jpsi_sublead", PER_JPSI_STEPS),
+                       ("phi", PER_PHI_STEPS)):
+        masks = cumulative_object_masks(frame, steps, obj)
+        for step in steps:
             rows.append(_efficiency_row(
-                {"map_type": "inclusive", "step": step, "object": obj},
-                total, int(frame[col].sum())))
+                {"map_type": "inclusive", "step": step, "object": obj,
+                 "selection_semantics": OBJECT_SELECTION_SEMANTICS},
+                total, int(masks[step].sum())))
 
     # Event-level columns
     if binning.include_trigger_matching:
@@ -2648,7 +2671,7 @@ def _inclusive_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[d
 
 
 def _per_object_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[dict[str, Any]]:
-    """Per-object 2D (pT, y) bins with conditional denominators."""
+    """Per-object 2D (pT, y) cumulative counts relative to full GEN."""
     rows: list[dict[str, Any]] = []
     specs = (
         ("jpsi_lead", "jpsi_lead_pt", "jpsi_lead_y",
@@ -2659,6 +2682,7 @@ def _per_object_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[
          binning.phi_pt_edges, binning.object_y_edges, PER_PHI_STEPS),
     )
     for obj, pt_col, y_col, pt_edges, y_edges, steps in specs:
+        masks = cumulative_object_masks(frame, steps, obj)
         for ix in range(len(pt_edges) - 1):
             for iy in range(len(y_edges) - 1):
                 subset = frame[
@@ -2669,11 +2693,11 @@ def _per_object_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[
                 ]
                 full_gen_total = int(subset["full_gen"].sum())
                 for step in steps:
-                    col = f"{obj}_{step}"
                     rows.append(
                         _efficiency_row(
                             {
                                 "map_type": "object_2d",
+                                "selection_semantics": OBJECT_SELECTION_SEMANTICS,
                                 "object": obj,
                                 "step": step,
                                 "x_axis": "pt",
@@ -2688,7 +2712,7 @@ def _per_object_counts(frame: pd.DataFrame, binning: EfficiencyBinning) -> list[
                                 "y_label": _bin_label(y_edges, iy),
                             },
                             full_gen_total,
-                            int(subset[col].sum()) if full_gen_total else 0,
+                            int(masks.loc[subset.index, step].sum()),
                         )
                     )
     return rows
@@ -2927,6 +2951,7 @@ def build_per_object_acceptance_maps(
         ("phi", "phi_pt", "phi_y", "phi_fiducial", binning.phi_pt_edges, binning.object_y_edges),
     )
     for obj, pt_col, y_col, flag_col, pt_edges, y_edges in specs:
+        accepted = cumulative_object_masks(merged, ("fiducial",), obj)["fiducial"]
         for ix in range(len(pt_edges) - 1):
             for iy in range(len(y_edges) - 1):
                 subset = merged[
@@ -2940,6 +2965,7 @@ def build_per_object_acceptance_maps(
                     _efficiency_row(
                         {
                             "map_type": "object_acceptance_2d",
+                            "selection_semantics": OBJECT_SELECTION_SEMANTICS,
                             "object": obj,
                             "step": "fiducial",
                             "x_axis": "pt",
@@ -2954,7 +2980,7 @@ def build_per_object_acceptance_maps(
                             "y_label": _bin_label(y_edges, iy),
                         },
                         total,
-                        int(subset[flag_col].sum()) if total else 0,
+                        int(accepted.loc[subset.index].sum()),
                     )
                 )
     result = pd.DataFrame(rows)
@@ -2977,12 +3003,12 @@ def _stacked_jpsi_frame(gen_df: pd.DataFrame, event_df: pd.DataFrame) -> pd.Data
         part["jpsi_pt"] = part[f"jpsi_{role}_pt"]
         part["jpsi_y"] = part[f"jpsi_{role}_y"]
         part["jpsi_abs_y"] = part[f"jpsi_{role}_abs_y"] if f"jpsi_{role}_abs_y" in part.columns else part["jpsi_y"].abs()
-        part["jpsi_fiducial_acceptance"] = part[flag_col].astype(int)
+        part["jpsi_fiducial_acceptance"] = part[flag_col].fillna(0).astype(bool)
         # Copy per-J/psi step flags for this role
         for suffix in PER_JPSI_STEPS:
             col = f"jpsi_{role}_{suffix}"
             if col in part.columns:
-                part[f"jpsi_{suffix}"] = part[col].astype(int)
+                part[f"jpsi_{suffix}"] = part[col].fillna(0).astype(bool)
         parts.append(part)
     return pd.concat(parts, ignore_index=True)
 
@@ -2993,6 +3019,7 @@ def build_stacked_jpsi_acceptance_maps(
     stacked = _stacked_jpsi_frame(gen_df, event_df)
     if stacked.empty:
         return pd.DataFrame()
+    masks = cumulative_object_masks(stacked, ("fiducial_acceptance",), "jpsi")
     rows: list[dict[str, Any]] = []
     pt_edges = binning.jpsi_pt_edges
     y_edges = binning.object_abs_y_edges
@@ -3004,7 +3031,7 @@ def build_stacked_jpsi_acceptance_maps(
                 & (stacked["jpsi_abs_y"] >= y_edges[iy])
                 & (stacked["jpsi_abs_y"] < y_edges[iy + 1])
             ]
-            total = int(len(subset))
+            total = int(masks.loc[subset.index, "full_gen"].sum())
             rows.append(
                 _efficiency_row(
                     {
@@ -3024,7 +3051,7 @@ def build_stacked_jpsi_acceptance_maps(
                         "quantity": "stacked_jpsi_acceptance",
                     },
                     total,
-                    int(subset["jpsi_fiducial_acceptance"].sum()) if total else 0,
+                    int(masks.loc[subset.index, "fiducial_acceptance"].sum()),
                 )
             )
     return pd.DataFrame(rows)
@@ -3035,13 +3062,8 @@ def build_stacked_jpsi_efficiency_maps(
 ) -> pd.DataFrame:
     """Build stacked J/psi per-object conditional efficiency maps in (pT, |y|).
 
-    Each step uses the immediately preceding raw flag as denominator and its
-    AND-intersection with the current flag as numerator. These are pairwise
-    conditionals, without cumulative requirements from earlier steps:
-
-        muonRECO  = N(muonRECO & fiducial)  / N(fiducial)
-        muonID    = N(muonID & muonRECO)    / N(muonRECO)
-        dimuon    = N(dimuon & muonID)      / N(muonID)
+    Each denominator requires full GEN and every preceding object step.
+    The numerator additionally requires the current raw flag.
     """
     stacked = _stacked_jpsi_frame(gen_df, event_df)
     if stacked.empty:
@@ -3057,11 +3079,8 @@ def build_stacked_jpsi_efficiency_maps(
                 & (stacked["jpsi_abs_y"] >= y_edges[iy])
                 & (stacked["jpsi_abs_y"] < y_edges[iy + 1])
             ]
-            columns = [
-                "jpsi_fiducial_acceptance", "jpsi_muonRECO",
-                "jpsi_muonID", "jpsi_dimuon",
-            ]
-            flags = subset.reindex(columns=columns, fill_value=0).fillna(0).astype(bool)
+            masks = cumulative_object_masks(
+                subset, ("fiducial_acceptance", "muonRECO", "muonID", "dimuon"), "jpsi")
 
             _base = {
                 "map_type": "stacked_jpsi_efficiency_2d",
@@ -3077,6 +3096,7 @@ def build_stacked_jpsi_efficiency_maps(
                 "x_label": _bin_label(pt_edges, ix),
                 "y_label": _bin_label(y_edges, iy),
                 "quantity": "stacked_jpsi_efficiency",
+                "selection_semantics": OBJECT_SELECTION_SEMANTICS,
             }
 
             for step, previous in (
@@ -3084,8 +3104,8 @@ def build_stacked_jpsi_efficiency_maps(
                 ("muonID", "muonRECO"),
                 ("dimuon", "muonID"),
             ):
-                denominator = flags[f"jpsi_{previous}"]
-                passed = denominator & flags[f"jpsi_{step}"]
+                denominator = masks[previous]
+                passed = masks[step]
                 rows.append(_efficiency_row(
                     {**_base, "step": step},
                     int(denominator.sum()), int(passed.sum()),
@@ -3225,17 +3245,15 @@ def _chain_conditional_rows_with_and(
     obj_name: str, frame: pd.DataFrame, binning: EfficiencyBinning,
     parts: list[pd.DataFrame], map_type: str = "object_2d",
 ) -> None:
-    """Build conditional efficiency rows with AND-intersection denominators.
-
-    Unlike ``_chain_conditional_rows`` which chains raw step counts, this
-    computes ``N(step & previous) / N(previous)`` directly from the merged
-    gen+event frame, giving properly chained conditional efficiencies.
-    """
+    """Build conditional rows using the full cumulative object selection."""
     if not chain:
         return
     present_steps = [s for s in chain if s in subset["step"].values]
-    if len(present_steps) < 2:
+    if not present_steps:
         return
+
+    masks = cumulative_object_masks(frame, chain, obj_name)
+    frame = frame.assign(**{f"{obj_name}_{step}": masks[step] for step in chain})
 
     # Map object name to (pt_col, y_col, pt_edges, y_edges)
     obj_specs = {
@@ -3262,6 +3280,7 @@ def _chain_conditional_rows_with_and(
             passed = int(bin_frame[first_col].sum()) if first_col in bin_frame.columns else 0
             row = _efficiency_row({
                 "map_type": map_type,
+                "selection_semantics": OBJECT_SELECTION_SEMANTICS,
                 "object": obj_name,
                 "step": first_step,
                 "x_axis": "pt", "y_axis": "y",
@@ -3281,7 +3300,7 @@ def _chain_conditional_rows_with_and(
             row["quantity"] = "conditional_efficiency_vs_previous_step"
             parts.append(pd.DataFrame([row]))
 
-    # Subsequent steps: AND-intersection with previous
+    # Subsequent steps: flags in this local frame are already cumulative.
     for prev_step, this_step in zip(present_steps, present_steps[1:]):
         prev_col = f"{obj_name}_{prev_step}"
         this_col = f"{obj_name}_{this_step}"
@@ -3298,6 +3317,7 @@ def _chain_conditional_rows_with_and(
                 passed = int((bin_frame[this_col] & bin_frame[prev_col]).sum())
                 row = _efficiency_row({
                     "map_type": map_type,
+                    "selection_semantics": OBJECT_SELECTION_SEMANTICS,
                     "object": obj_name,
                     "step": this_step,
                     "x_axis": "pt", "y_axis": "y",
@@ -3310,9 +3330,10 @@ def _chain_conditional_rows_with_and(
                 row["previous_step"] = prev_step
                 row["conditional_total"] = total
                 row["conditional_passed"] = passed
-                row["absolute_total"] = total
+                row["absolute_total"] = int(bin_frame["full_gen"].sum())
                 row["absolute_passed"] = passed
-                row["absolute_efficiency"] = row["efficiency"]
+                row["absolute_efficiency"] = (
+                    passed / row["absolute_total"] if row["absolute_total"] else math.nan)
                 _recompute_efficiency_from_dict(row, "conditional_total", "conditional_passed")
                 row["quantity"] = "conditional_efficiency_vs_previous_step"
                 parts.append(pd.DataFrame([row]))
@@ -3332,6 +3353,14 @@ def _recompute_efficiency_from_dict(row: dict[str, Any], total_key: str, passed_
 def _chain_conditional_rows(subset: pd.DataFrame, chain: tuple[str, ...],
                             keys: list[str], parts: list[pd.DataFrame]) -> None:
     """Build conditional efficiency rows for a single (map_type, object) group."""
+    if chain and (
+        "selection_semantics" not in subset.columns
+        or not subset["selection_semantics"].eq(OBJECT_SELECTION_SEMANTICS).all()
+    ):
+        raise ValueError(
+            "Object conditionals require cumulative counts or gen/event flags; "
+            "rebuild legacy counts from gen_systems.parquet and event_step_flags.parquet."
+        )
     if chain:
         present_steps = [s for s in chain if s in subset["step"].values]
     else:

@@ -172,7 +172,7 @@ def test_membership_semantics_keep_cumulative_and_adjacent_raw_separate():
     assert examples["jpsi_lead/muonRECO/rejected"][0].entry == 2
 
 
-def test_summary_matches_pairwise_pipeline_counts():
+def test_summary_matches_cumulative_pipeline_counts():
     event_df = _membership_frame()
     memberships = classify_memberships(event_df)
     summary = summarize_memberships(memberships, event_df)
@@ -181,9 +181,10 @@ def test_summary_matches_pairwise_pipeline_counts():
     ].iloc[0]
     assert row["cumulative_total"] == 1
     assert row["adjacent_raw_total"] == 2
-    assert row["pipeline_conditional_total"] == 2
-    assert row["pipeline_conditional_passed"] == 2
-    assert bool(row["pipeline_matches_adjacent_raw"])
+    assert row["pipeline_conditional_total"] == 1
+    assert row["pipeline_conditional_passed"] == 1
+    assert bool(row["pipeline_matches_cumulative"])
+    assert not bool(row["pipeline_matches_adjacent_raw"])
     assert not bool(row["pipeline_non_binomial"])
 
 
@@ -206,13 +207,13 @@ def test_summary_detects_invalid_pipeline_counts(monkeypatch):
     ("phi", ("fiducial", "kaonRECO", "kaonID", "dikaon")),
 ])
 @pytest.mark.parametrize("non_nested", [False, True])
-def test_object_cutflows_use_raw_previous_counts(object_name, steps, non_nested):
+def test_object_cutflows_use_cumulative_counts(object_name, steps, non_nested):
     frame = _membership_frame()
     values = [(1, 0, 1), (1, 1, 0), (1, 1, 0), (1, 0, 0)]
-    expected = [(3, 2), (2, 1), (2, 2), (2, 1)]
+    expected = [(3, 2), (2, 1), (1, 1), (1, 1)]
     if non_nested:
         values = [(1, 0, 1), (1, 0, 0), (1, 1, 0), (1, 1, 1)]
-        expected = [(3, 2), (2, 1), (1, 1), (2, 2)]
+        expected = [(3, 2), (2, 1), (1, 1), (1, 1)]
     for step, flags in zip(steps, values):
         frame[f"{object_name}_{step}"] = flags
     cutflow = build_cutflow(frame)
@@ -223,7 +224,7 @@ def test_object_cutflows_use_raw_previous_counts(object_name, steps, non_nested)
         assert row["conditional_passed"] == passed
         assert row["conditional_efficiency"] == pytest.approx(passed / total)
         assert row["total"] == 3
-        assert row["passed"] == sum(flags)
+        assert row["passed"] == passed
 
 
 @pytest.mark.parametrize("missing", ["fiducial", "muonRECO", "muonID", "dimuon"])
@@ -241,6 +242,8 @@ def test_cutflow_missing_flags_have_zero_intersections(missing):
 
 def test_factor_summary_uses_explicit_intersections():
     factors = build_factor_summary(_membership_frame())
+    muon_id = factors[factors["factor"] == "eff_muID_jpsi_lead"].iloc[0]
+    assert (muon_id["total"], muon_id["passed"]) == (1, 1)
     hlt = factors[factors["factor"] == "eff_hlt"].iloc[0]
     assert hlt["denominator_column"] == "s_cand"
     assert hlt["numerator_column"] == "hlt_muon_matched"
@@ -378,7 +381,7 @@ def test_real_fixture_baseline_and_branch_recomputation():
     summary = summarize_memberships(memberships, event_df)
     assert int(summary["pipeline_non_binomial"].fillna(False).sum()) == 0
     objects = summary[summary["scope"].isin(["jpsi_lead", "jpsi_sublead", "phi"])]
-    assert objects["pipeline_matches_adjacent_raw"].all()
+    assert objects["pipeline_matches_cumulative"].all()
 
     from efficiency_workflow.audit import load_selected_evidence
 

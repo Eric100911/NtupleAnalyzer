@@ -26,9 +26,10 @@ from .corrections import (
     load_hybrid_correction_map,
 )
 from .io import ensure_dir, write_json
+from .efficiency import DEFAULT_JJP_SAMPLES, _uproot_read_options
 
 
-DEFAULT_YIELD_SAMPLES = ("JJP_DPS1", "JJP_DPS2_CS", "JJP_DPS2_G", "JJP_SPS_CS", "JJP_SPS_G")
+DEFAULT_YIELD_SAMPLES = DEFAULT_JJP_SAMPLES
 DEFAULT_NOMINAL_SAMPLE = "JJP_DPS1"
 FIT_MASS_BRANCHES = ("sel_Jpsi_1_mass", "sel_Jpsi_2_mass", "sel_Phi_mass")
 CORRECTION_PT_BRANCHES = ("sel_Jpsi_1_pt", "sel_Jpsi_2_pt", "sel_Phi_pt")
@@ -438,7 +439,7 @@ def build_factorized_weighted_mini_tree(
     output_path = Path(output_file)
     ensure_dir(output_path.parent)
     branches = FIT_MASS_BRANCHES + CORRECTION_FACTOR_BRANCHES
-    with uproot.open(input_path) as root_file:
+    with uproot.open(input_path, **_uproot_read_options(str(input_path))) as root_file:
         if tree_name not in root_file:
             raise RuntimeError(f"Input tree {tree_name!r} not found in {input_path}")
         tree = root_file[tree_name]

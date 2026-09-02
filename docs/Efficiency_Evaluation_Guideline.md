@@ -303,6 +303,44 @@ candidate before writing the MC tree. Use `maxEvents=-1` to process all events.
 ### Step 2: Build per-object efficiency maps
 
 Each efficiency is conditional: $\varepsilon_{\mathrm{step}} = N(\text{pass step}) \;/\; N(\text{pass previous step})$.
+Here “pass previous step” means passing **all** steps up to that point, starting
+with `full_gen` and fiducial acceptance. Raw RECO, ID, and candidate flags are
+not assumed to be nested. Accumulate their intersections before counting:
+
+```python
+cumulative = flags["full_gen"]
+for step in ("fiducial", "muonRECO", "muonID", "dimuon"):
+    denominator = cumulative
+    cumulative = denominator & flags[step]
+    # conditional: cumulative.sum() / denominator.sum()
+```
+
+Use `fiducial, kaonRECO, kaonID, dikaon` for φ. Apply the same masks to ordinary
+object maps, stacked J/ψ maps, cutflows, and fine/coarse/inclusive factorized
+maps. Absolute efficiencies divide the cumulative numerator by `full_gen`.
+For matching bins, `next_step.total == previous_step.passed` in conditional
+maps (the analogous cutflow fields are `conditional_total/conditional_passed`).
+
+Build the count products from `gen_systems.parquet` and
+`event_step_flags.parquet`, then build the derived products and factorized maps
+from those cumulative counts before computing corrected yields.
+
+```bash
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+python3 rebuild_efficiency_maps.py --input-dir /path/to/merged --output-dir /path/to/fresh_cumulative
+python3 build_derived_efficiency.py --input-dir /path/to/fresh_cumulative --plot-scope stacked-jpsi-only
+python3 -m efficiency_workflow.build_factorized_maps --input-dir /path/to/fresh_cumulative \
+  --samples JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G
+```
+
+The rebuild preserves source configuration metadata and uses its binning when
+available. Raw event flags and the event-level/Pri endpoint definitions retain
+their existing meaning.
+
+The `--plot-scope` choices are `separate-jpsi` for the full bundle,
+`stacked-jpsi-only` for the dedicated stacked-J/ψ layout, and `both` for both
+layouts.
+
 For each J/ψ and φ kinematic bin `(pT, |y|)`:
 
 1. **Acceptance** — $A_{J/\psi}$, $A_{\phi}$: From `MC_GenPart_*`.

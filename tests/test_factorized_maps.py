@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import pandas as pd
 import pytest
 
@@ -71,3 +72,8 @@ def test_build_factorized_maps_uses_conditional_denominators(tmp_path) -> None:
     hlt_inclusive = hlt.loc[hlt["fallback_level"] == "inclusive"].iloc[0]
     assert hlt_inclusive["total"] == 1
     assert hlt_inclusive["passed"] == 1
+
+    definitions = json.loads((sample_dir / "maps" / "manifest.json").read_text())["factor_definitions"]
+    assert definitions["eff_muID_jpsi"]["denominator"] == "full_gen AND fiducial AND muonRECO"
+    assert definitions["eff_dikaon_phi"]["numerator"] == "full_gen AND fiducial AND kaonRECO AND kaonID AND dikaon"
+    assert definitions["eff_hlt"]["denominator"] == "s_cand"

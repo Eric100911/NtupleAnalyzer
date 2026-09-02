@@ -222,7 +222,7 @@ compatibility; prefer the canonical paths below for new docs and automation.
 | `scripts/efficiency/prepare_efficiency_shards.py` | Prepare per-file efficiency computation shards for Condor |
 | `scripts/efficiency/merge_efficiency_shards.py` | Merge efficiency shard outputs into consolidated parquet files |
 | `scripts/efficiency/rebuild_efficiency_maps.py` | Rebuild `efficiency_maps.parquet` from existing `gen_systems.parquet` + `event_step_flags.parquet` (non-overwriting by default) |
-| `scripts/efficiency/build_derived_efficiency.py` | Build derived efficiency products (acceptance, conditional, pair-level, stacked-J/ψ); use `--plot-scope stacked-jpsi` to render only stacked-J/ψ plots |
+| `scripts/efficiency/build_derived_efficiency.py` | Build derived efficiency products (acceptance, conditional, pair-level, stacked-J/ψ); use `--plot-scope stacked-jpsi-only` to render only stacked-J/ψ plots |
 | `scripts/efficiency/build_response_classification.py` | Build response matrix classification for efficiency correction diagnostics |
 | `scripts/efficiency/build_systematic_uncertainty.py` | Compute systematic uncertainty envelope from per-sample efficiency variations |
 | `scripts/efficiency/print_cutflow.py` | Print formatted cutflow tables (text/LaTeX/CSV) from `event_step_flags.parquet` |
@@ -384,7 +384,7 @@ bash -c 'source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup
   python3 build_derived_efficiency.py \
     --input-dir ../merged_efficiency_output_20260601_01 \
     --output-dir stacked_jpsi_pt_absy_only_YYYYMMDD \
-    --plot-scope stacked-jpsi --min-plot-total 1'
+    --plot-scope stacked-jpsi-only --min-plot-total 1'
 ```
 
 This writes four regular PNGs per sample under
