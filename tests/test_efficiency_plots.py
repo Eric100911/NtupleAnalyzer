@@ -20,6 +20,7 @@ from efficiency_workflow.efficiency import (
     build_stacked_jpsi_efficiency_maps,
 )
 from efficiency_workflow.io import ensure_dir
+from efficiency_workflow import plotting
 from efficiency_workflow.plotting import (
     save_efficiency_heatmap,
     subprocess_label_for_sample,
@@ -27,6 +28,65 @@ from efficiency_workflow.plotting import (
     write_per_object_acceptance_plots,
     write_stacked_jpsi_plots,
 )
+
+
+def test_efficiency_plot_bundle_uncertainty_plots_are_opt_in(monkeypatch, tmp_path: Path) -> None:
+    calls: list[Path] = []
+
+    def fake_write_efficiency_plots(output_dir: Path, *_args, **_kwargs):
+        calls.append(output_dir)
+        return {"plot": output_dir / "plot.png"}
+
+    monkeypatch.setattr(plotting, "write_efficiency_plots", fake_write_efficiency_plots)
+    counts = pd.DataFrame()
+    style = CmsPlotStyleConfig()
+
+    default_outputs = plotting.write_efficiency_plot_bundle(tmp_path / "default", counts, style)
+    assert "plots_with_uncertainty" not in default_outputs
+    assert len(calls) == 1
+    assert all("plots_with_uncertainty" not in path.parts for path in calls)
+
+    calls.clear()
+    qa_outputs = plotting.write_efficiency_plot_bundle(
+        tmp_path / "with_qa", counts, style, include_uncertainty=True
+    )
+    assert "plots_with_uncertainty" in qa_outputs
+    assert len(calls) == 2
+    assert any("plots_with_uncertainty" in path.parts for path in calls)
+
+
+def test_derived_plot_bundle_uncertainty_plots_are_opt_in(monkeypatch, tmp_path: Path) -> None:
+    calls: list[tuple[Path, bool]] = []
+
+    def fake_per_object_plots(output_dir: Path, **kwargs):
+        calls.append((output_dir, kwargs.get("include_uncertainty", False)))
+        return {"plot": output_dir / "plot.png"}
+
+    monkeypatch.setattr(plotting, "write_per_object_acceptance_plots", fake_per_object_plots)
+
+    def bundle(path: Path, *, include_uncertainty: bool = False):
+        return plotting.write_derived_plot_bundle(
+            path,
+            acceptance_df=pd.DataFrame(),
+            conditional_df=pd.DataFrame(),
+            per_object_acceptance_df=pd.DataFrame([{"efficiency": 0.5}]),
+            stacked_jpsi_acceptance_df=pd.DataFrame(),
+            stacked_jpsi_efficiency_df=pd.DataFrame(),
+            pair_level_dfs={},
+            plot_style_cfg=CmsPlotStyleConfig(),
+            include_uncertainty=include_uncertainty,
+        )
+
+    default_outputs = bundle(tmp_path / "default")
+    assert "plots_with_uncertainty" not in default_outputs
+    assert len(calls) == 1
+    assert "plots_with_uncertainty" not in calls[0][0].parts
+
+    calls.clear()
+    qa_outputs = bundle(tmp_path / "with_qa", include_uncertainty=True)
+    assert "plots_with_uncertainty" in qa_outputs
+    assert len(calls) == 2
+    assert any("plots_with_uncertainty" in path.parts and include_qa for path, include_qa in calls)
 
 
 def test_default_plot_style_uses_run3() -> None:

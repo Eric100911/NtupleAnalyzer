@@ -10,6 +10,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 
 from efficiency_workflow.config import CmsPlotStyleConfig
@@ -24,9 +25,11 @@ from efficiency_workflow.plotting import (
 from efficiency_workflow.products import (
     build_derived_efficiency_products,
     build_systematic_uncertainty,
+    load_derived_efficiency_products,
     update_manifest_outputs,
     write_derived_products_manifest,
 )
+from efficiency_workflow.io import write_json
 
 
 def _record_outputs(products, outputs: dict[str, object]) -> None:
@@ -43,16 +46,22 @@ def main() -> None:
     parser.add_argument("--input-dir", required=True, help="Merge output directory (contains per-sample subdirs + manifest.json)")
     parser.add_argument("--output-dir", default=None, help="Output directory (default: same as --input-dir)")
     parser.add_argument("--skip-plots", action="store_true")
+    parser.add_argument("--plots-only", action="store_true",
+                        help="Read existing derived parquet from --derived-input-dir; do not rebuild maps")
+    parser.add_argument("--derived-input-dir", default=None,
+                        help="Saved derived product root (default: --output-dir)")
+    parser.add_argument("--with-cumulative-plots", action="store_true",
+                        help="Explicitly include legacy cumulative efficiency figures")
     parser.add_argument(
         "--plot-scope",
-        default="separate-jpsi",
+        default="both",
         choices=("separate-jpsi", "stacked-jpsi-only", "both"),
-        help="Plot layout: separate-jpsi (full bundle), stacked-jpsi-only (dedicated stacked plots), or both.",
+        help="Plot layout: separate-jpsi (stepwise bundle), stacked-jpsi-only, or both.",
     )
     parser.add_argument(
         "--with-uncertainty-plots",
         action="store_true",
-        help="For stacked-jpsi-only or both, also write uncertainty QA versions.",
+        help="Explicitly include uncertainty QA figures for the selected layout.",
     )
     parser.add_argument("--min-plot-total", type=int, default=1)
     parser.add_argument("--skip-trigger-matching", action="store_true",
@@ -72,23 +81,36 @@ def main() -> None:
 
     input_dir = Path(args.input_dir)
     output_dir = Path(args.output_dir) if args.output_dir else input_dir
-    products_by_sample = build_derived_efficiency_products(input_dir, output_dir, binning=binning)
+    if args.plots_only:
+        if args.systematics:
+            parser.error("--plots-only cannot be combined with --systematics")
+        source_root = Path(args.derived_input_dir) if args.derived_input_dir else output_dir
+        loaded = load_derived_efficiency_products(input_dir, source_root)
+        products_by_sample = {}
+        for sample, products in loaded.items():
+            target = output_dir / sample / "derived"
+            target.mkdir(parents=True, exist_ok=True)
+            manifest = {"source": str(products.derived_dir.resolve()), "outputs": {}}
+            write_json(manifest, target / "manifest.json")
+            products_by_sample[sample] = replace(products, derived_dir=target, manifest=manifest)
+    else:
+        products_by_sample = build_derived_efficiency_products(input_dir, output_dir, binning=binning)
     print(f"Processing {len(products_by_sample)} sample(s) from {input_dir}")
 
     if not args.skip_plots:
         for products in products_by_sample.values():
             plot_outputs = {}
-            if args.plot_scope in {"separate-jpsi", "both"}:
+            if args.with_cumulative_plots:
                 print(f"[{products.sample}] Generating cumulative efficiency plots ...")
                 cumul_outputs = write_efficiency_plot_bundle(
-                    products.derived_dir,
-                    products.counts_df,
-                    plot_style_cfg=CmsPlotStyleConfig(is_data=False),
+                    products.derived_dir, products.counts_df,
+                    plot_style_cfg=CmsPlotStyleConfig(caption="Work In Progress", is_data=False),
                     min_total=args.min_plot_total,
+                    include_uncertainty=args.with_uncertainty_plots,
                 )
                 if cumul_outputs:
                     _record_outputs(products, cumul_outputs)
-
+            if args.plot_scope in {"separate-jpsi", "both"}:
                 print(f"[{products.sample}] Generating derived plots ...")
                 derived_outputs = write_derived_plot_bundle(
                     products.derived_dir,
@@ -98,14 +120,16 @@ def main() -> None:
                     stacked_jpsi_acceptance_df=products.stacked_jpsi_acceptance_df,
                     stacked_jpsi_efficiency_df=products.stacked_jpsi_efficiency_df,
                     pair_level_dfs=products.pair_level_dfs,
-                    plot_style_cfg=CmsPlotStyleConfig(is_data=False),
+                    plot_style_cfg=CmsPlotStyleConfig(caption="Work In Progress", is_data=False),
                     min_total=args.min_plot_total,
+                    include_uncertainty=args.with_uncertainty_plots,
                 )
                 _record_outputs(products, derived_outputs)
 
             if args.plot_scope in {"stacked-jpsi-only", "both"}:
                 print(f"[{products.sample}] Generating stacked J/psi plots only ...")
-                style = with_subprocess_label(CmsPlotStyleConfig(is_data=False), products.sample)
+                style = with_subprocess_label(
+                    CmsPlotStyleConfig(caption="Work In Progress", is_data=False), products.sample)
                 regular = write_stacked_jpsi_plots(
                     products.derived_dir / "plots" / "stacked_jpsi",
                     products.stacked_jpsi_acceptance_df,

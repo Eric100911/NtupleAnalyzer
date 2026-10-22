@@ -337,9 +337,10 @@ The rebuild preserves source configuration metadata and uses its binning when
 available. Raw event flags and the event-level/Pri endpoint definitions retain
 their existing meaning.
 
-The `--plot-scope` choices are `separate-jpsi` for the full bundle,
-`stacked-jpsi-only` for the dedicated stacked-J/ψ layout, and `both` for both
-layouts.
+The `--plot-scope` choices are `separate-jpsi` for the separate-object bundle,
+`stacked-jpsi-only` for the dedicated stacked-J/ψ layout, and `both` (the
+default) for both layouts. Cumulative figures require `--with-cumulative-plots`;
+uncertainty QA figures require `--with-uncertainty-plots`.
 
 For each J/ψ and φ kinematic bin `(pT, |y|)`:
 
@@ -397,6 +398,22 @@ acceptance. See `Efficiency_scheme.md` for the product formula.
 ---
 
 ## 5. Cross-checks
+
+### 5.0 JJP validation plot entry point
+
+Use `python3 scripts/efficiency/plot_validation.py` for the validation plot
+groups `stepwise`, `closure`, `factorization`, `angular`, `phi-origin`,
+`phi-ctau`, `phi-gen`, or `all`, with `--merged-dir` and `--output-dir`.
+`Makefile.validation` builds the prerequisites needed by the selected group on
+demand. Run Python/ROOT work in the LCG 109a environment.
+
+The default acceptance, conditional, pair, and stacked plots for the six JJP
+subprocesses show central values without efficiency-uncertainty panels, and do
+not include cumulative plots. The legacy cumulative and QA uncertainty plots
+remain opt-in through `--with-cumulative-plots` and
+`--with-uncertainty-plots`, respectively. For downloads on another machine,
+enter the destination directory first, then use `rsync -avPm
+hepthu-el9:/path/to/validation_plots_20261022/ ./validation_plots_20261022/`.
 
 ### 5.1 Factorized vs. cumulative comparison
 

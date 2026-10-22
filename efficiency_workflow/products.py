@@ -463,6 +463,37 @@ def build_derived_efficiency_products(
     return products
 
 
+def load_derived_efficiency_products(input_dir: Path, derived_root: Path) -> dict[str, DerivedSampleProducts]:
+    """Load saved maps for plotting without recomputing GEN/event products."""
+    products: dict[str, DerivedSampleProducts] = {}
+    for sample_dir in discover_merged_samples(input_dir):
+        sample = sample_dir.name
+        derived_dir = derived_root / sample / "derived"
+        def frame(stem: str) -> pd.DataFrame:
+            path = derived_dir / f"{stem}.parquet"
+            return pd.read_parquet(path) if path.exists() else pd.DataFrame()
+        required = ("acceptance_maps", "conditional_efficiency_maps",
+                    "per_object_acceptance_maps", "stacked_jpsi_acceptance_maps",
+                    "stacked_jpsi_efficiency_maps")
+        missing = [stem for stem in required if not (derived_dir / f"{stem}.parquet").exists()]
+        if missing:
+            raise FileNotFoundError(f"{sample}: missing derived parquet: {', '.join(missing)}")
+        pairs = {step: frame(f"{stem}_maps") for step, stem in PAIR_LEVEL_OUTPUT_NAMES.items()
+                 if (derived_dir / f"{stem}_maps.parquet").exists()}
+        products[sample] = DerivedSampleProducts(
+            sample=sample, sample_dir=sample_dir, derived_dir=derived_dir,
+            manifest=read_json(derived_dir / "manifest.json"),
+            counts_df=pd.read_parquet(sample_dir / "efficiency_counts.parquet"),
+            acceptance_df=frame("acceptance_maps"),
+            conditional_df=frame("conditional_efficiency_maps"),
+            per_object_acceptance_df=frame("per_object_acceptance_maps"),
+            stacked_jpsi_acceptance_df=frame("stacked_jpsi_acceptance_maps"),
+            stacked_jpsi_efficiency_df=frame("stacked_jpsi_efficiency_maps"),
+            pair_level_dfs=pairs,
+        )
+    return products
+
+
 def build_systematic_uncertainty(
     input_dir: Path,
     output_dir: Path | None = None,

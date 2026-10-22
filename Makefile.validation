@@ -1,0 +1,142 @@
+SHELL := /bin/bash
+.SHELLFLAGS := -e -o pipefail -c
+.DELETE_ON_ERROR:
+
+LCG ?= /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+PYTHON ?= python3
+REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+MERGED_DIR ?= $(REPO)/efficiency_maps_cumulative_20261022/merged
+DERIVED_DIR ?= $(REPO)/efficiency_maps_cumulative_20261022/derived
+OUTPUT_DIR ?= $(REPO)/validation_plots
+ANGULAR_CACHE ?= $(REPO)/.claude/worktrees/sps-cs-angular/diagnostics/sps_cs_angular_20261019/outputs_helicity_corrected_20261019
+PHI_CACHE ?= $(REPO)/diagnostics/phi_ctau_20261022
+DATA_ROOT ?= $(REPO)/../jjp_data_selected.root
+OLD_MC_DIR ?= $(REPO)/../../../MC_samples/selected-merged-v3
+CLOSURE_SAMPLES ?= JJP_DPS1 JJP_SPS_CS
+PLOT_MODE ?= default
+PLOT_FLAGS ?=
+
+SAMPLES := JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G JJP_TPS
+OLD_STEMS := jjp_mc_dps_1_selected jjp_mc_dps_2_cs_selected jjp_mc_dps_2_g_selected jjp_mc_sps_cs_selected jjp_mc_sps_g_selected
+MERGED_FLAGS := $(foreach s,$(SAMPLES),$(MERGED_DIR)/$(s)/event_step_flags.parquet)
+MERGED_GEN := $(foreach s,$(SAMPLES),$(MERGED_DIR)/$(s)/gen_systems.parquet)
+EXTERNAL_DERIVED := $(foreach s,$(SAMPLES),$(DERIVED_DIR)/$(s)/derived/conditional_efficiency_maps.parquet)
+ifeq ($(words $(wildcard $(EXTERNAL_DERIVED))),6)
+DERIVED_SOURCE := $(DERIVED_DIR)
+else
+DERIVED_SOURCE := $(OUTPUT_DIR)/intermediate/derived
+endif
+DERIVED_READY := $(foreach s,$(SAMPLES),$(DERIVED_SOURCE)/$(s)/derived/conditional_efficiency_maps.parquet)
+
+PHI_ORIGIN_CACHED := $(PHI_CACHE)/inventory/full_gen_system_origin_sidecar.parquet $(foreach s,$(OLD_STEMS),$(PHI_CACHE)/inventory/$(s)_full_selected.parquet)
+ifeq ($(words $(wildcard $(PHI_ORIGIN_CACHED))),6)
+PHI_INVENTORY := $(PHI_CACHE)/inventory
+else
+PHI_INVENTORY := $(OUTPUT_DIR)/intermediate/phi/inventory
+endif
+PHI_ORIGIN_READY := $(PHI_INVENTORY)/full_gen_system_origin_sidecar.parquet $(foreach s,$(OLD_STEMS),$(PHI_INVENTORY)/$(s)_full_selected.parquet)
+OLD_ROOTS := $(foreach s,$(OLD_STEMS),$(OLD_MC_DIR)/$(s).root)
+
+DATA_SCALARS := $(if $(wildcard $(PHI_CACHE)/inventory/data_scalar_full.parquet),$(PHI_CACHE)/inventory/data_scalar_full.parquet,$(OUTPUT_DIR)/intermediate/phi/inventory/data_scalar_full.parquet)
+CENTRAL_FIT := $(if $(wildcard $(PHI_CACHE)/vertex/fits/data_full_floatall_exponential/fit_summary.json),$(PHI_CACHE)/vertex/fits/data_full_floatall_exponential/fit_summary.json,$(OUTPUT_DIR)/intermediate/phi/central/fit_summary.json)
+CENTRAL_DIR := $(dir $(CENTRAL_FIT))
+VAR_FIT := $(if $(wildcard $(PHI_CACHE)/vertex/fits/data_full_floatall_exponential_phi_sigma_max010/summary.json),$(PHI_CACHE)/vertex/fits/data_full_floatall_exponential_phi_sigma_max010/summary.json,$(OUTPUT_DIR)/intermediate/phi/sigma_max010/summary.json)
+GEN_PROXY := $(if $(wildcard $(PHI_CACHE)/generator/workflow_target_proxy.parquet),$(PHI_CACHE)/generator/workflow_target_proxy.parquet,$(OUTPUT_DIR)/intermediate/phi/workflow_target_proxy.parquet)
+
+ANG_CACHE_READY := $(ANGULAR_CACHE)/angles/data.parquet $(ANGULAR_CACHE)/angles/mc_dps1.parquet $(ANGULAR_CACHE)/angles/mc_dps2_cs.parquet $(ANGULAR_CACHE)/angles/mc_dps2_g.parquet $(ANGULAR_CACHE)/angles/mc_sps_cs.parquet $(ANGULAR_CACHE)/angles/mc_sps_g.parquet $(foreach v,cos_theta_jpsi1 cos_theta_jpsi2 abs_cos_theta_phi delta_phi_jj,$(ANGULAR_CACHE)/binned_angles/$(v).json)
+ifeq ($(words $(wildcard $(ANG_CACHE_READY))),10)
+ANG_SOURCE := $(ANGULAR_CACHE)
+else
+ANG_SOURCE := $(OUTPUT_DIR)/intermediate/angular
+endif
+
+.PHONY: plots-stepwise plots-closure plots-factorization plots-angular plots-phi-origin plots-phi-ctau plots-phi-gen plots-all
+plots-all: plots-stepwise plots-closure plots-factorization plots-angular plots-phi-origin plots-phi-ctau plots-phi-gen
+plots-stepwise: $(OUTPUT_DIR)/stepwise/$(PLOT_MODE)/derived_manifest.json
+plots-closure: $(OUTPUT_DIR)/closure/closure_comparison.png
+plots-factorization: $(OUTPUT_DIR)/factorization/direct_over_product.png
+plots-angular: $(OUTPUT_DIR)/angular/plots/angular_summary.json $(OUTPUT_DIR)/angular/reweighting/phi_polarization_reweighting.png
+plots-phi-origin: $(OUTPUT_DIR)/phi/origin_evidence_ctau_shapes.png
+plots-phi-ctau: $(OUTPUT_DIR)/phi/tail_model_sensitivity.png
+plots-phi-gen: $(OUTPUT_DIR)/phi/phi_abs_y_counts_and_shapes.png
+
+ifeq ($(DERIVED_SOURCE),$(OUTPUT_DIR)/intermediate/derived)
+$(DERIVED_READY) &: $(MERGED_FLAGS) $(MERGED_GEN) $(REPO)/scripts/efficiency/build_derived_efficiency.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/efficiency/build_derived_efficiency.py" --input-dir "$(MERGED_DIR)" --output-dir "$(DERIVED_SOURCE)" --skip-plots
+endif
+
+$(OUTPUT_DIR)/stepwise/$(PLOT_MODE)/derived_manifest.json: $(DERIVED_READY) $(REPO)/scripts/efficiency/build_derived_efficiency.py $(REPO)/efficiency_workflow/plotting.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/efficiency/build_derived_efficiency.py" --input-dir "$(MERGED_DIR)" --derived-input-dir "$(DERIVED_SOURCE)" --output-dir "$(OUTPUT_DIR)/stepwise/$(PLOT_MODE)" --plots-only --plot-scope both $(PLOT_FLAGS)
+
+$(OUTPUT_DIR)/closure/%/factorized/closure_results.csv: $(MERGED_FLAGS) $(MERGED_GEN) $(REPO)/efficiency_workflow/closure.py
+	 source "$(LCG)" && $(PYTHON) -m efficiency_workflow.closure --input-dir "$(MERGED_DIR)" --samples "$*" --map-type factorized --file-disjoint --holdout-modulus 5 --holdout-remainder 0 --output-dir "$(OUTPUT_DIR)/closure/$*/factorized"
+
+$(OUTPUT_DIR)/closure/%/hybrid/closure_results.csv: $(MERGED_FLAGS) $(MERGED_GEN) $(REPO)/efficiency_workflow/closure.py
+	 source "$(LCG)" && $(PYTHON) -m efficiency_workflow.closure --input-dir "$(MERGED_DIR)" --samples "$*" --map-type hybrid --file-disjoint --holdout-modulus 5 --holdout-remainder 0 --output-dir "$(OUTPUT_DIR)/closure/$*/hybrid"
+
+CLOSURE_CSV := $(foreach s,$(CLOSURE_SAMPLES),$(OUTPUT_DIR)/closure/$(s)/factorized/closure_results.csv $(OUTPUT_DIR)/closure/$(s)/hybrid/closure_results.csv)
+$(OUTPUT_DIR)/closure/closure_comparison.png: $(CLOSURE_CSV) $(REPO)/scripts/validation/plot_saved_checks.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/plot_saved_checks.py" closure --input-dir "$(OUTPUT_DIR)/closure" --output "$@" --samples $(CLOSURE_SAMPLES)
+
+$(OUTPUT_DIR)/factorization/%/scand_factorization_stage_bins.csv: $(MERGED_FLAGS) $(MERGED_GEN) $(REPO)/efficiency_workflow/scand_factorization.py
+	 source "$(LCG)" && $(PYTHON) -m efficiency_workflow.scand_factorization --input-dir "$(MERGED_DIR)" --samples "$*" --output-dir "$(OUTPUT_DIR)/factorization/$*"
+
+FACTOR_CSV := $(foreach s,$(CLOSURE_SAMPLES),$(OUTPUT_DIR)/factorization/$(s)/scand_factorization_stage_bins.csv)
+$(OUTPUT_DIR)/factorization/direct_over_product.png: $(FACTOR_CSV) $(REPO)/scripts/validation/plot_saved_checks.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/plot_saved_checks.py" factorization --input-dir "$(OUTPUT_DIR)/factorization" --output "$@" --samples $(CLOSURE_SAMPLES)
+
+ifeq ($(PHI_INVENTORY),$(OUTPUT_DIR)/intermediate/phi/inventory)
+$(PHI_ORIGIN_READY) &: $(OLD_ROOTS) $(REPO)/scripts/validation/extract_full_selected_mc.py $(REPO)/scripts/validation/verify_full_gen_system.py $(REPO)/scripts/validation/join_full_gen_system_origin.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/extract_full_selected_mc.py" --inventory-dir "$(PHI_INVENTORY)" --mc-dir "$(OLD_MC_DIR)"
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/verify_full_gen_system.py" --full --inventory-dir "$(PHI_INVENTORY)" --mc-dir "$(OLD_MC_DIR)"
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/join_full_gen_system_origin.py" --inventory-dir "$(PHI_INVENTORY)"
+endif
+
+$(OUTPUT_DIR)/phi/origin_evidence_ctau_shapes.png: $(PHI_ORIGIN_READY) $(REPO)/scripts/validation/plot_saved_checks.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/plot_saved_checks.py" phi-origin --input-dir "$(PHI_INVENTORY)" --output "$@"
+
+$(OUTPUT_DIR)/intermediate/phi/inventory/data_scalar_full.parquet: $(DATA_ROOT) $(REPO)/scripts/validation/extract_data_scalars.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/extract_data_scalars.py" --input "$(DATA_ROOT)" --output "$@"
+
+$(OUTPUT_DIR)/intermediate/phi/central/fit_summary.json: $(DATA_SCALARS) $(REPO)/scripts/validation/run_data_mass_ctau_bins.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/run_data_mass_ctau_bins.py" --input "$(DATA_SCALARS)" --output-dir "$(OUTPUT_DIR)/intermediate/phi/central" --ctau-edges -0.1 -0.03 -0.01 0 0.01 0.03 0.1 --all-valid
+
+$(OUTPUT_DIR)/intermediate/phi/sigma_max010/summary.json: $(CENTRAL_FIT) $(REPO)/scripts/validation/fit_phi_sigma_extended_range.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/fit_phi_sigma_extended_range.py" --central-dir "$(CENTRAL_DIR)" --output-dir "$(OUTPUT_DIR)/intermediate/phi/sigma_max010"
+
+$(OUTPUT_DIR)/phi/tail_model_sensitivity.png: $(CENTRAL_FIT) $(VAR_FIT) $(REPO)/scripts/validation/plot_saved_checks.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/plot_saved_checks.py" phi-ctau --central "$(CENTRAL_FIT)" --variation "$(VAR_FIT)" --output "$@"
+
+$(OUTPUT_DIR)/intermediate/phi/workflow_target_proxy.parquet: $(MERGED_FLAGS) $(MERGED_GEN) $(REPO)/scripts/validation/extract_gen_proxy.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/extract_gen_proxy.py" --merged-dir "$(MERGED_DIR)" --output "$@"
+
+$(OUTPUT_DIR)/phi/phi_abs_y_counts_and_shapes.png: $(GEN_PROXY) $(REPO)/scripts/validation/plot_saved_checks.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/plot_saved_checks.py" phi-gen --input-dir "$(GEN_PROXY)" --output "$@"
+
+ifeq ($(ANG_SOURCE),$(OUTPUT_DIR)/intermediate/angular)
+$(ANG_SOURCE)/angles/data.parquet: $(DATA_ROOT) $(REPO)/scripts/validation/compute_angles.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/compute_angles.py" --input "$(DATA_ROOT)" --output "$@" --label JJP_DATA
+
+ANGULAR_MC_FILES := $(foreach s,$(OLD_STEMS),$(OLD_MC_DIR)/$(s).root)
+ANGULAR_SHORT := dps1 dps2_cs dps2_g sps_cs sps_g
+$(ANG_SOURCE)/angles/mc_dps1.parquet: $(OLD_MC_DIR)/jjp_mc_dps_1_selected.root $(REPO)/scripts/validation/compute_angles.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/compute_angles.py" --input "$<" --output "$@" --label JJP_DPS1
+$(ANG_SOURCE)/angles/mc_dps2_cs.parquet: $(OLD_MC_DIR)/jjp_mc_dps_2_cs_selected.root $(REPO)/scripts/validation/compute_angles.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/compute_angles.py" --input "$<" --output "$@" --label JJP_DPS2_CS
+$(ANG_SOURCE)/angles/mc_dps2_g.parquet: $(OLD_MC_DIR)/jjp_mc_dps_2_g_selected.root $(REPO)/scripts/validation/compute_angles.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/compute_angles.py" --input "$<" --output "$@" --label JJP_DPS2_G
+$(ANG_SOURCE)/angles/mc_sps_cs.parquet: $(OLD_MC_DIR)/jjp_mc_sps_cs_selected.root $(REPO)/scripts/validation/compute_angles.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/compute_angles.py" --input "$<" --output "$@" --label JJP_SPS_CS
+$(ANG_SOURCE)/angles/mc_sps_g.parquet: $(OLD_MC_DIR)/jjp_mc_sps_g_selected.root $(REPO)/scripts/validation/compute_angles.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/compute_angles.py" --input "$<" --output "$@" --label JJP_SPS_G
+
+$(foreach v,cos_theta_jpsi1 cos_theta_jpsi2 abs_cos_theta_phi delta_phi_jj,$(ANG_SOURCE)/binned_angles/$(v).json) &: $(ANG_SOURCE)/angles/data.parquet $(REPO)/scripts/validation/fit_angular_bins.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/fit_angular_bins.py" --angles "$<" --output-dir "$(ANG_SOURCE)/binned_angles" --jobs 1
+endif
+
+ANG_ANGLES := $(ANG_SOURCE)/angles/data.parquet $(foreach s,dps1 dps2_cs dps2_g sps_cs sps_g,$(ANG_SOURCE)/angles/mc_$(s).parquet)
+$(OUTPUT_DIR)/angular/plots/angular_summary.json: $(ANG_ANGLES) $(ANG_SOURCE)/binned_angles/abs_cos_theta_phi.json $(REPO)/scripts/validation/plot_angles.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/plot_angles.py" --angles-dir "$(ANG_SOURCE)/angles" --binned-dir "$(ANG_SOURCE)/binned_angles" --output-dir "$(OUTPUT_DIR)/angular/plots"
+
+$(OUTPUT_DIR)/angular/reweighting/phi_polarization_reweighting.png: $(ANG_ANGLES) $(REPO)/scripts/validation/check_phi_polarization.py
+	 source "$(LCG)" && $(PYTHON) "$(REPO)/scripts/validation/check_phi_polarization.py" --angles-dir "$(ANG_SOURCE)/angles" --output-dir "$(OUTPUT_DIR)/angular/reweighting"

@@ -398,6 +398,39 @@ Expected regular output is four PNGs per sample in
 `stacked_jpsi_absy_dimuon.png`. Add `--with-uncertainty-plots` only when the
 matching QA uncertainty panels are needed.
 
+### JJP validation plots
+
+Use the validation plot entry point for the stepwise, closure, factorization,
+angular, and φ-specific checks. The default acceptance, conditional, pair, and
+stacked plots for the six JJP subprocesses show central efficiency values only:
+they do not include efficiency-uncertainty panels, and this plot set does not
+include cumulative plots. Build legacy cumulative plots explicitly with
+`--with-cumulative-plots`; build QA uncertainty panels explicitly with
+`--with-uncertainty-plots` in the relevant legacy plotting workflow.
+
+To download figures on another machine, first enter the intended download
+directory and copy from the analysis host into the current directory:
+
+```bash
+cd /path/to/download/directory
+rsync -avPm hepthu-el9:/home/storage29/users/chiwang/JpsiJpsiPhi/analysis/Efficiency/NtupleAnalyzer/validation_plots_20261022/ ./validation_plots_20261022/
+```
+
+Available `--plots` values are `stepwise`, `closure`, `factorization`,
+`angular`, `phi-origin`, `phi-ctau`, `phi-gen`, and `all`. `Makefile.validation`
+builds only the prerequisites needed by the selected plot target. For example,
+run every group from the repository root with:
+
+```bash
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+python3 scripts/efficiency/plot_validation.py \
+  --plots all \
+  --merged-dir /path/to/merged \
+  --output-dir /path/to/validation-plots
+```
+
+The output directory can be reused for the selected validation figures.
+
 ### Full run
 
 Process each formal manifest with the same command and a separate output

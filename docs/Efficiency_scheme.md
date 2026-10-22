@@ -179,9 +179,10 @@ When only these plots are needed, use `build_derived_efficiency.py
 --plot-scope stacked-jpsi-only` to skip cumulative, conditional, pair-level, and
 systematics plots.
 
-The `--plot-scope` choices are `separate-jpsi` for the full bundle,
-`stacked-jpsi-only` for the dedicated stacked-J/ψ layout, and `both` for both
-layouts.
+The `--plot-scope` choices are `separate-jpsi` for the separate-object bundle,
+`stacked-jpsi-only` for the dedicated stacked-J/ψ layout, and `both` (default)
+for both layouts. Cumulative plots and efficiency-uncertainty QA plots are
+opt-in via `--with-cumulative-plots` and `--with-uncertainty-plots`.
 
 The correction workflow is:
 

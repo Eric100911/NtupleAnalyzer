@@ -232,11 +232,14 @@ bash -c 'source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup
   python3 build_derived_efficiency.py \
     --input-dir ../merged_efficiency_output_20260601_01 \
     --output-dir stacked_jpsi_pt_absy_only_YYYYMMDD \
-    --plot-scope stacked-jpsi --min-plot-total 1'
+    --plot-scope stacked-jpsi-only --min-plot-total 1'
 ```
 
 Add `--with-uncertainty-plots` to the command above only when the QA panels with
 Clopper-Pearson uncertainties are needed.
+The default `build_derived_efficiency.py` layout is `both`: acceptance,
+conditional, pair-level, and stacked-J/psi plots without uncertainty panels.
+Cumulative plots require `--with-cumulative-plots`.
 
 Rebuild maps from existing merged parquet products:
 

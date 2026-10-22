@@ -968,6 +968,7 @@ def write_efficiency_plot_bundle(
     counts_df: pd.DataFrame,
     plot_style_cfg: CmsPlotStyleConfig,
     min_total: int = 1,
+    include_uncertainty: bool = False,
 ) -> dict[str, dict[str, str]]:
     plot_style_cfg = with_subprocess_label(plot_style_cfg, sample_dir.name)
     # write_efficiency_plots internally uses subdir="cumulative"
@@ -978,12 +979,10 @@ def write_efficiency_plot_bundle(
         min_total=min_total,
     )
     qa_paths = write_efficiency_plots(
-        sample_dir / "plots_with_uncertainty",
-        counts_df,
-        plot_style_cfg=plot_style_cfg,
-        min_total=min_total,
+        sample_dir / "plots_with_uncertainty", counts_df,
+        plot_style_cfg=plot_style_cfg, min_total=min_total,
         include_uncertainty=True,
-    )
+    ) if include_uncertainty else {}
     outputs = {
         "plots": {
             key: str(path.relative_to(sample_dir))
@@ -1533,16 +1532,18 @@ def _dual_plot_invocation(
     subdir: str,
     output_key: str,
     qa_prefix: str,
+    include_uncertainty: bool = False,
     **fn_kwargs,
 ) -> dict[str, object]:
-    """Call a plot writer twice (regular + QA with uncertainty), return manifest entries."""
+    """Write regular plots and, when requested, uncertainty QA plots."""
     outputs: dict[str, object] = {}
     regular = fn(derived_dir / "plots" / subdir, **fn_kwargs)
     if regular:
         outputs[output_key] = {
             k: str(p.relative_to(derived_dir)) for k, p in regular.items()
         }
-    qa = fn(derived_dir / "plots_with_uncertainty" / subdir, **fn_kwargs, include_uncertainty=True)
+    qa = (fn(derived_dir / "plots_with_uncertainty" / subdir,
+             **fn_kwargs, include_uncertainty=True) if include_uncertainty else {})
     if qa:
         outputs.setdefault("plots_with_uncertainty", {}).update(
             {f"{qa_prefix}.{k}": str(p.relative_to(derived_dir)) for k, p in qa.items()}
@@ -1561,6 +1562,7 @@ def write_derived_plot_bundle(
     pair_level_dfs: dict[str, pd.DataFrame],
     plot_style_cfg: CmsPlotStyleConfig,
     min_total: int = 1,
+    include_uncertainty: bool = False,
 ) -> dict[str, object]:
     from .products import PAIR_LEVEL_OUTPUT_NAMES
 
@@ -1574,6 +1576,7 @@ def write_derived_plot_bundle(
             subdir="acceptance",
             output_key="acceptance_per_object_plots",
             qa_prefix="acceptance_per_object_qa",
+            include_uncertainty=include_uncertainty,
             poa_df=per_object_acceptance_df,
             plot_style_cfg=plot_style_cfg, min_total=min_total,
         ))
@@ -1582,7 +1585,7 @@ def write_derived_plot_bundle(
     has_sj_acc = not stacked_jpsi_acceptance_df.empty
     has_sj_eff = not stacked_jpsi_efficiency_df.empty
     if has_sj_acc or has_sj_eff:
-        for qa in (False, True):
+        for qa in ((False, True) if include_uncertainty else (False,)):
             plot_root = derived_dir / ("plots_with_uncertainty" if qa else "plots")
             sj_out = write_stacked_jpsi_plots(
                 plot_root,
@@ -1610,6 +1613,7 @@ def write_derived_plot_bundle(
             subdir="pair_vertex",
             output_key=f"{name}_plots",
             qa_prefix=f"{name}_qa",
+            include_uncertainty=include_uncertainty,
             df=frame, step=step,
             plot_style_cfg=plot_style_cfg, min_total=min_total,
         ))
@@ -1620,6 +1624,7 @@ def write_derived_plot_bundle(
             subdir="",
             output_key="derived_plots",
             qa_prefix="derived_qa",
+            include_uncertainty=include_uncertainty,
             acc_df=acceptance_df, cond_df=conditional_df,
             plot_style_cfg=plot_style_cfg, min_total=min_total,
         ))

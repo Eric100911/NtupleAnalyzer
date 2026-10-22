@@ -446,6 +446,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--tree-path", default="auto", help="Data tree path or auto for X_data/mkcands/X_data detection.")
     parser.add_argument("--min-plot-total", type=int, default=1)
     parser.add_argument("--skip-plots", action="store_true")
+    parser.add_argument("--with-cumulative-plots", action="store_true",
+                        help="Explicitly draw cumulative plots during shard processing")
     parser.add_argument("--stage-mode", default="auto", choices=("auto", "always", "never"), help="Stage remote root:// inputs to local scratch before reading.")
     parser.add_argument("--stage-dir", default=None, help="Parent directory for staged inputs, defaults to TMPDIR or /tmp.")
     parser.add_argument("--stage-copy-tool", default="auto", choices=("auto", "gfal", "xrdcp"), help="Remote copy tool used for staging.")
@@ -459,7 +461,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--worker-efficiency-json", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--efficiency-config", default=None, help="Versioned YAML efficiency definition; use configs/efficiency/tps_nominal.yaml for the JJP sample contract.")
     parser.add_argument("--config-policy", default=None, choices=("strict", "legacy"), help="X_config/schema policy; defaults to strict with --efficiency-config and legacy otherwise.")
-    parser.add_argument("--cms-caption", default="Simulation Preliminary")
+    parser.add_argument("--cms-caption", default="Work In Progress")
     parser.add_argument("--cms-energy", type=float, default=13.6)
     parser.add_argument("--cms-lumi", type=float, default=None)
     parser.add_argument("--cms-era", default="Run 3")
@@ -744,7 +746,7 @@ def main() -> None:
             tables,
             plot_style_cfg=plot_style_cfg,
             min_plot_total=run_cfg.min_plot_total,
-            skip_plots=args.skip_plots,
+            skip_plots=args.skip_plots or not args.with_cumulative_plots,
         )
         inclusive_final = tables["cutflow"].loc[tables["cutflow"]["step"] == "Pri_trackPVPass"]
         summary_rows.append(
