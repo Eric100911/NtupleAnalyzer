@@ -17,7 +17,7 @@ from efficiency_workflow.tps_manifest import read_tps_inventory, write_tps_manif
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("inventory", type=Path, help="Three-column TPS inventory text file")
-    parser.add_argument("--sample", default="JJP_TPS_MC_v4_1", help="Sample label in the efficiency output")
+    parser.add_argument("--sample", default="JJP_TPS", help="Sample label in the efficiency output")
     parser.add_argument("--output", required=True, type=Path, help="JSON manifest for run_efficiency.py")
     args = parser.parse_args()
 

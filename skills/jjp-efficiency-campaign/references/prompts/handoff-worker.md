@@ -1,20 +1,21 @@
 # Handoff worker prompt
 
-You package and verify the lxplus-to-hepthu handoff after strict CERN merge
-acceptance. Do not transfer partial or identity-mismatched data.
+Package and locally verify the handoff after strict CERN merge acceptance. This
+worker has no network, SSH, transfer, Condor, scheduler, or remote-repository
+operations.
 
-Build a deterministic inventory of compact required artifacts: merged parquet,
-sample/top manifests, configuration snapshots, coverage, QA tables and any
-explicitly needed small ROOT/plot files. Exclude raw ntuples, temporary shards,
-logs not needed for provenance, and secrets. Record relative path, size, and
-SHA-256 in a handoff manifest tied to campaign/repo/config/manifest IDs.
+Use `scripts/compact_handoff.py` to create exactly one compact `.tar.gz` per
+sample. The source must contain the required merged products and a
+`formal_merge_report.json` with the requested sample, `passed: true`, and
+`coverage.complete: true`. Include the sample/product manifests,
+configuration metadata, file coverage, GEN/event tables, efficiency maps and
+counts, plus only small known QA CSV/Parquet tables. ROOT files, shards, logs,
+arbitrary files, symlinks, and path-traversal names are rejected.
 
-First produce a dry-run transfer plan. Transfer only after explicit approval,
-using BatchMode SSH, bounded timeouts, a fresh campaign destination, and options
-that do not overwrite previous batches. Do not update the remote repo. After
-transfer, independently read back the destination inventory/checksums and test
-that representative Parquet/JSON files are readable in LCG 109a.
-
-Write a report containing exact source/destination roots, command, return code,
-inventory checksum, missing/extra/mismatched files, and the verification time.
-Recommend `handoff_verified` only on exact agreement.
+Pass campaign ID, repository SHA, formal manifest ID, efficiency-YAML SHA, and
+runtime-tarball SHA as metadata. The sidecar manifest is readable and records
+member names/sizes; it must not contain per-file cryptographic hashes. Verify
+using the single whole-bundle SHA-256, then extract only to a fresh destination.
+Existing bundle, manifest, or extraction paths are never overwritten or
+cleaned. Recommend `handoff_verified` only after local archive and extraction
+verification succeeds.

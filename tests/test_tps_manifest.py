@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 
 import pytest
 
@@ -39,3 +41,19 @@ def test_manifest_is_json_serialisable(tmp_path) -> None:
     inventory.write_text("/tmp/a.root 10 1\n", encoding="utf-8")
     payload = build_tps_manifest(read_tps_inventory(inventory), "JJP_TPS", str(inventory))
     json.dumps(payload)
+
+
+def test_prepare_script_uses_canonical_sample_and_preserves_legacy_source_path(tmp_path) -> None:
+    inventory = tmp_path / "inventory.txt"
+    legacy_source = "root://cceos.ihep.ac.cn:1094///store/JJP_TPS_MC_v4_1/a.root"
+    inventory.write_text(f"{legacy_source} 10 1\n", encoding="utf-8")
+    output = tmp_path / "JJP_TPS.manifest.json"
+
+    subprocess.run(
+        [sys.executable, "scripts/efficiency/prepare_tps_efficiency_manifest.py", str(inventory), "--output", str(output)],
+        check=True,
+    )
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["sample"] == "JJP_TPS"
+    assert "JJP_TPS_MC_v4_1" in payload["files"][0]

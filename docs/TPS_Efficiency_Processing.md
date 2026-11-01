@@ -12,7 +12,7 @@ mathematical definitions remain in [Efficiency_scheme.md](Efficiency_scheme.md).
 Set `SAMPLE` to one of the checked-in sample labels:
 
 ```text
-JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G JJP_TPS_MC_v4_1
+JJP_DPS1 JJP_DPS2_CS JJP_DPS2_G JJP_SPS_CS JJP_SPS_G JJP_TPS
 ```
 
 Use that sample's manifest, the versioned definition
@@ -72,7 +72,8 @@ are:
 | `JJP_DPS2_G` | `JJP_DPS2_G.manifest.json` | 730 | 291,458 | 13,543 |
 | `JJP_SPS_CS` | `JJP_SPS_CS.manifest.json` | 4,840 | 17,615,553 | 436,669 |
 | `JJP_SPS_G` | `JJP_SPS_G.manifest.json` | 292 | 230,914 | 10,147 |
-| `JJP_TPS_MC_v4_1` | `JJP_TPS_MC_v4_1.manifest.json` | 317 | 1,472,109 | 93,901 |
+| `JJP_TPS` | `JJP_TPS.manifest.json` | 317 | 1,472,109 | 93,904 |
+| `JJP_TPS_MC_v4_1` | historical provenance only (do not run) | 317 | 1,472,109 | 93,904 |
 
 Retained means an event with at least one stored `Pri_passAny` candidate
 (`Pri_fitPass || Pri_assocPVPass`); it is coverage bookkeeping, not a map cut.
@@ -83,6 +84,7 @@ When updating a manifest, retain both the per-file totals and their provenance.
 Use `count_ntuple_candidates.py` followed by
 `build_oldpipeline_manifests.py` for count tables, or use
 `prepare_tps_efficiency_manifest.py` for a three-column retained-event list.
+The checked-in `JJP_TPS_MC_v4_1.manifest.json` is a historical formal provenance source for the existing storage campaign; do not rewrite it or use its legacy name as a new analysis sample label. Its external source URLs may continue to contain `JJP_TPS_MC_v4_1`.
 
 ## 2. One-file preflight
 

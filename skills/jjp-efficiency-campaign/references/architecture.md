@@ -6,6 +6,10 @@
 checked-in manifests + frozen repo/config
                  |
                  v
+IHEP (optional): CCEOS-local verified stage -> CERN EOS staged manifest
+                 |                                  |
+                 +-----------------------+----------+
+                                         v
 lxplus: audit -> one-file preflight -> shard/DAG -> Condor -> strict merge
                  |                       ^                 |
                  |              background monitor        |
@@ -15,13 +19,35 @@ lxplus: audit -> one-file preflight -> shard/DAG -> Condor -> strict merge
                                                              |
                                                              v
                                                   independent validation
+
+  detached credential guardian (4 h, same ticket/PAG/session context)
+             | heartbeat/status + alerts (read by monitor/orchestrator)
+             +----> pause remote writes on failure or renew-until warning
 ```
 
-The default handoff is merged Parquet/JSON/CSV metadata and small required
-ROOT/plot artifacts, not raw ntuples or unverified shards. Keep raw XRootD reads
+The default handoff is one verified compact `tar.gz` of merged
+Parquet/JSON/CSV metadata and small QA tables, not ROOT files, raw ntuples, or
+unverified shards. Its sidecar records one whole-bundle SHA-256 and readable
+member sizes. Keep raw XRootD reads
 and per-file preprocessing on lxplus. Run derived products, factorized/hybrid
 maps, closure, QA, systematics, and requested corrected-yield work on hepthu.
+This campaign uses only literal endpoint `hepthu-el9`, with post-connect `hostname -s=nd-29` and `/home/storage29` path checks; no `hepthu`/`nd-0` fallback.
 
+When CCEOS bulk reads are materially more reliable from IHEP, an optional
+preprocessing input-staging layer may materialize a frozen formal manifest into
+`/eos/user/c/chiw/JpsiJpsiUps/NtupleAnalyzer_assocPV/<campaign>/staged_inputs/<sample>`.
+It is executed by a detached IHEP worker, not by Condor.  It produces a new
+staged manifest that preserves original manifest identity and maps every source
+URL to its staged URL.  This adds a distinct approval gate: no staging launch,
+EOS write, or use of the staged manifest is implied by lxplus submission
+approval.  Existing staged files are verification-only; they are never
+overwritten.
+
+The IHEP launcher uploads both its frozen plan and the local staging helper into
+that fresh workspace with create-only semantics, verifies both SHA-256 values on
+IHEP, and invokes the uploaded helper.  It may use `mkdir -p` only for the
+workspace parent chain; final campaign/sample/plan workspace creation is a
+separate atomic `mkdir` duplicate-launch lock.
 ## Agents
 
 | Agent | Prompt | Responsibility | Live mutation |
@@ -30,7 +56,9 @@ maps, closure, QA, systematics, and requested corrected-yield work on hepthu.
 | Manifest auditor | `prompts/manifest-auditor.md` | Freeze inputs, hashes, totals | No |
 | lxplus preflight | `prompts/lxplus-preflight.md` | Strict one-file tests | Temp outputs |
 | lxplus batch worker | `prompts/lxplus-batch-worker.md` | Prepare/submit DAGs | Bounded |
+| IHEP EOS staging worker | `prompts/ihep-eos-staging-worker.md` | CCEOS-local verified staging | Bounded |
 | Background monitor | `prompts/background-monitor.md` | Persistent read-only snapshots | No |
+| Credential guardian | `prompts/credential-guardian.md` | Detached credential renewal/verification | Credential status only |
 | Handoff worker | `prompts/handoff-worker.md` | Package, transfer, verify | Fresh destination |
 | hepthu worker | `prompts/hepthu-analysis-worker.md` | Downstream analysis/logs | Fresh destination |
 | Validation worker | `prompts/validation-worker.md` | Independent acceptance audit | Report only |
@@ -39,6 +67,9 @@ maps, closure, QA, systematics, and requested corrected-yield work on hepthu.
 Workers never spawn competing orchestrators. Start the monitor immediately
 after the first asynchronous submission or remote launch and leave it delegated
 in the background. The orchestrator continues normally and never tails logs.
+The credential guardian is an OS-level detached service, outside both the
+orchestrator and the monitor; the monitor only reads its status, while the
+orchestrator gates remote writes on that status.
 
 ## Background monitoring
 
@@ -47,6 +78,12 @@ snapshot, compares it with the prior snapshot, emits only transitions or
 actionable anomalies, then waits. The wait happens in a delegated agent or
 detached watcher, never in the user's terminal. A failed/empty query is
 `unknown`, not zero completed. Use bounded SSH timeouts.
+
+Drive the monitor agent with a lightweight model (deepseek-v4-flash / Haiku):
+its only job is to diff snapshots and surface transitions. It reports back to
+the orchestrator only when there is a transition or an actionable anomaly; a
+quiet iteration returns nothing and the main loop stays idle. The monitor never
+occupies a heavy model or the orchestrator's loop just to say "still running".
 
 Use about 5 minutes while jobs are active and 15 minutes during quiet remote
 analysis. Stop after success, an actionable blocker, loss of campaign identity,

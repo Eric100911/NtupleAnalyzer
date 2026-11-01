@@ -4,7 +4,7 @@
   "repository_sha": "REPLACE_WITH_FROZEN_GIT_SHA",
   "lcg_view": "/cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh",
   "efficiency_config": "configs/efficiency/tps_nominal.yaml",
-  "samples": ["JJP_DPS1", "JJP_DPS2_CS", "JJP_DPS2_G", "JJP_SPS_CS", "JJP_SPS_G", "JJP_TPS_MC_v4_1"],
+  "samples": ["JJP_DPS1", "JJP_DPS2_CS", "JJP_DPS2_G", "JJP_SPS_CS", "JJP_SPS_G", "JJP_TPS"],
   "manifest_dir": "configs/efficiency/manifests",
   "files_per_job": 10,
   "automatic_retry_count": 2,

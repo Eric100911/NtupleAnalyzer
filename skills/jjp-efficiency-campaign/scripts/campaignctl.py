@@ -258,6 +258,8 @@ def build_initial_state(config_path: Path, repo: Path) -> dict[str, Any]:
             raise ValueError(f"missing site configuration: {site}")
         for key in required_fields:
             reject_placeholder(config[site].get(key), f"{site}.{key}")
+    if config["hepthu"].get("ssh_host") != "hepthu-el9":
+        raise ValueError("hepthu.ssh_host must be exactly hepthu-el9")
 
     timestamp = now()
     identity = {

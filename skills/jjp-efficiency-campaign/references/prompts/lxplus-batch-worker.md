@@ -8,6 +8,10 @@ Before submission:
 
 - Build a fresh per-sample workspace/output root and prepare shards with the
   configured `files_per_job`; never use hard-coded `all`.
+- When an IHEP-to-CERN-EOS staged manifest has passed its checksum audit, pass
+  that per-sample manifest to `prepare_efficiency_shards.py`; preserve the
+  original formal manifest ID and staging-plan hash in the generated report.
+  Never mix staged and original URLs within one sample or quietly fall back.
 - Ensure each worker receives its shard JSON explicitly (prefer transfer input
   plus basename). A submit-host `/tmp` absolute path is not worker-visible.
 - Split/replace the stock POST so CERN performs fail-closed merge/coverage audit

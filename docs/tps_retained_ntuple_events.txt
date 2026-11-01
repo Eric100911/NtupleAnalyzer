@@ -144,7 +144,7 @@ root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_fu
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000028/output_ntuple.root 4634 298
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000039/output_ntuple.root 4652 334
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000045/output_ntuple.root 4667 296
-root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000046/output_ntuple.root 4655 285
+root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000046/output_ntuple.root 4655 286
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000048/output_ntuple.root 4591 305
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000049/output_ntuple.root 4656 297
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000002_MERGE000050/output_ntuple.root 4654 319
@@ -252,7 +252,7 @@ root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_fu
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000012/output_ntuple.root 4637 291
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000013/output_ntuple.root 4658 298
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000014/output_ntuple.root 4643 266
-root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000015/output_ntuple.root 4631 295
+root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000015/output_ntuple.root 4631 296
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000016/output_ntuple.root 4624 316
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000018/output_ntuple.root 4641 276
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000007_MERGE000019/output_ntuple.root 4624 306
@@ -307,7 +307,7 @@ root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_fu
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000389/output_ntuple.root 4636 262
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000390/output_ntuple.root 4670 308
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000391/output_ntuple.root 4650 289
-root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000392/output_ntuple.root 4625 281
+root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000392/output_ntuple.root 4625 282
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000393/output_ntuple.root 4644 299
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000394/output_ntuple.root 4653 300
 root://cceos.ihep.ac.cn:1094///store/user/chiw/JpsiJpsiPhi_MC_Production_v4_2_full/output/JJP_TPS_MC_v4_1/JOB000011_MERGE000395/output_ntuple.root 4612 280

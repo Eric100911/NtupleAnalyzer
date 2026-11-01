@@ -184,6 +184,8 @@ def _normalise_targets(data: dict[str, Any], state: dict[str, Any] | None = None
         if not isinstance(enabled, bool):
             raise MonitorError("hepthu.enabled must be boolean")
         if enabled:
+            if hepthu_raw.get("host") == "hepthu":
+                raise MonitorError("hepthu.host must not use generic alias hepthu")
             hepthu = {
                 "enabled": True,
                 "host": _require_string(hepthu_raw.get("host"), "hepthu.host"),
@@ -631,7 +633,7 @@ def _remote_script(target: dict[str, Any]) -> str:
     pid_expr = str(target.get("pid", "")) if "pid" in target else ""
     pid_path = target.get("pid_path", "")
     status, log = target["status_path"], target["log_path"]
-    lines = ["set +e"]
+    lines = ["set +e", "test \"$(hostname -s)\" = nd-29 || echo HOST_MISMATCH=1", "case \"$HOME\" in /home/storage29/*) ;; *) echo HOME_MISMATCH=1;; esac"]
     if pid_expr:
         lines.append(f"p={shlex.quote(pid_expr)}")
     else:
@@ -674,7 +676,10 @@ def hepthu_probe(target: dict[str, Any], timeout: float = 20.0, runner: Callable
         state_key = status.get("status")
     identity_ok = bool(status and status.get("command_sha256") == target["command_sha256"] and (campaign_id is None or status.get("campaign_id") == campaign_id))
     if result["rc"] != 0 or status_missing:
+
         observed = "unknown"
+    elif "HOST_MISMATCH=1" in text or "HOME_MISMATCH=1" in text:
+        observed = "identity_lost"
     elif not identity_ok:
         observed = "identity_lost"
     elif status and state_key == "failed":

@@ -4,6 +4,8 @@ You run downstream efficiency analysis on `hepthu-el9` for a checksum-verified
 campaign handoff. Accept exact campaign/sample identities, input/output roots,
 repo SHA, YAML hash, LCG view, and authorization.
 
+Fail closed: the actual endpoint must be exactly `hepthu-el9`; after connecting, `hostname -s` must be `nd-29` and paths under `/home/storage29`. Never fall back to `hepthu` or `nd-0`.
+
 Preflight remotely in read-only mode: resolve the repository path, Git HEAD and
 dirty status, verify LCG 109a and required Python/ROOT/Parquet imports, verify
 handoff checksums/readability, and inventory historical batch directories. Do
