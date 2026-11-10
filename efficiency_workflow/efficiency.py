@@ -598,6 +598,14 @@ def _scalar_rapidity_array(px: ak.Array, py: ak.Array, pz: ak.Array, mass: ak.Ar
     return ak.where(valid, 0.5 * np.log((energy + pz) / (energy - pz)), np.nan)
 
 
+def _empty_event_step_flags() -> pd.DataFrame:
+    """Keep reconstructed phi response features typed even without event rows."""
+    return pd.DataFrame({
+        "reco_best_phi_pt": pd.Series(dtype=np.float64),
+        "reco_best_phi_y": pd.Series(dtype=np.float64),
+    })
+
+
 def _p4_components_array(pt: ak.Array, eta: ak.Array, phi: ak.Array, mass: ak.Array) -> tuple[ak.Array, ak.Array, ak.Array, ak.Array]:
     px = pt * np.cos(phi)
     py = pt * np.sin(phi)
@@ -1561,7 +1569,7 @@ def _process_efficiency_chunk_vectorized(
 ) -> dict[str, pd.DataFrame]:
     n_events = len(_record_field(arrays, "evtNum"))
     if n_events == 0:
-        return {"gen_systems": pd.DataFrame(), "event_step_flags": pd.DataFrame()}
+        return {"gen_systems": pd.DataFrame(), "event_step_flags": _empty_event_step_flags()}
     ntuple_format = _detect_ntuple_format(set(arrays.fields))
 
     pdg = arrays["MC_GenPart_pdgId"]
@@ -1723,6 +1731,7 @@ def _process_efficiency_chunk_vectorized(
         for key, val in event_raw.items():
             event_data[key] = _to_numpy(val, has_full_gen, 0).astype(np.int8)
         event_data["reco_best_phi_pt"] = np.full(np.count_nonzero(full_mask), np.nan, dtype=np.float64)
+        event_data["reco_best_phi_y"] = np.full(np.count_nonzero(full_mask), np.nan, dtype=np.float64)
         event_data["reco_best_jpsi1_pt"] = np.full(np.count_nonzero(full_mask), np.nan, dtype=np.float64)
         event_data["reco_best_jpsi2_pt"] = np.full(np.count_nonzero(full_mask), np.nan, dtype=np.float64)
         event_data["reco_best_score"] = np.full(np.count_nonzero(full_mask), np.nan, dtype=np.float64)
@@ -1928,6 +1937,8 @@ def _process_efficiency_chunk_vectorized(
         return ak.fill_none(ak.firsts(val[at_best]), default)
 
     reco_best_phi_pt = ak.where(has_quality_candidate, _best_or(arrays["Phi_pt"], np.nan), np.nan)
+    phi_y_reco = _scalar_rapidity_array(arrays["Phi_px"], arrays["Phi_py"], arrays["Phi_pz"], arrays["Phi_mass"])
+    reco_best_phi_y = ak.where(has_quality_candidate, _best_or(phi_y_reco, np.nan), np.nan)
     reco_best_jpsi1_pt = ak.where(has_quality_candidate, _best_or(arrays["Jpsi_1_pt"], np.nan), np.nan)
     reco_best_jpsi2_pt = ak.where(has_quality_candidate, _best_or(arrays["Jpsi_2_pt"], np.nan), np.nan)
     reco_best_score = ak.where(has_quality_candidate, _best_or(candidate_score, np.nan), np.nan)
@@ -2194,6 +2205,7 @@ def _process_efficiency_chunk_vectorized(
         event_data[key] = _to_numpy(val, has_full_gen, 0).astype(np.int8)
     # Reco best-candidate columns for response matrix classification
     event_data["reco_best_phi_pt"] = _to_numpy(reco_best_phi_pt, has_full_gen, np.nan).astype(np.float64)
+    event_data["reco_best_phi_y"] = _to_numpy(reco_best_phi_y, has_full_gen, np.nan).astype(np.float64)
     event_data["reco_best_jpsi1_pt"] = _to_numpy(reco_best_jpsi1_pt, has_full_gen, np.nan).astype(np.float64)
     event_data["reco_best_jpsi2_pt"] = _to_numpy(reco_best_jpsi2_pt, has_full_gen, np.nan).astype(np.float64)
     event_data["reco_best_score"] = _to_numpy(reco_best_score, has_full_gen, np.nan).astype(np.float64)
@@ -2317,11 +2329,10 @@ def process_efficiency_file_vectorized(
         )
         if not chunk["gen_systems"].empty:
             gen_parts.append(chunk["gen_systems"])
-        if not chunk["event_step_flags"].empty:
-            event_parts.append(chunk["event_step_flags"])
+        event_parts.append(chunk["event_step_flags"])
 
     gen_df = pd.concat(gen_parts, ignore_index=True) if gen_parts else pd.DataFrame()
-    event_df = pd.concat(event_parts, ignore_index=True) if event_parts else pd.DataFrame()
+    event_df = pd.concat(event_parts, ignore_index=True) if event_parts else _empty_event_step_flags()
     ancestry_df = pd.concat(ancestry_parts, ignore_index=True) if ancestry_parts else pd.DataFrame()
     if not ancestry_df.empty:
         ancestry_df = (
@@ -2395,12 +2406,14 @@ def run_efficiency_for_sample(
         else:
             raise ValueError(f"Unsupported efficiency backend: {backend}")
         for key in parts:
-            if not tables[key].empty:
+            if not tables[key].empty or key == "event_step_flags":
                 parts[key].append(tables[key])
         input_metadata.extend(tables.get("input_metadata", []))
 
     combined = {
-        key: pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        key: pd.concat(frames, ignore_index=True) if frames else (
+            _empty_event_step_flags() if key == "event_step_flags" else pd.DataFrame()
+        )
         for key, frames in parts.items()
     }
     gen_df = combined["gen_systems"]
