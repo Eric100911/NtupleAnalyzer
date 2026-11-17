@@ -1,0 +1,25 @@
+# Replace manifest paths with frozen sample->ROOT-file-list JSON inventories.
+# No implicit EOS inventory discovery is performed by the unified adapter.
+schema_version: ntuple-analyzer-analysis/v1
+channel: JJP
+run_dir: ../../runs/jjp_efficiency_v1
+inputs:
+  input_file_manifest: /replace/jjp_fullchain_files.json
+  # To reuse completed merged products instead, remove input_file_manifest and set:
+  # efficiency_products: /replace/completed_merged_products
+  # Separate Run A / Run B scans can be requested with efficiency_run_a_manifest
+  # and efficiency_run_b_manifest, but their automatic count combination is not
+  # implemented: acceptance/maps require a scientifically merged product set.
+efficiency:
+  config: ../efficiency/tps_nominal.yaml
+  samples: [JJP_DPS1, JJP_DPS2_CS, JJP_DPS2_G, JJP_SPS_CS, JJP_SPS_G, JJP_TPS]
+  correction_mode: factorized
+# Six-source correction additionally requires accepted fit_results and an explicit
+# compatibility/count/covariance bridge, not just a matching channel name:
+# inputs.fit_results: /replace/accepted_fit_result.json
+# efficiency.bridge: /replace/selection_matched_bridge.json
+correct:
+  mode: six-class
+validation:
+  dependencies: []
+  artifacts: []

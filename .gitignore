@@ -26,3 +26,9 @@ single_object_efficiency_20260609/
 stacked_jpsi_pt_absy_20260605/
 stacked_jpsi_pt_absy_only_20260605/
 yield_hybrid.json
+# Generated saved-result plot galleries; source JSON/configuration stays tracked.
+/differential_yield_20261117/
+/differential_yield_axis_scaling_20261117/
+/differential_yield_log_display_20261117/
+/differential_yield_log_display_xmin0p5_20261117/
+/differential_yield_xmin_updates_20261117/

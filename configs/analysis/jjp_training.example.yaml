@@ -1,0 +1,50 @@
+# Replace the explicit input paths with your frozen local inventory/cache.
+# plan --target training displays the graph without opening ROOT files.
+schema_version: ntuple-analyzer-analysis/v1
+channel: JJP
+run_dir: ../../runs/jjp_training_v1
+inputs:
+  classifier_feature_cache: /replace/selected_classifier_cache/full_features.parquet
+  # The cache directory must also contain the matching source_manifest.json.
+  # Alternative: remove classifier_feature_cache and supply classifier_raw_root.
+  phi_target: /replace/jjp_data_weighted.root
+  selected_data: {path: /replace/jjp_data_selected.root, schema: legacy_selected}
+  data_selection_manifest: /replace/jjp_data_selection.json
+  # For a frozen model instead of training, set classifier_study to its directory;
+  # score/templates/fit then reuse it and prune extraction/reweighting/training.
+classifier:
+  preset: full_correlation_21
+  baseline: phi_reweighted_native
+  class_order: [DPS1, DPS2_CS, DPS2_G, SPS_CS, SPS_G, TPS]
+  seed: 20261109
+  n_estimators: 1200
+  jobs: 1
+  map_partition_policy: training-only-native
+  response: {preset: argmax_tps_sumdps_54_v1}
+fit:
+  mode: data
+  mixture: fitted
+  mass_config: /replace/jjp_mass.json
+  observable_mass_config: /replace/jjp_observable_mass.json
+  observables: [dr_jj, dphi_j1phi, dy_jj, m_jj, pt_jjp, pt_jj, dphi_jj, dphi_j2phi]
+  observable_bins: 8
+plots:
+  normalization: differential_yield
+  plot_height_per_unit_interval: true
+  plot_axis_scaling: {x: linear, y: linear}
+  plot_axis_limits: {}
+  observables:
+    pt_j1phi: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 0.5}}
+    pt_j2phi: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 0.5}}
+    pt_jj: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 0.5}}
+    pt_jjp: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 0.5}}
+    jpsi1_pt: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 4.0}}
+    jpsi2_pt: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 4.0}}
+    sumpt_jjp: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 15.0}}
+    m_jj: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 5.7}}
+    m_j1phi: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 3.8}}
+    m_j2phi: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 0.5}}
+    m_jjp: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 6.6}}
+  cms_caption: Work In Progress
+validation:
+  dependencies: [plot]

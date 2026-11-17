@@ -60,6 +60,7 @@ class YieldCorrectionResult:
     weighted_tree: str
     correction_mode: str = "legacy-correlated"
     mc_stat_unc: float = math.nan
+    numerical_diagnostics: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,7 @@ class YieldSystematicResult:
     raw_yield: float
     raw_yield_err: float
     per_sample: dict[str, YieldCorrectionResult]
+    raw_numerical_diagnostics: dict | None = None
 
     @property
     def nominal_corrected_yield(self) -> float:
@@ -115,6 +117,7 @@ class YieldSystematicResult:
             "nominal_sample": self.nominal_sample,
             "raw_yield": self.raw_yield,
             "raw_yield_err": self.raw_yield_err,
+            "raw_numerical_diagnostics": self.raw_numerical_diagnostics,
             "nominal_corrected_yield": self.nominal_corrected_yield,
             "stat_unc": self.stat_unc,
             "mc_stat_unc": self.mc_stat_unc,
@@ -599,6 +602,7 @@ def run_weighted_yield_fit(
     channel: str = "JJP",
     dataset: str = "data",
     jobs: int = 4,
+    diagnostics_out: dict | None = None,
 ) -> tuple[float, float, float, int]:
     if channel != "JJP":
         raise ValueError("Yield correction currently supports only channel='JJP'")
@@ -611,6 +615,22 @@ def run_weighted_yield_fit(
         jobs=jobs,
         compute_significance_result=False,
     )
+    # Match the joint-mass workflow's numerical acceptance policy. The legacy
+    # fit API returns its RooFitResult without rejecting failed minimizations.
+    result = payload['fit_result']
+    diagnostics = {
+        'fit_status': int(result.status()),
+        'cov_qual': int(result.covQual()),
+        'edm': float(result.edm()),
+    }
+    payload['numerical_diagnostics'] = diagnostics
+    if diagnostics_out is not None:
+        diagnostics_out.update(diagnostics)
+    values = np.asarray([payload['yield'], payload['yield_err'], payload['fit_nll'], diagnostics['edm']], float)
+    if (diagnostics['fit_status'] != 0 or diagnostics['cov_qual'] < 3
+            or diagnostics['edm'] >= 1.e-3 or diagnostics['edm'] < 0
+            or not np.isfinite(values).all() or payload['yield'] < 0 or payload['yield_err'] <= 0):
+        raise RuntimeError(f'Unreliable yield correction fit: {diagnostics}; yield={payload["yield"]}, error={payload["yield_err"]}')
     return payload["yield"], payload["yield_err"], payload["fit_nll"], payload["n_events"]
 
 
@@ -643,7 +663,8 @@ def compute_efficiency_corrected_yield(
             status_callback(message)
 
     status(f"Fitting raw unweighted yield from {data_input_file}")
-    raw_yield, raw_yield_err, _, _ = run_weighted_yield_fit(data_input_file, weight_branch=None, jobs=jobs)
+    raw_diagnostics = {}
+    raw_yield, raw_yield_err, _, _ = run_weighted_yield_fit(data_input_file, weight_branch=None, jobs=jobs, diagnostics_out=raw_diagnostics)
     status(f"Raw fit complete: yield={raw_yield:.1f} +/- {raw_yield_err:.1f}")
     temp_context = tempfile.TemporaryDirectory(prefix="yieldcorr_") if temp_dir is None else None
     work_dir = Path(temp_context.name) if temp_context is not None else ensure_dir(Path(temp_dir))
@@ -712,10 +733,12 @@ def compute_efficiency_corrected_yield(
                 f"missing={n_missing}, invalid={n_invalid}, fallback_or_interpolated={n_interpolated}"
             )
             status(f"[{sample}] fitting weighted yield")
+            fit_diagnostics = {}
             corrected_yield, corrected_yield_err, fit_nll, _ = run_weighted_yield_fit(
                 weighted_tree,
                 weight_branch=DEFAULT_WEIGHT_BRANCH,
                 jobs=jobs,
+                diagnostics_out=fit_diagnostics,
             )
             status(f"[{sample}] fit complete: yield={corrected_yield:.1f} +/- {corrected_yield_err:.1f}")
             per_sample[sample] = YieldCorrectionResult(
@@ -734,12 +757,14 @@ def compute_efficiency_corrected_yield(
                 weighted_tree=str(weighted_tree),
                 correction_mode=correction_mode,
                 mc_stat_unc=mc_stat_unc,
+                numerical_diagnostics=fit_diagnostics,
             )
         return YieldSystematicResult(
             nominal_sample=nominal_sample,
             raw_yield=raw_yield,
             raw_yield_err=raw_yield_err,
             per_sample=per_sample,
+            raw_numerical_diagnostics=raw_diagnostics,
         )
     finally:
         if temp_context is not None:

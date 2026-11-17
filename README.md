@@ -1,5 +1,13 @@
 # NtupleAnalyzer assocPV Workflow
 
+The unified `python3 -m ntuple_analyzer` CLI and GNU Make execution graph are
+implemented; see [usage and configuration examples](#unified-analysis-interface).
+The original integration audit and implementation status are recorded in the
+[workflow proposal](docs/Unified_Analysis_Workflow_Proposal_20261117.md).
+The bin-width-normalized signal-mixture renderer and saved-result replot CLI are
+implemented; [regenerated plots](differential_yield_20261117/README.md) include
+eight data comparisons and 54 meeting-report distributions.
+
 这个包现在按 assocPV merge/fit/plot 和 JJP efficiency 工作流运行。公开 channel 名称固定为：
 
 - `JJP`: `J/psi + J/psi + phi`
@@ -761,3 +769,118 @@ done
 # Cutflow table
 python3 print_cutflow.py -i ../merged_efficiency_output_20260601_01 -f table
 ```
+
+## Unified analysis interface
+
+The versioned `ntuple_analyzer` interface schedules existing numerical code with
+GNU Make. The supplied configuration deliberately reuses saved results for a
+bounded plot-only run; it does not scan EOS, train a classifier, or repeat a fit.
+Paths in YAML are relative to the configuration file. Use a fresh run directory.
+
+```bash
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+python3 -m ntuple_analyzer --config configs/analysis/jjp.yaml plan --target plots
+python3 -m ntuple_analyzer --config configs/analysis/jjp.yaml status
+python3 -m ntuple_analyzer --config configs/analysis/jjp.yaml \
+  --run-dir /tmp/chiw/jjp_saved_plots run --target plots --jobs 1
+# Repeating run does no work unless inputs, relevant settings, or outputs changed.
+```
+
+`plan` and `status` only read local metadata. `run` invokes Make; `stage NAME`
+executes exactly one stage after checking accepted prerequisites. Targets include
+`training`, `plots`, `validation`, `efficiency`, `acceptance`, and `correction`.
+Adapters reject unsupported channel/stage combinations and incompatible physics
+metadata. Public channels remain JJP, JYP and JJY; current numerical adapters
+support JJP. External artifacts must be named explicitly in `inputs`; historical
+cache directories are never selected automatically.
+
+Each stage is published under `RUN/stages/NAME` only after required outputs and
+saved acceptance status pass. `.complete.json` inventories all children, so a
+deleted PNG or parquet invalidates completion. Failed/rejected attempts remain
+in `RUN/attempts`, with separate `RUN/status` records; numerical acceptance does
+not establish heldout closure or inference validity. Per-stage configuration
+files change only with their relevant settings, so plot caption changes do not
+invalidate training. Existing scientific launchers remain available.
+
+See [the workflow proposal](docs/Unified_Analysis_Workflow_Proposal_20261117.md)
+for schema, statistical boundaries and the staged migration scope.
+
+Start new runs from [the training example](configs/analysis/jjp_training.example.yaml)
+or [the efficiency example](configs/analysis/jjp_efficiency.example.yaml), replacing
+`/replace/` inputs with frozen inventories and matching selection manifests.
+The examples expose the complete stage settings without choosing historical
+cache directories. `plan --target training` and `plan --target acceptance`
+inspect their graphs without scanning those inputs. Current separate Run A/B
+outputs need an explicit scientifically compatible merged product set before
+map construction; automatic cross-run count combination is not implemented.
+
+Saved-result plot settings separate bin-height units from axis display:
+
+```yaml
+plots:
+  plot_height_per_unit_interval: true
+  plot_axis_scaling: {x: linear, y: linear}
+  observables:
+    pt_jj:
+      plot_axis_scaling: {x: log}
+```
+
+The height flag defaults to `true`: divide integrated bin yields and errors by
+original linear bin widths. Setting it to `false` displays integrated yields.
+Axis scales independently accept `linear` or `log`; a log x axis applies to both
+the distribution and ratio panels and does not introduce a log-coordinate
+Jacobian. Per-observable settings partially override global settings, including
+individual x/y choices. Log x requires positive edges, or a zero first edge with
+an explicit positive display minimum; invalid edges cause an error without
+dropping bins, changing edges, or refitting.
+
+The checked-in profiles set log x for `pt_jj`, `pt_j1phi`, `pt_j2phi`, `pt_jjp`,
+`m_jj`, `m_j1phi`, `m_j2phi`, and `m_jjp`. Saved meeting plots do not contain the
+two J/psi+phi pair-pT observables; those overrides apply when such saved results
+exist. Individual J/psi pT plots keep their default linear axes.
+
+```bash
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+python3 -m ntuple_analyzer --config configs/analysis/jjp_plot_scaling_data.yaml run --target plots
+python3 -m ntuple_analyzer --config configs/analysis/jjp_plot_scaling_meeting.yaml run --target plots
+```
+
+These profiles publish fresh saved-result renderings under
+`differential_yield_axis_scaling_20261117/`, preserving earlier outputs and
+integrated numbers. Changing plot settings invalidates plotting only.
+
+The legacy `plots.normalization: differential_yield` profile label does not
+override `plot_height_per_unit_interval`; the Boolean alone selects displayed
+bin heights, while saved integrated yields remain intact.
+
+Explicit display bounds use `plot_axis_limits`, with the same partial inheritance
+as axis scales:
+
+```yaml
+plots:
+  plot_height_per_unit_interval: true
+  plot_axis_scaling: {x: log, y: log}
+  plot_axis_limits: {x_min: 0.1, y_min: 0.01}  # user-chosen display bounds
+  observables:
+    pt_jj:
+      plot_axis_limits: {y_min: 0.02}
+```
+
+A saved first x edge of zero is allowed on log x only with an explicit positive
+`x_min`. This clips the display; the complete original bin width still determines
+the height. Negative x edges remain invalid. Log y requires an explicit positive
+`y_min` for the main distribution; the ratio y axis stays linear. Lower error
+segments and bands are clipped at the display minimum. Nonpositive central
+values have no log-y marker and remain in saved numerical results. No bins are
+dropped and no one-sided statistical limit is inferred from clipping.
+
+A saved `signal_upper_limits` list may contain `null` or records with `value`,
+`confidence_level` and optional `method`. Only these supplied statistical limits
+produce upper-limit arrows; ordinary errors crossing zero do not. The current
+62 saved inputs contain no supplied limits, so their regenerated plots have no
+manufactured arrows. Labels and captions stay outside the data region.
+
+The fresh [log-display gallery](differential_yield_log_display_20261117/README.md)
+uses `jjp_plot_log_display_data.yaml` and `jjp_plot_log_display_meeting.yaml`.
+It retains the requested linear y default and creates one rendering per saved
+observable, with no extra axis-mode companion figures.

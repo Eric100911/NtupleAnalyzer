@@ -1,0 +1,28 @@
+schema_version: ntuple-analyzer-analysis/v1
+channel: JJP
+run_dir: ../../differential_yield_axis_scaling_20261117/meeting
+inputs:
+  fit_results: ../../meeting_report_20261112/distributions
+classifier:
+  preset: full_correlation_21
+  baseline: phi_reweighted_native
+  class_order: [DPS1, DPS2_CS, DPS2_G, SPS_CS, SPS_G, TPS]
+  seed: 20261109
+  response:
+    preset: argmax_tps_sumdps_54_v1
+plots:
+  normalization: differential_yield
+  plot_height_per_unit_interval: true
+  plot_axis_scaling: {x: linear, y: linear}
+  plot_axis_limits: {}
+  observables:
+    pt_j1phi: {plot_axis_scaling: {x: log}}
+    pt_j2phi: {plot_axis_scaling: {x: log}}
+    pt_jj: {plot_axis_scaling: {x: log}}
+    pt_jjp: {plot_axis_scaling: {x: log}}
+    m_jj: {plot_axis_scaling: {x: log}}
+    m_j1phi: {plot_axis_scaling: {x: log}}
+    m_j2phi: {plot_axis_scaling: {x: log}}
+    m_jjp: {plot_axis_scaling: {x: log}}
+  cms_caption: Work In Progress
+  pattern: '*/preferred/*/signal_mixture.json'

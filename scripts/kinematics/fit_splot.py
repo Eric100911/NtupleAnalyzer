@@ -246,6 +246,83 @@ def _mass_window(value, default: tuple[float, float]) -> tuple[float, float]:
     return low, high
 
 
+def build_jjp_mass_components(observables, prefix="", shape_config=None, shared_parameters=None):
+    """Build normalized eight-category mass PDFs on caller-owned observables.
+
+    Parameters may be shared by passing the returned ``parameters`` dictionary.
+    ``shape_config`` accepts ``values`` and ``fixed`` parameter names; inclusive
+    data initializations are starting values, never independent constraints.
+    The legacy ``build_jjp_model`` API remains unchanged.
+    """
+    cfg = dict(shape_config or {})
+    allowed = {"values", "fixed", "jpsi_background"}
+    if set(cfg) - allowed:
+        raise ValueError(f"Unknown mass-shape options: {sorted(set(cfg) - allowed)}")
+    masses = list(observables.values()) if hasattr(observables, "values") else list(observables)
+    if len(masses) != 3:
+        raise ValueError("Three shared mass observables are required")
+    parameters = {} if shared_parameters is None else shared_parameters
+    keep = list(masses)
+    specs = {
+        "jpsi_alpha_l": (1.5, .1, 10.), "jpsi_n_l": (5.,),
+        "jpsi_alpha_r": (1.5, .1, 10.), "jpsi_n_r": (5.,),
+        "jpsi1_mean": (3.096, 3.05, 3.15), "jpsi2_mean": (3.096, 3.05, 3.15),
+        "jpsi1_sigma": (.025, .003, .08), "jpsi2_sigma": (.025, .003, .08),
+        "phi_mean": (1.019, 1.010, 1.028), "phi_width": (.004249,),
+        "phi_sigma": (.002, .0002, .005), "phi_bkg_thr": (.987354,),
+        "phi_bkg_p": (.8, -8., 8.), "phi_bkg_a1": (10., -200., 200.),
+    }
+    background = cfg.get("jpsi_background", "exponential")
+    if background == "exponential":
+        specs.update({f"jpsi{i}_bkg_slope": (-2., -50., 50.) for i in (1, 2)})
+    elif background in ("chebychev1", "chebychev2"):
+        specs.update({f"jpsi{i}_bkg_c{j}": (0., -1., 1.)
+                      for i in (1, 2) for j in range(1 if background == "chebychev1" else 2)})
+    else:
+        raise ValueError(f"Unsupported J/psi background: {background}")
+    values = cfg.get("values", {})
+    fixed = set(cfg.get("fixed", []))
+    if (set(values) | fixed) - set(specs):
+        raise ValueError("Unknown mass-shape parameter")
+    for key, spec in specs.items():
+        if key not in parameters:
+            name = prefix + key
+            initial = float(values.get(key, spec[0]))
+            if len(spec) == 1:
+                parameters[key] = ROOT.RooConstVar(name, name, initial)
+            else:
+                if not spec[1] <= initial <= spec[2]:
+                    raise ValueError(f"Initial {key} outside bounds")
+                parameters[key] = ROOT.RooRealVar(name, name, initial, spec[1], spec[2])
+                parameters[key].setConstant(key in fixed)
+        keep.append(parameters[key])
+    signals, backgrounds = [], []
+    for i, mass in enumerate(masses[:2], 1):
+        p = parameters
+        name = prefix + f"jpsi{i}_signal"
+        signals.append(ROOT.RooCrystalBall(name, name, mass, p[f"jpsi{i}_mean"],
+            p[f"jpsi{i}_sigma"], p["jpsi_alpha_l"], p["jpsi_n_l"], p["jpsi_alpha_r"], p["jpsi_n_r"]))
+        name = prefix + f"jpsi{i}_background"
+        if background == "exponential":
+            backgrounds.append(ROOT.RooExponential(name, name, mass, p[f"jpsi{i}_bkg_slope"]))
+        else:
+            args = ROOT.RooArgList(*[p[f"jpsi{i}_bkg_c{j}"] for j in range(1 if background == "chebychev1" else 2)])
+            backgrounds.append(ROOT.RooChebychev(name, name, mass, args))
+    name = prefix + "phi_signal"
+    signals.append(ROOT.RooVoigtian(name, name, masses[2], parameters["phi_mean"], parameters["phi_width"], parameters["phi_sigma"]))
+    name = prefix + "phi_background"
+    backgrounds.append(ROOT.RooGenericPdf(name, name, "pow(@0-@1,@2)*exp(@3*(@0-@1))",
+        ROOT.RooArgList(masses[2], parameters["phi_bkg_thr"], parameters["phi_bkg_p"], parameters["phi_bkg_a1"])))
+    keep.extend(signals + backgrounds)
+    components = OrderedDict()
+    for category in ("sss", "ssb", "sbs", "bss", "sbb", "bsb", "bbs", "bbb"):
+        name = prefix + "pdf_" + category
+        components[category] = ROOT.RooProdPdf(name, name, ROOT.RooArgSet(*[
+            signals[i] if letter == "s" else backgrounds[i] for i, letter in enumerate(category)]))
+    keep.extend(components.values())
+    return {"components": components, "parameters": parameters, "keep": keep}
+
+
 def build_jjp_model(
     n_events: int,
     mc_two_component: bool = False,
