@@ -884,3 +884,9 @@ The fresh [log-display gallery](differential_yield_log_display_20261117/README.m
 uses `jjp_plot_log_display_data.yaml` and `jjp_plot_log_display_meeting.yaml`.
 It retains the requested linear y default and creates one rendering per saved
 observable, with no extra axis-mode companion figures.
+
+To reproduce the current **eight real-data versus fixed-mixture MC comparisons**,
+follow [the saved-data recipe and normalization definition](docs/Unified_Classifier_Stages.md#reproduce-the-eight-saved-datamc-comparisons).
+It documents the common inclusive yield, fixed-fraction provenance, native MC
+weights, current per-observable display minima and exact available pT binning.
+This reproduction does not implement the requested finer 20–80 GeV mass-bin fits.

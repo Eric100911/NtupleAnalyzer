@@ -110,12 +110,10 @@ inputs, integrated covariance, support thresholds, or ratio values. Saved JSON
 retains integrated originals and physical `differential_yield` and separately
 records actual `displayed_height`, height mode, and resolved axis scales.
 
-Log x requires strictly positive original bin edges. Invalid edges fail before
-rendering, without dropping, clipping, or changing bins. Select linear x or
-produce scientifically justified positive binning separately. Log y requires
-positive visible signal lower-error endpoints and prediction lower uncertainty
-bands, and nonnegative stacked components; zero component contributions are
-allowed. Otherwise choose linear y. Ratio y remains linear. Missing observable
+Log x rejects negative original bin edges; a zero first edge requires a positive
+configured display minimum. Log y requires an explicit positive display minimum
+and clips error segments and bands for display as described below; numerical
+arrays remain intact. Ratio y remains linear. Missing observable
 overrides are recorded in `unused_observable_overrides`: the pair-system pT
 names `pt_j1phi`/`pt_j2phi` never alias individual J/psi pT, and absent saved
 spectra are never produced by refitting.
@@ -134,7 +132,7 @@ segments and prediction bands stop at the display floor; no lower cap or
 statistical endpoint is invented there. Nonpositive centers have no marker.
 The saved integrated measurements, errors and covariance remain untouched;
 `display_clipping` records omitted centers and display intersections. These
-rules supersede the earlier strict lower-error rejection policy above.
+rules apply without rejecting ordinary intervals that cross zero.
 
 Upper-limit arrows require explicit saved `signal_upper_limits`, one entry per
 bin: `null` or `{value: 12.3, confidence_level: 0.95, method: "profile", provenance:
@@ -151,3 +149,75 @@ their confidence metadata.
 The legacy `normalization: differential_yield` key remains an accepted
 compatibility label. The new height boolean is authoritative, including false;
 new configurations should use `plot_height_per_unit_interval` instead.
+
+## Reproduce the eight saved data–MC comparisons
+
+Run from the repository root, choosing a fresh output directory:
+
+```bash
+source /cvmfs/sft.cern.ch/lcg/views/LCG_109a/x86_64-el9-gcc13-opt/setup.sh
+python3 -m ntuple_analyzer --config configs/analysis/jjp_plot_log_display_data.yaml \
+  --run-dir data_mc_comparison_reproduced_20261117 run --target plots --jobs 1
+```
+
+The config resolves its input relative to `configs/analysis/`:
+`subprocess_efficiency_derived_20261108/mass_classifier_fixed_mixture_comparison_20261116/fine8_continuation/plots`.
+This directory contains eight accepted saved mass-bin extractions (`status.json`:
+phase complete, eight completed, no failed). The plot stage reads their JSON;
+it does not load event ROOT files, classifier models or MC feature caches, and
+does not fit, retrain or derive new bins. Results appear under
+`RUN/stages/plot/plots/OBSERVABLE/signal_mixture.{png,pdf,json}`. Repeating the
+same command performs no work; choose a new `--run-dir` for a separate copy.
+The input products are local analysis artifacts, not included in Git.
+
+Points are independent unweighted measured-mass signal fits per observable bin.
+The stacked MC prediction uses one common inclusive normalization,
+**1561.862716 ± 142.630650 events**, and fixed fractions in class order
+`DPS1,DPS2_CS,DPS2_G,SPS_CS,SPS_G,TPS`:
+`[0.2060158217,0.1163824955,0.4753657633,0,0,0.2022359195]`.
+The source `common_normalization.json` propagates only its inclusive variance.
+These fractions are a user-fixed hypothesis derived from the failed historical
+optimizer (`mass_classifier_data_20261112_retry_from_best/reco_fractions.json`),
+with SPS_CS/G set to zero and remaining fractions renormalized. They are **not
+an accepted composition measurement**; no fraction-fit covariance is supplied.
+No observable is independently rescaled to its extracted total.
+
+MC shapes use the frozen native phi reweighting: `base_weight = input_weight *
+phi_shape_weight`, normalized within class/partition to `shape_weight` for the
+heldout templates. Balanced `training_weight`/`objective_weight` train the
+classifier and are not the native shape weights. Data sWeights determined the
+historical phi-map target; these plotted signal yields come from mass-bin fits,
+not a weighted likelihood. Under/overflow is folded into the finite endpoint
+bins. Shared data-normalization/extraction and map/model correlations are not
+available; saved covariance remains conditional on the frozen model/maps.
+
+| Observable | Definition | Current log-x minimum |
+|---|---|---:|
+| `jpsi1_pt`, `jpsi2_pt` | Individual pT after leading/subleading ordering | 4.0 GeV |
+| `pt_jj` | Vector pT of the two-J/psi system | 0.5 GeV |
+| `pt_j1phi`, `pt_j2phi` | Vector pT of each J/psi+phi pair | 0.5 GeV |
+| `pt_jjp` | Vector pT of the full three-object system | 0.5 GeV |
+| `sumpt_jjp` | Scalar sum of the three individual pT values | 15 GeV |
+| `m_jj` | Two-J/psi invariant mass | 5.7 GeV |
+| `m_j1phi`, `m_j2phi` | Invariant mass of either ordered J/psi+phi pair | 3.8 GeV |
+| `m_jjp` | Three-object invariant mass | 6.6 GeV |
+
+The eight available data observables are `dr_jj`, `dphi_j1phi`, `dy_jj`, `m_jj`,
+`pt_jjp`, `pt_jj`, `dphi_jj`, and `dphi_j2phi`. Other overrides apply only when
+matching saved spectra exist; pair-system pT never aliases individual J/psi pT.
+Y axes remain linear. Heights/errors divide by original linear bin widths even
+on log x, with covariance scaled by both widths; no log Jacobian is introduced.
+
+Finer 20–80 GeV pT binning is **not implemented by this reproduction**. The
+current eight-bin edges are:
+
+| Spectrum | Saved edges (GeV; rounded for display) |
+|---|---|
+| `pt_jj` | 0.378, 9.153, 15.309, 19.029, 22.115, 25.187, 28.835, 34.815, 150.950 |
+| `pt_jjp` | 0.358, 8.786, 12.743, 15.866, 18.738, 21.554, 25.169, 30.653, 125.453 |
+
+The wide last bins do not resolve 35–80 GeV (`pt_jj`) or 31–80 GeV (`pt_jjp`).
+New fine bins require independent mass-bin fits with saved event/template inputs
+and their acceptance/covariance checks. No saved `pt_j1phi`/`pt_j2phi` data
+extractions exist. Changing display limits or dividing saved bins cannot produce
+those measurements. Exact unrounded edges remain in each saved JSON.

@@ -25,7 +25,7 @@ plots:
     sumpt_jjp: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 15.0}}
     m_jj: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 5.7}}
     m_j1phi: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 3.8}}
-    m_j2phi: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 0.5}}
+    m_j2phi: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 3.8}}
     m_jjp: {plot_axis_scaling: {x: log}, plot_axis_limits: {x_min: 6.6}}
   cms_caption: Work In Progress
   pattern: '*/preferred/*/signal_mixture.json'

@@ -394,3 +394,10 @@ remain in numerical arrays. Statistical limit arrows require supplied
 clipped ordinary intervals never create limits. The fresh log-display profiles
 retain linear y for the saved 62-distribution gallery and produce no companion
 renderings or additional inference.
+
+For the current implemented saved-data comparison, use the
+[reproduction recipe](Unified_Classifier_Stages.md#reproduce-the-eight-saved-datamc-comparisons).
+It specifies the accepted eight-bin extraction products, common inclusive
+normalization, fixed-hypothesis fractions and current display limits. The
+historical design inventory above does not imply that finer 20–80 GeV pT
+measurements or absent J/psi+phi pair-pT extractions have been produced.
