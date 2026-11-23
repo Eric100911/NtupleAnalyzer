@@ -258,7 +258,13 @@ def weighted_frame(frame, shape_weights=None):
     return result
 
 
-def selected_features(excluded=()):
+def selected_features(excluded=(), included=None):
+    if included is not None:
+        names=tuple(included)
+        if excluded:raise ValueError('Choose explicit features or exclusions, not both')
+        if not names or len(set(names))!=len(names) or set(names)-set(FEATURE_NAMES):
+            raise ValueError('Explicit features must be unique known trained inputs')
+        return names
     unknown=set(excluded)-set(FEATURE_NAMES)
     if unknown:raise ValueError(f'Excluded names are not trained features: {sorted(unknown)}; phi_y is already metadata only')
     names=tuple(name for name in FEATURE_NAMES if name not in excluded)
@@ -402,6 +408,8 @@ def main():
     parser.add_argument("--feature-cache", type=Path, help="New full_features.parquet generated ONLY by this ROOT extractor")
     parser.add_argument('--frozen-study-dir',type=Path,help='Reuse complete selected cache/splits and frozen phi weights from an existing full-correlation study; no extraction or map refit')
     parser.add_argument('--exclude-features',nargs='+',default=[],help='Exclude actual trained features; phi_y is already absent and is not a valid exclusion')
+    parser.add_argument('--features',nargs='+',help='Train exactly these known features in the supplied order; incompatible with --exclude-features')
+    parser.add_argument('--variants',nargs='+',choices=['no_phi','phi_reweighted'],default=['no_phi','phi_reweighted'],help='Model variants to train (default both)')
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--data", type=Path, default=REPO / "plots_kinematics/temp/jjp_data_weighted.root")
     parser.add_argument("--extract-only", action="store_true")
@@ -413,21 +421,22 @@ def main():
     args = parser.parse_args()
     if sum(x is not None for x in (args.raw_root,args.feature_cache,args.frozen_study_dir))!=1:
         parser.error('Choose exactly one of --raw-root, --feature-cache, --frozen-study-dir')
-    features=selected_features(args.exclude_features)
+    features=selected_features(args.exclude_features,args.features)
     if args.jobs < 1 or args.n_estimators < 1 or (args.max_files is not None and args.max_files < 1):
         parser.error("jobs/estimators/max-files must be positive")
     args.output_dir.mkdir(parents=True, exist_ok=args.resume_extraction)
     if args.frozen_study_dir:
         if args.extract_only or args.resume_extraction:parser.error('Frozen study mode cannot extract/resume')
         frame,phi=frozen_inputs(args.frozen_study_dir)
-        reference={'study':str(args.frozen_study_dir.resolve()),'features':features,'excluded_features':args.exclude_features,'phi_y':'Already absent from trained input; retained for frozen reweighting','explicit_input_only':'phi_pt remains algebraically reconstructable as sumpt_jjp-jpsi1_pt-jpsi2_pt; this does not remove phi kinematic information','baseline':'phi_reweighted_native','selection_and_splits':'unchanged','phi_maps':'Frozen maps and weights reused; no fit'}
+        reference={'study':str(args.frozen_study_dir.resolve()),'features':features,'excluded_features':args.exclude_features,'phi_y':'Already absent from trained input; retained for frozen reweighting','baseline':'phi_reweighted_native','selection_and_splits':'unchanged','phi_maps':'Frozen maps and weights reused; no fit'}
         write_json(args.output_dir/'frozen_input_reference.json',reference)
         print(f'FROZEN_INPUTS rows={len(frame)} features={len(features)} partitions={frame.groupby("partition").size().to_dict()}',flush=True)
         metrics={}
         for model,weights in [('no_phi',None),('phi_reweighted',phi.phi_shape_weight.to_numpy())]:
+            if model not in args.variants:continue
             metrics[model]=train_variant(weighted_frame(frame,weights),args.output_dir/model,seed=args.seed,n_estimators=args.n_estimators,jobs=args.jobs,feature_names=features)
         write_json(args.output_dir/'study_summary.json',metrics)
-        (args.output_dir/'README.md').write_text('# Individual-phi-input ablation\n\nRemoved trained phi_pt only; phi_y was never a trained input. All derived correlations, original selection, event splits, frozen phi maps and exposure/class weights retained.\n\nThis removes an explicit input only: phi_pt is still algebraically reconstructable as sumpt_jjp-jpsi1_pt-jpsi2_pt. It does not remove phi kinematic information.\n\nBaseline: phi_reweighted_native; common-population views compare original input_weight. No redundancy/binning changes or permutation calculations.\n\nSource: '+str(args.frozen_study_dir.resolve())+'\n')
+        (args.output_dir/'README.md').write_text('# Frozen-input feature-subset study\n\nTrained features in order: '+', '.join(features)+'\n\nOriginal selection, event splits, frozen phi maps and exposure/class weights retained. Phi_y remains reweighting metadata only.\n\nBaseline: phi_reweighted_native; common-population views compare original input_weight. No permutation calculations.\n\nSource: '+str(args.frozen_study_dir.resolve())+'\n')
         return
     if args.feature_cache:
         manifest_path = args.feature_cache.parent / "source_manifest.json"
@@ -451,9 +460,10 @@ def main():
     write_json(inputs / "phi_maps.json", maps)
     write_json(inputs / "phi_map_report.json", report)
     print(f"PHI_INPUTS_READY {inputs}", flush=True)
-    no_phi = weighted_frame(frame)
-    metrics = {"no_phi": train_variant(no_phi, args.output_dir / "no_phi", seed=args.seed, n_estimators=args.n_estimators, jobs=args.jobs,feature_names=features)}
-    metrics["phi_reweighted"] = train_variant(weighted_frame(frame, phi.phi_shape_weight), args.output_dir / "phi_reweighted", seed=args.seed, n_estimators=args.n_estimators, jobs=args.jobs,feature_names=features)
+    metrics = {}
+    for model, weights in [('no_phi', None), ('phi_reweighted', phi.phi_shape_weight)]:
+        if model in args.variants:
+            metrics[model] = train_variant(weighted_frame(frame, weights), args.output_dir / model, seed=args.seed, n_estimators=args.n_estimators, jobs=args.jobs,feature_names=features)
     write_json(args.output_dir / "study_summary.json", metrics)
 
 

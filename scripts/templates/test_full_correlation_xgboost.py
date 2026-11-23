@@ -16,6 +16,13 @@ from scripts.templates.train_full_correlation_xgboost import (
 
 
 class FullFeatureTests(unittest.TestCase):
+    def test_explicit_feature_subset_order_and_validation(self):
+        names=['dr_jj','dphi_j1phi','dy_jj','m_jj','pt_jjp','pt_jj','dphi_j2phi']
+        self.assertEqual(selected_features(included=names),tuple(names))
+        for included in ([],['dr_jj','dr_jj'],['phi_y']):
+            with self.assertRaises(ValueError):selected_features(included=included)
+        with self.assertRaises(ValueError):selected_features(['phi_pt'],names)
+
     def test_actual_feature_exclusion(self):
         names=selected_features(['phi_pt'])
         self.assertEqual(len(names),21);self.assertNotIn('phi_pt',names);self.assertNotIn('phi_y',FEATURE_NAMES)
