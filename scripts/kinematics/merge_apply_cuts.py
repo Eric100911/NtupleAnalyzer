@@ -44,9 +44,11 @@ from ntuple_pipeline_common import (
 
 
 OUTPUT_TREE = "selected"
+NESTED_INT_VECTOR_TYPE = "std::vector<std::vector<int>>"
 SNAPSHOT_TYPE_CAST_MAP = {
     "Float16_t": "float",
     "Double32_t": "double",
+    "vector<vector<int>>": NESTED_INT_VECTOR_TYPE,
 }
 
 
@@ -238,14 +240,14 @@ def inspect_branch_types(file_name: str, tree_name: str):
     for branch in tree.GetListOfBranches():
         branch_name = branch.GetName()
         for leaf in branch.GetListOfLeaves():
-            branch_types[branch_name] = leaf.GetTypeName()
+            branch_types[branch_name] = leaf.GetTypeName().replace("std::", "").replace(" ", "")
             break
     root_file.Close()
     return branch_types
 
 
 def prepare_snapshot_metadata(sample_file: str, schema):
-    """Determine the snapshot column list and type-cast map for unsupported branch types."""
+    """Determine the snapshot columns and the types to explicitly write."""
     original_branches = get_tree_branches(sample_file, TREE_NAME)
     snapshot_columns = list(dict.fromkeys(original_branches + selected_extra_columns(schema)))
     branch_types = inspect_branch_types(sample_file, TREE_NAME)
@@ -258,9 +260,14 @@ def prepare_snapshot_metadata(sample_file: str, schema):
 
 
 def apply_snapshot_casts(rdf, cast_map):
-    """Apply static_cast redefinitions for unsupported branch types (e.g. Float16_t -> float)."""
+    """Restore nested vectors and cast compressed scalars before writing."""
     for branch_name, target_type in cast_map.items():
-        rdf = rdf.Redefine(branch_name, f"static_cast<{target_type}>({branch_name})")
+        if target_type == NESTED_INT_VECTOR_TYPE:
+            # ROOT provides a dictionary for std::vector<std::vector<int>>.
+            expression = f"{target_type}({branch_name}.begin(), {branch_name}.end())"
+        else:
+            expression = f"static_cast<{target_type}>({branch_name})"
+        rdf = rdf.Redefine(branch_name, expression)
     return rdf
 
 

@@ -125,6 +125,7 @@ def main():
     options = ROOT.RDF.RSnapshotOptions()
     options.fMode = "RECREATE"
     options.fLazy = True
+    options.fVector2RVec = False  # Preserve the container types of the input selected tree.
     snapshot_action = selected.Snapshot(OUTPUT_TREE, output_file, build_root_string_vector(snapshot_columns), options)
     ROOT.RDF.RunGraphs([total_action, selected_action, snapshot_action])
 
