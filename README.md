@@ -20,6 +20,7 @@ eight data comparisons and 54 meeting-report distributions.
 
 1. `merge_apply_cuts.py`
    合并全部 ntuple，做 assocPV 动力学 cut，事件内选最佳候选，输出带原始 branch 和统一 `sel_*` 标量分支的 ROOT 文件。
+   JJP 输出的 `sel_Phi_K_{1,2}_Idx` 优先从 `Phi_K_{1,2}_RecoKaonTrackIdx` 取值，索引对应 `RecoKaonTrack_*`，`-1` 表示没有对应轨迹。对只提供旧索引的 ntuple，仍从 `Phi_K_{1,2}_Idx` 取值，保留旧索引语义。
 2. `fit_splot.py`
    对 cut 后样本做质量拟合和 `sPlot`，输出拟合图，并把 `signal_sw` 与各个 yield 的 sWeight 回写到 ROOT 文件。
 3. `plot_weighted_distributions.py`

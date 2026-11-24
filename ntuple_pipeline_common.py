@@ -904,7 +904,8 @@ def declare_rdf_helpers() -> None:
             return values[idx];
         }
 
-        int TakeAtInt(const RVec<float>& values, int idx) {
+        template <typename T>
+        int TakeAtInt(const RVec<T>& values, int idx) {
             if (idx < 0 || idx >= static_cast<int>(values.size())) {
                 return -1;
             }
@@ -1494,7 +1495,23 @@ def define_selected_columns(rdf, schema: DatasetSchema):
         The modified ``RDataFrame`` with all ``sel_*`` columns defined.
     """
     cfg = CHANNEL_CONFIGS[schema.channel]
+    branch_overrides = {}
+    if schema.channel == "JJP":
+        available = {str(name) for name in rdf.GetColumnNames()}
+        kaon_track_indices = {
+            "Phi_K_1_Idx": "Phi_K_1_RecoKaonTrackIdx",
+            "Phi_K_2_Idx": "Phi_K_2_RecoKaonTrackIdx",
+        }
+        if available.issuperset(kaon_track_indices.values()):
+            branch_overrides = kaon_track_indices
+        elif not available.issuperset(kaon_track_indices):
+            raise ValueError(
+                "JJP selection requires both Phi_K_{1,2}_RecoKaonTrackIdx "
+                "or both legacy Phi_K_{1,2}_Idx branches"
+            )
+
     for out_name, in_name in schema.selected_branch_map:
+        in_name = branch_overrides.get(in_name, in_name)
         target = f"sel_{out_name}"
         if out_name.endswith("_Idx"):
             rdf = rdf.Define(target, f"TakeAtInt({in_name}, bestCandIdx)")
